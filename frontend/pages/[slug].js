@@ -1,0 +1,42 @@
+import { useState } from "react";
+
+export default function Review() {
+  const [rating, setRating] = useState(0);
+  const [sent, setSent] = useState(false);
+
+  return (
+    <main className="page">
+      <div className="box">
+        <div className="brand">
+          <div className="logo">★</div>
+          <div>
+            <b>Friseur Profi</b><br />
+            <span className="muted">Bewertung abgeben</span>
+          </div>
+        </div>
+
+        <h1>Wie zufrieden warst du?</h1>
+        <p className="muted">4–5 Sterne würden zu Google weiterleiten, 1–3 Sterne bleiben intern.</p>
+
+        <div className="stars">
+          {[1,2,3,4,5].map(n => (
+            <span key={n} onClick={() => setRating(n)}>{n <= rating ? "★" : "☆"}</span>
+          ))}
+        </div>
+
+        {rating > 0 && rating < 4 && !sent && (
+          <>
+            <input className="input" placeholder="Name optional" />
+            <textarea className="input" rows="5" placeholder="Was können wir verbessern?" />
+            <button className="btn" onClick={() => setSent(true)}>Intern senden</button>
+          </>
+        )}
+
+        {rating >= 4 && <div className="ok">Demo: Hier würde Google geöffnet werden.</div>}
+        {sent && <div className="ok">Danke! Feedback wurde intern gespeichert.</div>}
+
+        <a href="/"><button className="btn secondary">Zur Admin-Demo</button></a>
+      </div>
+    </main>
+  );
+}
