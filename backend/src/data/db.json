@@ -1,0 +1,213 @@
+{
+  "users": [
+    {
+      "id": "u_admin",
+      "name": "Dominique Zapf",
+      "email": "admin@agentur.local",
+      "password": "admin123",
+      "role": "agency_admin"
+    },
+    {
+      "id": "u_staff",
+      "name": "Mitarbeiter Admin",
+      "email": "mitarbeiter@agentur.local",
+      "password": "mitarbeiter123",
+      "role": "agency_admin"
+    }
+  ],
+  "employees": [
+    {
+      "id": "e1",
+      "name": "Dominique Zapf",
+      "email": "admin@agentur.local",
+      "role": "agency_admin",
+      "status": "Aktiv"
+    },
+    {
+      "id": "e2",
+      "name": "Mitarbeiter Admin",
+      "email": "mitarbeiter@agentur.local",
+      "role": "agency_admin",
+      "status": "Aktiv"
+    }
+  ],
+  "clients": [
+    {
+      "id": "c_friseur",
+      "name": "Friseur Profi",
+      "slug": "friseur-profi",
+      "ownerEmail": "dominiquezapf@gmail.com",
+      "demoRevenue": 299,
+      "subscriptionStatus": "active",
+      "googleReviewLink": "https://google.com",
+      "modules": {
+        "reviews": true,
+        "crm": true,
+        "booking": true,
+        "chatbot": true,
+        "whatsapp": true,
+        "seo": true,
+        "analytics": true,
+        "invoices": true,
+        "websites": true,
+        "automations": true,
+        "outreach": true,
+        "reputation": true,
+        "reports": true,
+        "qr": true,
+        "onboarding": true,
+        "sales-assistant": true,
+        "proposals": true,
+        "suite": true,
+        "social": true,
+        "portal": true
+      }
+    },
+    {
+      "id": "c_demo_barbershop",
+      "name": "Barber Lounge Rostock",
+      "slug": "barber-lounge-rostock",
+      "ownerEmail": "kunde@barberlounge-rostock.de",
+      "demoRevenue": 1299,
+      "subscriptionStatus": "active",
+      "googleReviewLink": "https://google.com",
+      "modules": {
+        "reviews": true,
+        "crm": true,
+        "booking": true,
+        "chatbot": true,
+        "whatsapp": true,
+        "seo": true,
+        "analytics": true,
+        "invoices": true,
+        "websites": true,
+        "automations": true,
+        "outreach": true,
+        "reputation": true,
+        "reports": true,
+        "qr": true,
+        "onboarding": true,
+        "sales-assistant": true,
+        "proposals": true,
+        "suite": true,
+        "social": true,
+        "portal": true
+      }
+    }
+  ],
+  "reviews": [
+    {
+      "id": "r1",
+      "clientId": "c_friseur",
+      "rating": 5,
+      "name": "Marcel",
+      "message": "Sehr moderne Website und super Service.",
+      "status": "published"
+    },
+    {
+      "id": "r2",
+      "clientId": "c_demo_barbershop",
+      "rating": 5,
+      "name": "Kevin Müller",
+      "message": "Mega Service und einfache Online-Terminbuchung.",
+      "status": "published"
+    }
+  ],
+  "leads": [
+    {
+      "id": "l1",
+      "clientId": "c_friseur",
+      "name": "Autohaus Schmidt",
+      "company": "Autohaus Schmidt",
+      "email": "kontakt@autohaus-schmidt.de",
+      "phone": "0381 111222",
+      "status": "Neu",
+      "value": "€1.980",
+      "priority": "Mittel"
+    },
+    {
+      "id": "l2",
+      "clientId": "c_demo_barbershop",
+      "name": "Restaurant Hafenblick",
+      "company": "Restaurant Hafenblick",
+      "email": "kontakt@hafenblick.de",
+      "phone": "0381 999999",
+      "status": "Angebot",
+      "value": "€3.900",
+      "priority": "Hoch"
+    }
+  ],
+  "bookings": [
+    {
+      "id": "b1",
+      "clientId": "c_friseur",
+      "name": "Lisa Schneider",
+      "service": "Damen Haarschnitt",
+      "date": "2026-05-22",
+      "time": "10:00",
+      "status": "bestätigt"
+    },
+    {
+      "id": "b2",
+      "clientId": "c_demo_barbershop",
+      "name": "Tim Schulz",
+      "service": "Fade Cut",
+      "date": "2026-05-22",
+      "time": "14:00",
+      "status": "bestätigt"
+    }
+  ],
+  "socialPosts": [
+    {
+      "id": "s1",
+      "clientId": "c_demo_barbershop",
+      "platform": "Instagram",
+      "content": "Fresh Fade Friday 🔥",
+      "date": "2026-05-20",
+      "time": "18:00",
+      "status": "geplant"
+    }
+  ],
+  "outreach": [],
+  "reputationAlerts": [
+    {
+      "id": "ra1",
+      "clientId": "c_friseur",
+      "source": "Google",
+      "title": "Neue Bewertung",
+      "message": "Eine neue Bewertung wartet auf Antwort.",
+      "severity": "medium",
+      "status": "offen"
+    }
+  ],
+  "reports": [
+    {
+      "id": "rep1",
+      "clientId": "c_demo_barbershop",
+      "title": "Performance Report April",
+      "summary": "34% mehr Buchungen und 18 neue Bewertungen.",
+      "status": "erstellt"
+    }
+  ],
+  "qrCampaigns": [],
+  "onboarding": [
+    {
+      "id": "on1",
+      "clientId": "c_friseur",
+      "title": "Google Bewertungslink prüfen",
+      "description": "Google Review Link ist gesetzt.",
+      "done": true
+    }
+  ],
+  "proposals": [
+    {
+      "id": "p1",
+      "clientId": "c_demo_barbershop",
+      "title": "Premium Marketing Paket",
+      "customer": "Barber Lounge Rostock",
+      "amount": "599€/Monat",
+      "status": "Angenommen"
+    }
+  ],
+  "auditLogs": []
+}
