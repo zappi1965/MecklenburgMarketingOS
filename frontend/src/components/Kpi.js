@@ -1,0 +1,1 @@
+export default function Kpi({icon,label,value,trend,color}){return <div className="card kpi"><div className="kpi-icon" style={{background:color||"#eef2ff"}}>{icon}</div><div><div className="kpi-label">{label}</div><div className="kpi-value">{value}</div><div className="trend">{trend}</div></div></div>}
