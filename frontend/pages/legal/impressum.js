@@ -1,0 +1,1 @@
+export default function Impressum(){return <main className="legal"><h1>Impressum</h1><p>Platzhalter.</p></main>}

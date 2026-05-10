@@ -1,0 +1,1 @@
+export default function Datenschutz(){return <main className="legal"><h1>Datenschutz</h1><p>Platzhalter.</p></main>}
