@@ -1,1 +1,0 @@
-const express=require("express");const cors=require("cors");const app=express();app.use(cors());app.use(express.json());app.get("/api/health",(req,res)=>res.json({ok:true,name:"Mecklenburg Marketing OS Enterprise Max"}));app.listen(process.env.PORT||4000,()=>console.log("API läuft"));
