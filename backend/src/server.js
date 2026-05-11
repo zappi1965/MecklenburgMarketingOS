@@ -1,1 +1,0 @@
-const express=require("express");const cors=require("cors");const app=express();app.use(cors());app.get("/api/health",(req,res)=>res.json({ok:true,name:"Mecklenburg Marketing OS Linked"}));app.listen(process.env.PORT||4000);
