@@ -1,3 +1,0 @@
-
-import { useState } from "react";
-export default function Register(){const[done,setDone]=useState(false);return <main className="page"><div className="box"><div className="brand"><div className="logo">M</div><div><b>Mecklenburg Marketing OS</b><br/><span className="muted">Registrierung</span></div></div><h1>Account erstellen</h1><input className="input" placeholder="Name"/><input className="input" placeholder="E-Mail"/><input className="input" type="password" placeholder="Passwort setzen"/><button className="btn" onClick={()=>setDone(true)}>Registrierung abschließen</button>{done&&<div className="ok">Account wurde erstellt. Du kannst dich nun einloggen.</div>}<a href="/"><button className="btn secondary">Zum Login</button></a></div></main>}
