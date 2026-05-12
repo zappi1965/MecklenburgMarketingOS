@@ -1,0 +1,17 @@
+{
+  "name": "mmos-v10-enterprise-fullstack-backend",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "worker": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "latest",
+    "cors": "latest",
+    "express": "latest",
+    "pdfkit": "latest",
+    "multer": "latest",
+    "express-rate-limit": "latest"
+  }
+}
