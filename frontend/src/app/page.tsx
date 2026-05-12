@@ -123,3 +123,69 @@ function Templates(){return <><Hero title="E-Mail Vorlagen" text="Vorlagenmodul 
 export function ImpersonationInfo(){
   return null
 }
+
+function ToolAccess({ customer }: any) {
+  const [items, setItems] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!customer) return
+    supabase
+      .from('customer_tool_access')
+      .select('*')
+      .eq('customer_id', customer.id)
+      .then(({ data }) => setItems(data || []))
+  }, [customer])
+
+  async function toggle(tool_key: string, enabled: boolean) {
+    await supabase
+      .from('customer_tool_access')
+      .upsert(
+        {
+          customer_id: customer.id,
+          tool_key,
+          enabled
+        },
+        { onConflict: 'customer_id,tool_key' }
+      )
+
+    const { data } = await supabase
+      .from('customer_tool_access')
+      .select('*')
+      .eq('customer_id', customer.id)
+
+    setItems(data || [])
+  }
+
+  const tools = [
+    'seo',
+    'booking',
+    'tickets',
+    'invoices',
+    'integrations',
+    'templates',
+    'reviews',
+    'qr',
+    'reports',
+    'goals',
+    'multi_locations'
+  ]
+
+  return (
+    <Card title="Tool Freischaltung">
+      {tools.map((tool) => {
+        const row = items.find((i) => i.tool_key === tool)
+
+        return (
+          <label className="item" key={tool}>
+            <input
+              type="checkbox"
+              checked={!!row?.enabled}
+              onChange={(e) => toggle(tool, e.target.checked)}
+            />{' '}
+            {tool}
+          </label>
+        )
+      })}
+    </Card>
+  )
+}
