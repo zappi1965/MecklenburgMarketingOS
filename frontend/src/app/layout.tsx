@@ -4,7 +4,7 @@ import './globals.css'
 export const viewport = { width: 'device-width', initialScale: 1 }
 
 export const metadata = {
-  title: 'MMOS v10 Core',
+  title: 'MecklenburgMarketing',
   description: 'Mecklenburg Marketing OS Core Fullbuild'
 }
 
