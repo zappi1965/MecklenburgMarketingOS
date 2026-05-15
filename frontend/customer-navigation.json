@@ -1,0 +1,64 @@
+{
+  "sections": [
+    {
+      "key": "dashboard",
+      "label": "Dashboard",
+      "icon": "📊",
+      "mobilePriority": 1
+    },
+    {
+      "key": "qr-loyalty",
+      "label": "QR & Loyalty",
+      "icon": "🎯",
+      "mobilePriority": 2
+    },
+    {
+      "key": "reviews",
+      "label": "Reviews",
+      "icon": "⭐",
+      "mobilePriority": 3
+    },
+    {
+      "key": "booking",
+      "label": "Booking",
+      "icon": "📅",
+      "mobilePriority": 99
+    },
+    {
+      "key": "invoices",
+      "label": "Rechnungen",
+      "icon": "🧾",
+      "mobilePriority": 99
+    },
+    {
+      "key": "marketing",
+      "label": "Marketing",
+      "icon": "📣",
+      "mobilePriority": 99
+    },
+    {
+      "key": "analytics",
+      "label": "Analytics",
+      "icon": "📈",
+      "mobilePriority": 4
+    },
+    {
+      "key": "settings",
+      "label": "Einstellungen",
+      "icon": "⚙️",
+      "mobilePriority": 5
+    }
+  ],
+  "mobile": {
+    "drawer": true,
+    "bottomNav": [
+      "dashboard",
+      "qr-loyalty",
+      "reviews",
+      "analytics",
+      "settings"
+    ],
+    "collapseChildren": true,
+    "stickyActions": true
+  }
+}

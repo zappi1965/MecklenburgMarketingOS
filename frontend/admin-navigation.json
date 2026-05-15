@@ -1,0 +1,156 @@
+{
+  "sections": [
+    {
+      "key": "dashboard",
+      "label": "Dashboard",
+      "children": [
+        "overview",
+        "kpis",
+        "forecasting",
+        "ai-alerts"
+      ],
+      "icon": "📊",
+      "mobilePriority": 1
+    },
+    {
+      "key": "crm",
+      "label": "CRM",
+      "children": [
+        "customers",
+        "timeline",
+        "customer-health",
+        "customer-intelligence"
+      ],
+      "icon": "👥",
+      "mobilePriority": 2
+    },
+    {
+      "key": "pipeline",
+      "label": "Pipeline",
+      "children": [
+        "leads",
+        "opportunities",
+        "forecasting"
+      ],
+      "icon": "🧲",
+      "mobilePriority": 99
+    },
+    {
+      "key": "booking",
+      "label": "Booking",
+      "children": [
+        "calendar",
+        "appointments",
+        "services",
+        "categories"
+      ],
+      "icon": "📅",
+      "mobilePriority": 99
+    },
+    {
+      "key": "invoices",
+      "label": "Rechnungen",
+      "children": [
+        "invoices",
+        "pdfs",
+        "revenue"
+      ],
+      "icon": "🧾",
+      "mobilePriority": 99
+    },
+    {
+      "key": "qr-loyalty",
+      "label": "QR & Loyalty",
+      "children": [
+        "qr-campaigns",
+        "rewards",
+        "vip-levels",
+        "segments",
+        "smart-loyalty",
+        "employee-codes"
+      ],
+      "icon": "🎯",
+      "mobilePriority": 3
+    },
+    {
+      "key": "reviews",
+      "label": "Reviews",
+      "children": [
+        "review-list",
+        "review-intelligence",
+        "response-suggestions"
+      ],
+      "icon": "⭐",
+      "mobilePriority": 99
+    },
+    {
+      "key": "marketing",
+      "label": "Marketing",
+      "children": [
+        "automation",
+        "campaigns",
+        "audiences"
+      ],
+      "icon": "📣",
+      "mobilePriority": 99
+    },
+    {
+      "key": "ai",
+      "label": "AI & Automation",
+      "children": [
+        "assistant",
+        "smart-automations",
+        "recommendations"
+      ],
+      "icon": "🤖",
+      "mobilePriority": 99
+    },
+    {
+      "key": "analytics",
+      "label": "Analytics",
+      "children": [
+        "kpis",
+        "revenue-forecasting",
+        "dynamic-billing",
+        "revenue-share"
+      ],
+      "icon": "📈",
+      "mobilePriority": 4
+    },
+    {
+      "key": "billing",
+      "label": "Pakete & Billing",
+      "children": [
+        "package-matrix",
+        "tool-access",
+        "subscriptions"
+      ],
+      "icon": "💳",
+      "mobilePriority": 99
+    },
+    {
+      "key": "settings",
+      "label": "Einstellungen",
+      "children": [
+        "users",
+        "integrations",
+        "branding",
+        "api-keys"
+      ],
+      "icon": "⚙️",
+      "mobilePriority": 5
+    }
+  ],
+  "mobile": {
+    "drawer": true,
+    "bottomNav": [
+      "dashboard",
+      "crm",
+      "qr-loyalty",
+      "analytics",
+      "settings"
+    ],
+    "collapseChildren": true,
+    "stickyActions": true
+  }
+}
