@@ -1,0 +1,58 @@
+{
+  "customers": [
+    {
+      "id": "demo_barber",
+      "name": "Barber Lounge Rostock",
+      "branch": "Friseur",
+      "package": "Growth",
+      "city": "Rostock"
+    },
+    {
+      "id": "demo_roof",
+      "name": "NordDach GmbH",
+      "branch": "Dachdecker",
+      "package": "Premium",
+      "city": "Schwerin"
+    },
+    {
+      "id": "demo_restaurant",
+      "name": "Alexas Inselblick",
+      "branch": "Restaurant",
+      "package": "Growth",
+      "city": "Waren"
+    },
+    {
+      "id": "demo_gym",
+      "name": "Baltic Fitness Club",
+      "branch": "Fitnessstudio",
+      "package": "Premium",
+      "city": "Greifswald"
+    }
+  ],
+  "kpis": [
+    {
+      "customer_id": "demo_barber",
+      "revenue": "+18%",
+      "reviews": "4.8",
+      "leads": "42"
+    },
+    {
+      "customer_id": "demo_roof",
+      "revenue": "+31%",
+      "reviews": "4.9",
+      "leads": "67"
+    },
+    {
+      "customer_id": "demo_restaurant",
+      "revenue": "+22%",
+      "reviews": "4.7",
+      "leads": "53"
+    },
+    {
+      "customer_id": "demo_gym",
+      "revenue": "+14%",
+      "reviews": "4.6",
+      "leads": "88"
+    }
+  ]
+}
