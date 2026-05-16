@@ -1,0 +1,98 @@
+{
+  "sections": [
+    {
+      "key": "dashboard",
+      "label": "Dashboard",
+      "icon": "📊",
+      "children": [
+        "overview",
+        "tasks",
+        "ai-assistant"
+      ],
+      "mobilePriority": 1
+    },
+    {
+      "key": "qr-loyalty",
+      "label": "QR & Loyalty",
+      "icon": "🎯",
+      "children": [
+        "qr-campaigns",
+        "public-landing-page",
+        "loyalty-program",
+        "rewards",
+        "reward-rules",
+        "staff-confirmation-codes",
+        "segments",
+        "smart-loyalty"
+      ],
+      "mobilePriority": 2
+    },
+    {
+      "key": "reviews",
+      "label": "Reviews",
+      "icon": "⭐",
+      "children": [
+        "feedback",
+        "review-intelligence",
+        "response-templates"
+      ],
+      "mobilePriority": 3
+    },
+    {
+      "key": "marketing",
+      "label": "Marketing",
+      "icon": "📣",
+      "children": [
+        "marketing-automation",
+        "reactivation",
+        "review-booster"
+      ],
+      "mobilePriority": 4
+    },
+    {
+      "key": "operations",
+      "label": "Betrieb",
+      "icon": "📅",
+      "children": [
+        "booking",
+        "invoices",
+        "tickets"
+      ],
+      "mobilePriority": 99
+    },
+    {
+      "key": "analytics",
+      "label": "Analytics",
+      "icon": "📈",
+      "children": [
+        "customer-health",
+        "customer-intelligence",
+        "usage"
+      ],
+      "mobilePriority": 5
+    },
+    {
+      "key": "settings",
+      "label": "Einstellungen",
+      "icon": "⚙️",
+      "children": [
+        "profile",
+        "branding",
+        "integrations"
+      ],
+      "mobilePriority": 99
+    }
+  ],
+  "mobile": {
+    "drawer": true,
+    "bottomNav": [
+      "dashboard",
+      "qr-loyalty",
+      "reviews",
+      "marketing",
+      "analytics"
+    ],
+    "collapseChildren": true,
+    "stickyActions": true
+  }
+}
