@@ -468,7 +468,7 @@ export default function App(){
  {view==='qr'&&role==='admin'&&<QRCodes store={store} cid={cid} setCid={setCid}/>}
  {view==='demo_customers'&&role==='admin'&&<DemoCustomers store={store}/>}
  {/* V30.1: Demo tool modules visible in Admin and Customer UI */}
- {['public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','review_intelligence','review_templates','smart_automation','marketing_automation','ai_assistant','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events'].includes(view)&&<V30ToolModule view={view} store={store} cid={cid} role={role}/>}}
+ {['public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','review_intelligence','review_templates','smart_automation','marketing_automation','ai_assistant','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events'].includes(view)&&<V30ToolModule view={view} store={store} cid={cid} role={role}/>}
  {view==='integrations'&&role==='customer'&&<Integrations store={store} cid={cid}/>}
  {view==='packages'&&role==='customer'&&<CustomerPackages store={store} cid={cid}/>} 
  {view==='seo'&&role==='customer'&&<CustomerSEO store={store} cid={cid}/>}
