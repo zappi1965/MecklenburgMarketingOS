@@ -548,6 +548,81 @@ export default function App(){
 
 
 
+
+function V42BackendStatus(){
+ const [status,setStatus]=useState<any>(null)
+ const [msg,setMsg]=useState('')
+ useEffect(()=>{v33FunctionalClient.health().then((r:any)=>setStatus(r)).catch((e:any)=>setMsg(e.message))},[])
+ return <Card title="Backend Verbindung"><div className="sub">{status?.ok?'Backend erreichbar':msg||'Prüfe Verbindung...'}</div>{!status?.ok&&<div className="v42Warning">Wenn überall „fetch failed“ erscheint: NEXT_PUBLIC_BACKEND_URL in Vercel muss auf deine Railway Backend URL zeigen.</div>}</Card>
+}
+
+function V42CustomerLoyaltySettings({cid}:any){
+ const [data,setData]=useState<any>(null)
+ const [msg,setMsg]=useState('')
+ const [form,setForm]=useState<any>({staff_code:'',staff_label:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:''})
+ const [rule,setRule]=useState<any>({trigger:'qr_scan',condition:'always',action:'add_points',points:''})
+ async function load(){try{const r=await v33FunctionalClient.getCustomerLoyaltySettings(cid);setData(r)}catch(e:any){setMsg(e.message)}}
+ useEffect(()=>{load()},[cid])
+ async function save(){
+  setMsg('Speichere...')
+  try{
+   await v33FunctionalClient.saveStaffAndRules(cid,{...form,rules:[rule]})
+   setMsg('QR & Loyalty Einstellungen gespeichert')
+   await load()
+  }catch(e:any){setMsg(e.message)}
+ }
+ return <><Head title="QR & Loyalty Einstellungen" sub="Kundenbereich · Mitarbeitercode · Punkte · Reward-Regeln"/><div className="grid2"><Card title="Mitarbeitercode & Punkte"><input className="input" value={form.staff_label} onChange={e=>setForm({...form,staff_label:e.target.value})} placeholder="Bezeichnung, z. B. Thekencode"/><input className="input" value={form.staff_code} onChange={e=>setForm({...form,staff_code:e.target.value})} placeholder="Mitarbeitercode, z. B. 2468"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan, z. B. 10"/><input className="input" type="number" value={form.daily_scan_limit} onChange={e=>setForm({...form,daily_scan_limit:e.target.value})} placeholder="Tageslimit pro Gast, z. B. 1"/><input className="input" type="number" value={form.weekly_scan_limit} onChange={e=>setForm({...form,weekly_scan_limit:e.target.value})} placeholder="Wochenlimit pro Gast, z. B. 5"/><button className="btn" onClick={save}>Speichern</button></Card><Card title="Reward-Regel erstellen"><select className="input" value={rule.trigger} onChange={e=>setRule({...rule,trigger:e.target.value})}><option value="qr_scan">Wenn QR gescannt wird</option><option value="review_positive">Wenn positive Bewertung abgegeben wird</option><option value="birthday">Wenn Geburtstag erreicht</option><option value="referral">Wenn Empfehlung eingeht</option><option value="level_up">Wenn Level erreicht</option></select><select className="input" value={rule.condition} onChange={e=>setRule({...rule,condition:e.target.value})}><option value="always">Immer</option><option value="first_scan">Nur beim ersten Scan</option><option value="weekday">Nur Wochentag</option><option value="weekend">Nur Wochenende</option><option value="points_over_100">Punkte größer 100</option><option value="vip_only">Nur VIP</option></select><select className="input" value={rule.action} onChange={e=>setRule({...rule,action:e.target.value})}><option value="add_points">Punkte vergeben</option><option value="multiply_points">Punkte multiplizieren</option><option value="unlock_reward">Reward freischalten</option><option value="create_followup">Follow-up erzeugen</option></select><input className="input" type="number" value={rule.points} onChange={e=>setRule({...rule,points:e.target.value})} placeholder="Punkte / Multiplikator, z. B. 50"/><button className="btn secondary" onClick={save}>Regel speichern</button></Card></div><Card title="Bestehende Programme & Regeln">{(data?.loyalty_programs||[]).map((p:any)=><div className="item" key={p.id}><b>{p.name||p.title}</b><span>{p.points_per_scan} Punkte pro Scan · {p.active?'aktiv':'inaktiv'}</span></div>)}{(data?.rules||[]).map((r:any)=><div className="item" key={r.id}><b>{r.payload?.trigger} → {r.payload?.action}</b><span>{r.payload?.condition} · {r.payload?.points||0} Punkte</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
+}
+
+function V42AdminLoyaltyEditor({cid}:any){
+ const [msg,setMsg]=useState('')
+ const [form,setForm]=useState<any>({title:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:'',qr_title:''})
+ async function save(){try{const r=await v33FunctionalClient.saveLoyaltyProgram(cid,form);setMsg(`Gespeichert: ${r.loyalty_program?.name||'Loyalty Programm'}`)}catch(e:any){setMsg(e.message)}}
+ return <Card title="Bestehendes Loyalty Programm bearbeiten"><div className="grid4"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Programmname, z. B. Alexas Bonusclub"/><input className="input" value={form.qr_title} onChange={e=>setForm({...form,qr_title:e.target.value})} placeholder="QR Kampagnenname"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan"/><button className="btn" onClick={save}>Loyalty speichern</button></div>{msg&&<div className="sub">{msg}</div>}</Card>
+}
+
+function V42QrCodePanel({cid}:any){
+ const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
+ async function create(){setMsg('Erstelle QR/Loyalty...');try{const r=await v33FunctionalClient.createQrCampaign(cid,{title:'',purpose:'loyalty',points_per_scan:10});setData(r);setMsg('QR Kampagne erstellt')}catch(e:any){setMsg(e.message)}}
+ const slug=data?.qr_campaign?.slug
+ const url=slug&&typeof window!=='undefined'?`${window.location.origin}/l/${slug}`:''
+ const qr=url?`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(url)}`:''
+ return <Card title="QR Kampagne erstellen" action={<button className="btn secondary" onClick={create}>QR + Loyalty erstellen</button>}>{qr?<div className="qrExport"><img src={qr}/><div><b>{url}</b><div className="toolbarActions"><button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button></div></div></div>:<div className="sub">Noch kein QR erstellt. Klicke auf „QR + Loyalty erstellen“.</div>}{msg&&<div className="sub">{msg}</div>}</Card>
+}
+
+function V42ReviewsHub({cid}:any){
+ const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
+ async function load(){try{const r=await v33FunctionalClient.reviewsHub(cid);setData(r);setMsg('Reviews geladen')}catch(e:any){setMsg(e.message)}}
+ useEffect(()=>{load()},[cid])
+ return <><Head title="Reviews" sub="Reviews · Intelligence · Antwortvorlagen zusammengeführt"/><div className="grid4"><Metric label="Gesamt" value={data?.stats?.total??'-'}/><Metric label="Positiv" value={data?.stats?.positive??'-'}/><Metric label="Negativ" value={data?.stats?.negative??'-'}/><Metric label="Tickets" value={data?.stats?.open_tickets??'-'}/></div><Card title="Review Inbox">{(data?.reviews||[]).map((r:any)=><div className="item" key={r.id}><b>{r.reviewer_name||'Gast'} · {r.rating||'-'} Sterne</b><span>{r.feedback_text||r.comment||'Keine Nachricht'}</span><Badge type={Number(r.rating||0)<=2?'red':'green'}>{r.sentiment||'neu'}</Badge></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
+}
+
+function V42PackageRecommendations({cid}:any){
+ const [data,setData]=useState<any>(null)
+ useEffect(()=>{v33FunctionalClient.packageRecommendations(cid).then((r:any)=>setData(r)).catch(()=>{})},[cid])
+ const r=data?.recommendation
+ return <><Head title="Package Recommendations" sub="Kunde · Add-on · Begründung"/>{r&&<Card title={`Empfehlung für ${r.customer_name}`}><div className="v40Deal"><b>{r.addon}</b><strong>{eur(r.price)}</strong><span>Confidence: {r.confidence}%</span>{r.reason.map((x:string)=><p key={x}>✓ {x}</p>)}</div></Card>}</>
+}
+
+function V42PackageMatrixEditor({cid}:any){
+ const [packages,setPackages]=useState<any[]>([])
+ const [msg,setMsg]=useState('')
+ async function load(){try{const r=await v33FunctionalClient.getPackageMatrix(cid);setPackages(r.packages||[])}catch(e:any){setMsg(e.message)}}
+ useEffect(()=>{load()},[cid])
+ function patch(i:number,k:string,v:any){const next=[...packages];next[i]={...next[i],[k]:v};setPackages(next)}
+ async function save(){try{await v33FunctionalClient.savePackageMatrix(cid,{packages});setMsg('Paket-Matrix gespeichert');await load()}catch(e:any){setMsg(e.message)}}
+ function add(){setPackages([...packages,{id:`package_${Date.now()}`,name:'',price:'',billing_interval:'month',features:[],visible_on_landing:true,visible_to_customer:true,active:true}])}
+ return <><Head title="Paket-Matrix" sub="Preise und Inhalte einstellen · Landingpage · Kunde · Billing"/><Card title="Pakete bearbeiten" action={<button className="btn secondary" onClick={add}>Paket hinzufügen</button>}>{packages.map((p:any,i:number)=><div className="v42PackageEdit" key={p.id||i}><input className="input" value={p.name||''} onChange={e=>patch(i,'name',e.target.value)} placeholder="Paketname, z. B. Growth"/><input className="input" type="number" value={p.price||''} onChange={e=>patch(i,'price',e.target.value)} placeholder="Preis, z. B. 499"/><textarea className="input" value={(p.features||[]).join('\n')} onChange={e=>patch(i,'features',e.target.value.split('\n').filter(Boolean))} placeholder="Inhalte, je Zeile ein Feature"/><label><input type="checkbox" checked={p.visible_on_landing!==false} onChange={e=>patch(i,'visible_on_landing',e.target.checked)}/> Auf Landingpage anzeigen</label><label><input type="checkbox" checked={p.visible_to_customer!==false} onChange={e=>patch(i,'visible_to_customer',e.target.checked)}/> Im Kundenbereich/Billing anzeigen</label></div>)}<button className="btn" onClick={save}>Paket-Matrix speichern</button>{msg&&<div className="sub">{msg}</div>}</Card></>
+}
+
+function V42AnalyticsBilling({cid}:any){
+ const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
+ async function load(){try{const r=await v33FunctionalClient.analyticsBilling(cid);setData(r);setMsg('Analytics & Billing geladen')}catch(e:any){setMsg(e.message)}}
+ useEffect(()=>{load()},[cid])
+ const a=data?.analytics||{}
+ return <><Head title="Analytics & Billing" sub="Live Kennzahlen · Usage · Billing"/><div className="grid4"><Metric label="QR Scans" value={a.qr_scans??'-'}/><Metric label="Leads" value={a.leads??'-'}/><Metric label="Health" value={a.health??'-'}/><Metric label="Forecast" value={a.forecast??'-'}/></div><Card title="Billing Berechnung"><div className="item"><b>Usage Total</b><span>{data?.billing?.total??'-'} €</span></div><div className="item"><b>Revenue Share</b><span>{a.revenue_share??'-'} €</span></div>{msg&&<div className="sub">{msg}</div>}</Card></>
+}
+
 function V41DeepModuleShell({cid,children,title,sub}:any){
  return <><Head title={title} sub={sub}/><V40ErrorBoundary moduleName={title}>{children}</V40ErrorBoundary></>
 }
@@ -822,7 +897,7 @@ function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
  const seo=store.data.seo_snapshots.filter((s:any)=>s.customer_id===cid)
  const growth=seo.length>=2?Math.round(((seo.at(-1).organic_traffic-seo[0].organic_traffic)/seo[0].organic_traffic)*100):0
  const revenue=inv.filter((i:any)=>i.status==='Bezahlt'&&!isDemoCustomer(store.data,i.customer_id)&&!i.is_demo).reduce((s:number,i:any)=>s+Number(i.amount||0),0)
- return <><Head title={role==='admin'?'Dashboard':'Dashboard'} sub={role==='admin'?`Herzlich Willkommen ${activeAdmin}`:'Willkommen in deinem Kundenbereich'}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne Demo-Kunden"/><Metric label="Offene Tickets" value={open}/><Metric label="SEO Growth 7 Tage" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Paketanfragen" value={pending.length}/></div><div className="grid2"><V34CustomerProvisioning cid={cid}/><V33LeadQuickCheck cid={cid}/></div><V35BusinessEnginePanel cid={cid}/><V36DemoQaPanel cid={cid}/><V39StabilityPanel cid={cid}/><V40QualityPanel cid={cid}/><div className="grid2"><V38Customer360 cid={cid}/><V38PublicPreview cid={cid}/></div><div className="grid2"><V38BillingRevenueHub cid={cid}/><V38ResetControls cid={cid}/></div>{role==='admin'&&<Card title="Paketanfragen">{pending.map((p:any)=><div className="item" key={p.id}><div><b>{cname(store.data,p.customer_id)}</b><div className="sub">möchte {p.package_name}</div></div><button className="btn secondary" onClick={()=>{setCid(p.customer_id);setView('crm')}}>CRM öffnen</button></div>)}</Card>}</>
+ return <><Head title={role==='admin'?'Dashboard':'Dashboard'} sub={role==='admin'?`Herzlich Willkommen ${activeAdmin}`:'Willkommen in deinem Kundenbereich'}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne Demo-Kunden"/><Metric label="Offene Tickets" value={open}/><Metric label="SEO Growth 7 Tage" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Paketanfragen" value={pending.length}/></div>{role==='admin'&&<div className="grid2"><V34CustomerProvisioning cid={cid}/><V33LeadQuickCheck cid={cid}/></div>}{role==='admin'&&<><V35BusinessEnginePanel cid={cid}/><V36DemoQaPanel cid={cid}/><V39StabilityPanel cid={cid}/><V40QualityPanel cid={cid}/></>}<div className="grid2"><V38Customer360 cid={cid}/><V38PublicPreview cid={cid}/></div><div className="grid2"><V38BillingRevenueHub cid={cid}/><V38ResetControls cid={cid}/></div>{role==='admin'&&<Card title="Paketanfragen">{pending.map((p:any)=><div className="item" key={p.id}><div><b>{cname(store.data,p.customer_id)}</b><div className="sub">möchte {p.package_name}</div></div><button className="btn secondary" onClick={()=>{setCid(p.customer_id);setView('crm')}}>CRM öffnen</button></div>)}</Card>}</>
 }
 
 function CRM({store,cid,activeAdmin,adminAvatars}:any){return <><Head title="CRM Detail" sub={cname(store.data,cid)}/><CustomerInfo store={store} cid={cid}/><PackageControl store={store} cid={cid} activeAdmin={activeAdmin}/><QuickCRM store={store} cid={cid}/><div className="grid2"><CRMInvoices store={store} cid={cid}/><CRMNotes store={store} cid={cid} activeAdmin={activeAdmin}/></div><div className="grid2"><Card title="Verträge"><FileList store={store} cid={cid} type="contracts"/></Card><Card title="Media"><FileList store={store} cid={cid}/></Card></div></>}
@@ -943,6 +1018,11 @@ function v33LocalKey(view:string,cid:string){return `v33_${view}_${cid}`}
 function V30ToolModule({view,store,cid,role}:any){
  const cfg=v33ToolConfigs[view]||{title:view,category:'Tool',resource:view,fields:['title'],defaults:[]}
  // v40_ui_polish_router
+ // v42_router_patch
+ if(view==='reviews'||view==='review_intelligence'||view==='review_templates')return <V42ReviewsHub cid={cid}/>
+ if(view==='package_recommendations')return <V42PackageRecommendations cid={cid}/>
+ if(view==='package_matrix')return <V42PackageMatrixEditor cid={cid}/>
+ if(view==='dynamic_billing')return <V42AnalyticsBilling cid={cid}/>
  if(view==='smart_automation')return <V40AutomationStudio cid={cid}/>
  if(view==='marketing_automation')return <V41MarketingDetail cid={cid}/>
  if(view==='ai_assistant')return <V41AiAssistantDetail cid={cid}/>

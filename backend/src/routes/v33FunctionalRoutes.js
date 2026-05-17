@@ -1828,6 +1828,295 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
+
+  router.get('/v42/health', async (req, res) => {
+    res.json({ ok: true, service: 'v42-demo-functional-fix', timestamp: new Date().toISOString() })
+  })
+
+  router.post('/v42/:customer_id/loyalty-program', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const body = req.body || {}
+      const provisioned = await provisionCustomer(customerId, { title: body.title || body.name || undefined })
+
+      const points = Number(body.points_per_scan || body.pointsPerScan || provisioned.loyalty_program?.points_per_scan || 10)
+      const patch = {
+        title: body.title || body.name || provisioned.loyalty_program?.title || 'Loyalty Programm',
+        name: body.name || body.title || provisioned.loyalty_program?.name || 'Loyalty Programm',
+        points_per_scan: points,
+        active: body.active !== false,
+        require_staff_code: body.require_staff_code !== false,
+        metadata: {
+          ...(provisioned.loyalty_program?.metadata || {}),
+          v42_editable: true,
+          notes: body.notes || null
+        },
+        updated_at: new Date().toISOString()
+      }
+
+      const updated = await supabase
+        .from('loyalty_programs')
+        .update(patch)
+        .eq('id', provisioned.loyalty_program.id)
+        .select('*')
+        .single()
+
+      if (updated.error) throw updated.error
+
+      if (provisioned.qr_campaign?.id) {
+        await supabase.from('qr_campaigns').update({
+          title: body.qr_title || body.title || provisioned.qr_campaign.title || 'QR Kampagne',
+          name: body.qr_title || body.title || provisioned.qr_campaign.name || 'QR Kampagne',
+          active: body.active !== false,
+          updated_at: new Date().toISOString()
+        }).eq('id', provisioned.qr_campaign.id)
+      }
+
+      const settings = await v37GetOrCreateLoyaltySettings(customerId)
+      await supabase.from('v37_loyalty_settings').update({
+        daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
+        weekly_scan_limit: Number(body.weekly_scan_limit || settings.weekly_scan_limit || 5),
+        updated_at: new Date().toISOString()
+      }).eq('customer_id', customerId)
+
+      res.json({ ok: true, loyalty_program: updated.data, qr_campaign: provisioned.qr_campaign })
+    } catch (e) { next(e) }
+  })
+
+  router.get('/v42/:customer_id/customer-loyalty-settings', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const settings = await v37GetOrCreateLoyaltySettings(customerId)
+      const staff = await supabase.from('v33_functional_records')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('resource', 'staff_codes')
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      const rules = await supabase.from('v33_functional_records')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('resource', 'loyalty_reward_rules')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      const programs = await supabase.from('loyalty_programs')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      res.json({
+        ok: true,
+        settings,
+        staff_codes: staff.error ? [] : (staff.data || []),
+        rules: rules.error ? [] : (rules.data || []),
+        loyalty_programs: programs.error ? [] : (programs.data || [])
+      })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/v42/:customer_id/customer-loyalty-settings', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const body = req.body || {}
+
+      if (body.staff_code || body.staff_label) {
+        await upsertRecord('staff_codes', {
+          id: body.staff_id || `staff_${customerId}`,
+          customer_id: customerId,
+          label: body.staff_label || 'Mitarbeiter-Code',
+          code: body.staff_code || '2468',
+          active: body.staff_active !== false,
+          uses: Number(body.staff_uses || 0)
+        })
+      }
+
+      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit) {
+        const provisioned = await provisionCustomer(customerId, {})
+        await supabase.from('loyalty_programs').update({
+          points_per_scan: Number(body.points_per_scan || provisioned.loyalty_program?.points_per_scan || 10),
+          updated_at: new Date().toISOString()
+        }).eq('id', provisioned.loyalty_program.id)
+
+        const settings = await v37GetOrCreateLoyaltySettings(customerId)
+        await supabase.from('v37_loyalty_settings').update({
+          daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
+          weekly_scan_limit: Number(body.weekly_scan_limit || settings.weekly_scan_limit || 5),
+          updated_at: new Date().toISOString()
+        }).eq('customer_id', customerId)
+      }
+
+      if (Array.isArray(body.rules)) {
+        for (const rule of body.rules) {
+          if (!rule.trigger && !rule.condition && !rule.action) continue
+          await upsertRecord('loyalty_reward_rules', {
+            id: rule.id || `rule_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            customer_id: customerId,
+            title: rule.title || `${rule.trigger || 'Trigger'} → ${rule.action || 'Aktion'}`,
+            trigger: rule.trigger || 'qr_scan',
+            condition: rule.condition || 'always',
+            action: rule.action || 'add_points',
+            points: Number(rule.points || 0),
+            reward_id: rule.reward_id || null,
+            active: rule.active !== false
+          })
+        }
+      }
+
+      const refreshed = await Promise.all([
+        v37GetOrCreateLoyaltySettings(customerId),
+        supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'staff_codes').limit(20),
+        supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_reward_rules').limit(100)
+      ])
+
+      res.json({
+        ok: true,
+        settings: refreshed[0],
+        staff_codes: refreshed[1].data || [],
+        rules: refreshed[2].data || []
+      })
+    } catch (e) { next(e) }
+  })
+
+  router.get('/v42/:customer_id/package-matrix', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const records = await supabase.from('v33_functional_records')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('resource', 'package_matrix')
+        .order('created_at', { ascending: true })
+        .limit(50)
+
+      let packages = records.error ? [] : (records.data || []).map(r => r.payload || {})
+      if (!packages.length) {
+        packages = [
+          { id: 'starter', name: 'Starter', price: 199, billing_interval: 'month', features: ['QR Kampagnen', 'Basic Loyalty', 'Landingpage'], visible_on_landing: true, visible_to_customer: true, active: true },
+          { id: 'growth', name: 'Growth', price: 499, billing_interval: 'month', features: ['QR + Loyalty', 'Reviews', 'CRM 360', 'Marketing Automation'], visible_on_landing: true, visible_to_customer: true, active: true },
+          { id: 'premium', name: 'Premium', price: 899, billing_interval: 'month', features: ['AI Assistant', 'Revenue Hub', 'Advanced Automation', 'Priority Support'], visible_on_landing: true, visible_to_customer: true, active: true }
+        ]
+        for (const p of packages) {
+          await upsertRecord('package_matrix', { ...p, customer_id: customerId, title: p.name })
+        }
+      }
+
+      res.json({ ok: true, packages })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/v42/:customer_id/package-matrix', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const body = req.body || {}
+      const packages = Array.isArray(body.packages) ? body.packages : []
+
+      for (const pkg of packages) {
+        if (!pkg.name) continue
+        await upsertRecord('package_matrix', {
+          id: pkg.id || slugify(pkg.name, 'package'),
+          customer_id: customerId,
+          title: pkg.name,
+          name: pkg.name,
+          price: Number(pkg.price || 0),
+          billing_interval: pkg.billing_interval || 'month',
+          features: Array.isArray(pkg.features) ? pkg.features : String(pkg.features || '').split('\n').filter(Boolean),
+          visible_on_landing: pkg.visible_on_landing !== false,
+          visible_to_customer: pkg.visible_to_customer !== false,
+          active: pkg.active !== false
+        })
+      }
+
+      const refreshed = await supabase.from('v33_functional_records')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('resource', 'package_matrix')
+        .order('created_at', { ascending: true })
+
+      res.json({ ok: true, packages: (refreshed.data || []).map(r => r.payload || {}) })
+    } catch (e) { next(e) }
+  })
+
+  router.get('/v42/:customer_id/reviews-hub', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const [reviews, templates, tickets] = await Promise.all([
+        supabase.from('review_feedback').select('*').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(200),
+        supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'review_response_templates').limit(100),
+        supabase.from('tickets').select('*').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(100)
+      ])
+
+      res.json({
+        ok: true,
+        reviews: reviews.error ? [] : (reviews.data || []),
+        templates: templates.error ? [] : (templates.data || []),
+        tickets: tickets.error ? [] : (tickets.data || []),
+        stats: {
+          total: reviews.error ? 0 : (reviews.data || []).length,
+          positive: reviews.error ? 0 : (reviews.data || []).filter(r => Number(r.rating || 0) >= 4).length,
+          negative: reviews.error ? 0 : (reviews.data || []).filter(r => Number(r.rating || 0) <= 2).length,
+          open_tickets: tickets.error ? 0 : (tickets.data || []).filter(t => !['closed','done','resolved'].includes(String(t.status || '').toLowerCase())).length
+        }
+      })
+    } catch (e) { next(e) }
+  })
+
+  router.get('/v42/:customer_id/analytics-billing', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const detail = await engine.recalculateCustomer(customerId)
+      const billing = await engine.calculateBilling(customerId)
+      const signals = await v38Signals(customerId)
+      const counts = v38Counts(signals)
+
+      res.json({
+        ok: true,
+        analytics: {
+          qr_scans: counts.qrScans,
+          leads: counts.leads,
+          members: counts.members,
+          reviews: counts.reviews,
+          pipeline_value: counts.pipelineValue,
+          health: detail.health,
+          risk: detail.risk,
+          upsell: detail.upsell,
+          forecast: detail.forecast,
+          revenue_share: detail.revenue_share
+        },
+        billing
+      })
+    } catch (e) { next(e) }
+  })
+
+  router.get('/v42/:customer_id/package-recommendations', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const customer = await getCustomer(customerId)
+      const snapshot = await engine.recalculateCustomer(customerId)
+      const signals = await v38Signals(customerId)
+      const counts = v38Counts(signals)
+
+      const recommendation = {
+        customer_id: customerId,
+        customer_name: customer?.name || customer?.title || customer?.company || 'Kunde',
+        addon: Number(snapshot.upsell || 0) >= 80 ? 'Premium Growth Add-on' : 'Loyalty Booster Add-on',
+        price: Number(snapshot.upsell || 0) >= 80 ? 499 : 199,
+        reason: [
+          `${counts.qrScans} QR-Scans`,
+          `${counts.leads} Leads`,
+          `${counts.members} Loyalty Members`,
+          `Upsell Score ${snapshot.upsell}`,
+          `Health Score ${snapshot.health}`
+        ],
+        confidence: Math.max(55, Number(snapshot.upsell || 60)),
+        status: 'offen'
+      }
+
+      res.json({ ok: true, recommendation, snapshot })
+    } catch (e) { next(e) }
+  })
+
   return router
 }
 

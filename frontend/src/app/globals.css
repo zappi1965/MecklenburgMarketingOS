@@ -2705,3 +2705,31 @@ button:disabled{
   .publicStats{grid-template-columns:1fr}
   .publicActions{grid-template-columns:1fr}
 }
+
+
+/* V42 Demo Functional Fix */
+.v42Warning{
+  margin-top:10px;
+  padding:12px;
+  border-radius:14px;
+  background:rgba(239,68,68,.14);
+  border:1px solid rgba(239,68,68,.32);
+  color:#fecaca;
+  font-weight:800;
+}
+.v42PackageEdit{
+  display:grid;
+  gap:10px;
+  padding:14px;
+  border:1px solid rgba(148,163,184,.18);
+  border-radius:18px;
+  background:rgba(15,23,42,.45);
+  margin-bottom:12px;
+}
+.v42PackageEdit label{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:#cbd5e1;
+  font-weight:800;
+}
