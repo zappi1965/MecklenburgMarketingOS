@@ -1070,11 +1070,11 @@ function V30ToolModule({view,store,cid,role}:any){
   const row=items.find((x:any)=>x.id===id)||{}
   const nextRow={...row,...patch}
   persist(items.map((x:any)=>x.id===id?nextRow:x))
-  v33FunctionalClient.updateLocalRecord(cfg.resource,id,nextRow).then(()=>setMsg('Backend aktualisiert')).catch((e:any)=>setMsg(`Lokal aktualisiert · Backend: ${e.message}`))
+  v33FunctionalClient.updateRecord(cfg.resource,id,nextRow).then(()=>setMsg('Backend aktualisiert')).catch((e:any)=>setMsg(`Lokal aktualisiert · Backend: ${e.message}`))
  }
  function remove(id:string){
   persist(items.filter((x:any)=>x.id!==id))
-  v33FunctionalClient.deleteLocalRecord(cfg.resource,id,cid).then(()=>setMsg('Backend gelöscht')).catch((e:any)=>setMsg(`Lokal gelöscht · Backend: ${e.message}`))
+  v33FunctionalClient.deleteRecord(cfg.resource,id,cid).then(()=>setMsg('Backend gelöscht')).catch((e:any)=>setMsg(`Lokal gelöscht · Backend: ${e.message}`))
  }
  function testStaff(){
   v33FunctionalClient.verifyStaffCode({customer_id:cid,code:verify}).then(()=>setVerifyResult(true)).catch(()=>setVerifyResult(false))

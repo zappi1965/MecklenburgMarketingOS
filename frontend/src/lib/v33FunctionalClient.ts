@@ -74,7 +74,19 @@ export const v33FunctionalClient = {
   updateRecord: (resource: string, localId: string, payload: any) =>
     request(`/records/${resource}/local/${localId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
+  // V42.1 backward compatibility:
+  // Older demo modules still call updateLocalRecord/createLocalRecord/deleteLocalRecord.
+  // They map to the newer record helpers so Vercel typecheck no longer fails.
+  updateLocalRecord: (resource: string, localId: string, payload: any) =>
+    request(`/records/${resource}/local/${localId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+  createLocalRecord: (resource: string, payload: any) =>
+    request(`/records/${resource}`, { method: 'POST', body: JSON.stringify(payload) }),
+
   deleteRecord: (resource: string, localId: string, customerId?: string) =>
+    request(`/records/${resource}/local/${localId}${customerId ? `?customer_id=${customerId}` : ''}`, { method: 'DELETE' }),
+
+  deleteLocalRecord: (resource: string, localId: string, customerId?: string) =>
     request(`/records/${resource}/local/${localId}${customerId ? `?customer_id=${customerId}` : ''}`, { method: 'DELETE' }),
 
   verifyStaffCode: (payload: any) =>
