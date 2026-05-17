@@ -314,8 +314,8 @@ return <><Head title="QR Codes" sub="Bewertungslogik mit internem Feedback und G
 
 function ProductionStatusCard(){
  const [health,setHealth]=useState<any>(null)
- useEffect(()=>{if(API_BASE)fetch(`${API_BASE}/api/production/health`).then(r=>r.json()).then(setHealth).catch(()=>setHealth({ok:false,error:'Backend nicht erreichbar'}))},[])
- return <Card title="Production Status"><div className="item"><b>Backend</b><Badge type={health?.ok?'green':'red'}>{health?.ok?'Verbunden':'Nicht verbunden'}</Badge></div><div className="sub">Mail: {health?.mail_enabled?'aktiv':'Dry-Run / nicht konfiguriert'}</div><div className="sub">Worker, API-Syncs, PDF- und QR-Services sind backendseitig vorbereitet.</div></Card>
+ useEffect(()=>{v33FunctionalClient.health().then(setHealth).catch((e:any)=>setHealth({ok:false,error:e.message||'Backend nicht erreichbar'}))},[])
+ return <Card title="Production Status"><div className="item"><b>Backend</b><Badge type={health?.ok?'green':'red'}>{health?.ok?'Verbunden':'Nicht verbunden'}</Badge></div><div className="sub">Service: {health?.service||health?.error||'Prüfe Verbindung...'}</div><div className="sub">Worker, API-Syncs, PDF- und QR-Services sind backendseitig vorbereitet.</div></Card>
 }
 
 

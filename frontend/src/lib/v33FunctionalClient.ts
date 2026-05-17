@@ -15,14 +15,14 @@ async function request(path: string, init: RequestInit = {}) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const targets = []
 
-  if (V33_API_BASE) {
-    targets.push(`${V33_API_BASE}/api/v33-functional${normalizedPath}`)
-  }
+  // V42.5: Use same-origin Vercel API proxy first:
+  // Browser -> Vercel /api/v33-functional/... -> Railway Backend.
+  // This avoids browser CORS/cross-origin fetch problems.
+  targets.push(`/api/v33-functional${normalizedPath}`)
 
-  // Same-origin fallback is useful if Next rewrites/proxy are configured.
-  // It also gives a clearer error than raw TypeError: fetch failed.
-  if (!V33_API_BASE || localFallback) {
-    targets.push(`/api/v33-functional${normalizedPath}`)
+  // Direct Railway fallback remains available.
+  if (V33_API_BASE && !localFallback) {
+    targets.push(`${V33_API_BASE}/api/v33-functional${normalizedPath}`)
   }
 
   let lastError: any = null
