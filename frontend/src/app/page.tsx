@@ -731,7 +731,7 @@ function V42AnalyticsBilling({store,cid}:any){
   const paid=invoices.filter((i:any)=>i.status==='Bezahlt').reduce((s:number,i:any)=>s+Number(i.amount||0),0)
   const campaigns=(store?.data?.qr_campaigns||[]).filter((q:any)=>q.customer_id===cid)
   const reviews=(store?.data?.review_feedback||[]).filter((r:any)=>r.customer_id===cid)
-  return {analytics:{qr_scans:campaigns.reduce((s:number,q:any)=>s+Number(q.scans||0),0),leads:0,members:0,reviews:reviews.length,pipeline_value:(store?.data?.offers||[]).filter((o:any)=>o.customer_id===cid).reduce((s:number,o:any)=>s+Number(o.amount||0),0),health:reviews.some((r:any)=>Number(r.rating)<=2)?68:86,risk:reviews.some((r:any)=>Number(r.rating)<=2)?44:16,upsell:paid>500?82:58,forecast:paid+499,revenue_share:Math.round(paid*0.15)},billing:{total:paid,base:paid,usage:campaigns.length*25}}}
+  return {analytics:{qr_scans:campaigns.reduce((s:number,q:any)=>s+Number(q.scans||0),0),leads:0,members:0,reviews:reviews.length,pipeline_value:(store?.data?.offers||[]).filter((o:any)=>o.customer_id===cid).reduce((s:number,o:any)=>s+Number(o.amount||0),0),health:reviews.some((r:any)=>Number(r.rating)<=2)?68:86,risk:reviews.some((r:any)=>Number(r.rating)<=2)?44:16,upsell:paid>500?82:58,forecast:paid+499,revenue_share:Math.round(paid*0.15)},billing:{total:paid,base:paid,usage:campaigns.length*25}}
  }
  async function load(){try{const r=await v33FunctionalClient.analyticsBilling(cid);setData(r);setMsg('Analytics & Billing geladen')}catch(e:any){setData(localData());setMsg('Backend nicht erreichbar, lokale Analytics berechnet')}}
  useEffect(()=>{load()},[cid])
