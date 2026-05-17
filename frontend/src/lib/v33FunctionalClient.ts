@@ -1,7 +1,10 @@
+const DEFAULT_PUBLIC_BACKEND_URL = 'https://mecklenburgmarketingos-production.up.railway.app'
 const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const directBackendFallback =
   process.env.NEXT_PUBLIC_ENABLE_DIRECT_BACKEND === 'true' ||
   process.env.NEXT_PUBLIC_ENABLE_DIRECT_BACKEND_FALLBACK === 'true'
+const publicBackendFallbackEnabled =
+  process.env.NEXT_PUBLIC_DISABLE_PUBLIC_BACKEND_FALLBACK !== 'true'
 
 function normalizeBase(url: string) {
   const value = String(url || '').trim().replace(/\/+$/, '')
@@ -11,28 +14,46 @@ function normalizeBase(url: string) {
   return `https://${value}`
 }
 
-export const V33_API_BASE = normalizeBase(rawBackendUrl)
+export const V33_API_BASE = normalizeBase(rawBackendUrl || DEFAULT_PUBLIC_BACKEND_URL)
+
+function isSameOrigin(url: string) {
+  if (!url || typeof window === 'undefined') return false
+  try {
+    return new URL(url).host === window.location.host
+  } catch {
+    return false
+  }
+}
+
+function formatProxyAttempts(payload: any) {
+  const attempts = Array.isArray(payload?.attempts) ? payload.attempts : []
+  if (!attempts.length) return ''
+  return ` · Versuche: ${attempts
+    .map((a: any) => `${a.backendSource || 'Backend'} ${a.targetUrl || ''}: ${a.error || a.status || 'fehlgeschlagen'}`)
+    .join(' | ')}`
+}
 
 async function request(path: string, init: RequestInit = {}) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  const targets = []
+  const targets: Array<{ url: string; label: string }> = []
 
   // V42.5: Use same-origin Vercel API proxy first:
   // Browser -> Vercel /api/v33-functional/... -> Railway Backend.
   // This avoids browser CORS/cross-origin fetch problems.
-  targets.push(`/api/v33-functional${normalizedPath}`)
+  targets.push({ url: `/api/v33-functional${normalizedPath}`, label: 'Next API Proxy' })
 
-  // Direct Railway fallback is opt-in only. Default browser path stays same-origin
-  // to avoid Vercel/Railway browser fetch failures and CORS edge cases.
-  if (V33_API_BASE && directBackendFallback) {
-    targets.push(`${V33_API_BASE}/api/v33-functional${normalizedPath}`)
+  // V42.11: if the Vercel proxy itself fails, retry the public Railway URL.
+  // The proxy remains first choice, but demo/live tools should not die on a
+  // single serverless fetch failure.
+  if (V33_API_BASE && !isSameOrigin(V33_API_BASE) && (directBackendFallback || publicBackendFallbackEnabled)) {
+    targets.push({ url: `${V33_API_BASE}/api/v33-functional${normalizedPath}`, label: 'Public Backend Fallback' })
   }
 
   let lastError: any = null
 
-  for (const url of targets) {
+  for (const target of targets) {
     try {
-      const res = await fetch(url, {
+      const res = await fetch(target.url, {
         ...init,
         headers: {
           'Content-Type': 'application/json',
@@ -46,7 +67,9 @@ async function request(path: string, init: RequestInit = {}) {
       // V42.4 HTML_RESPONSE_GUARD
       // Wrong backend URLs often return a Next/Vercel HTML 404 page.
       if (text.trim().startsWith('<!DOCTYPE html') || text.trim().startsWith('<html')) {
-        throw new Error(`API lieferte HTML statt JSON. Prüfe Next API Proxy und BACKEND_URL. Aktueller Ziel-URL: ${url}`)
+        const htmlError: any = new Error(`API lieferte HTML statt JSON. Prüfe Next API Proxy und BACKEND_URL. Aktueller Ziel-URL: ${target.url}`)
+        htmlError.fromResponse = true
+        throw htmlError
       }
 
       let payload: any = null
@@ -59,7 +82,11 @@ async function request(path: string, init: RequestInit = {}) {
       if (!res.ok || payload?.ok === false) {
         const message = payload?.error || payload?.message || `${res.status} ${res.statusText}`
         const hint = payload?.hint ? ` · ${payload.hint}` : ''
-        throw new Error(`${message}${hint}`)
+        const proxyAttempts = formatProxyAttempts(payload)
+        const responseError: any = new Error(`${message}${hint}${proxyAttempts}`)
+        responseError.fromResponse = true
+        responseError.status = res.status
+        throw responseError
       }
 
       return payload
@@ -68,11 +95,10 @@ async function request(path: string, init: RequestInit = {}) {
     }
   }
 
-  const baseHint = directBackendFallback && V33_API_BASE
-    ? `Backend nicht erreichbar: ${V33_API_BASE}`
-    : 'Backend-Proxy nicht erreichbar: /api/v33-functional'
+  if (lastError?.fromResponse) throw lastError
 
-  throw new Error(`${baseHint}. Originalfehler: ${lastError?.message || 'fetch failed'}`)
+  const attempted = targets.map((target) => target.label).join(' -> ')
+  throw new Error(`Backend-Verbindung fehlgeschlagen (${attempted}). Originalfehler: ${lastError?.message || 'fetch failed'}`)
 }
 
 export const v33FunctionalClient = {
