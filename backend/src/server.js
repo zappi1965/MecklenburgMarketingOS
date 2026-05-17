@@ -20,6 +20,19 @@ const { securityHeaders, generalRateLimit } = require('./middleware/securityHard
 
 const app = express()
 
+
+
+// V42.2 CORS HOTFIX
+// Allows Vercel/frontend domains to call the Railway backend.
+// For the demo stage we allow all origins. Credentials are disabled because
+// the current frontend does not rely on cookie-based auth.
+app.use(cors({
+  origin: true,
+  credentials: false,
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}))
+app.options('*', cors())
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
