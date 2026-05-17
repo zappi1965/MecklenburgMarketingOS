@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isHtmlResponse, proxyErrorMessage, resolveBackendBase } from '../../_proxy/backend'
+import { isHtmlResponse, proxyErrorMessage, resolveBackendCandidates, type ResolvedBackend } from '../../_proxy/backend'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 async function readJson(req: NextRequest) {
   try {
@@ -21,7 +24,10 @@ function customerIdFrom(req: NextRequest, body: any) {
   )
 }
 
-async function upstreamJson(targetUrl: string, backend: ReturnType<typeof resolveBackendBase>, init: RequestInit = {}) {
+async function upstreamJson(targets: Array<{ targetUrl: string; backend: ResolvedBackend }>, init: RequestInit = {}) {
+  const attempts: any[] = []
+
+  for (const { targetUrl, backend } of targets) {
   try {
     const res = await fetch(targetUrl, {
       ...init,
@@ -34,14 +40,13 @@ async function upstreamJson(targetUrl: string, backend: ReturnType<typeof resolv
     const text = await res.text()
 
     if (isHtmlResponse(text)) {
-      return NextResponse.json({
-        ok: false,
-        code: 'UPSTREAM_HTML_RESPONSE',
-        error: 'Backend lieferte HTML statt JSON.',
+      attempts.push({
         targetUrl,
         backendSource: backend.source,
-        warning: backend.warning
-      }, { status: 502 })
+        warning: backend.warning,
+        error: 'Backend lieferte HTML statt JSON.'
+      })
+      continue
     }
 
     return new NextResponse(text, {
@@ -50,19 +55,26 @@ async function upstreamJson(targetUrl: string, backend: ReturnType<typeof resolv
       headers: {
         'content-type': res.headers.get('content-type') || 'application/json',
         'cache-control': 'no-store',
-        'x-mmos-legacy-proxy': 'v42.5'
+        'x-mmos-legacy-proxy': 'v42.10',
+        'x-mmos-backend-source': backend.source
       }
     })
   } catch (error: any) {
-    return NextResponse.json({
-      ok: false,
-      code: 'LEGACY_PROXY_FETCH_FAILED',
-      error: proxyErrorMessage(error),
+    attempts.push({
       targetUrl,
       backendSource: backend.source,
-      warning: backend.warning
-    }, { status: 502 })
+      warning: backend.warning,
+      error: proxyErrorMessage(error)
+    })
   }
+  }
+
+  return NextResponse.json({
+    ok: false,
+    code: 'LEGACY_PROXY_FETCH_FAILED',
+    error: attempts.at(-1)?.error || 'fetch failed',
+    attempts
+  }, { status: 502 })
 }
 
 type RouteContext = { params: Promise<{ path?: string[] }> }
@@ -70,32 +82,31 @@ type RouteContext = { params: Promise<{ path?: string[] }> }
 async function handler(req: NextRequest, context: RouteContext) {
   const params = await context.params
   const path = (params.path || []).join('/')
-  const backend = resolveBackendBase(req)
-  const base = backend.base
+  const backends = resolveBackendCandidates(req)
   const body = req.method === 'GET' ? {} : await readJson(req)
   const cid = customerIdFrom(req, body)
 
   if (path === 'health' || path === 'system/health') {
-    return upstreamJson(`${base}/api/system/health`, backend)
+    return upstreamJson(backends.map((backend) => ({ backend, targetUrl: `${backend.base}/api/system/health` })))
   }
 
   if (path === 'v42/health') {
-    return upstreamJson(`${base}/api/v33-functional/v42/health`, backend)
+    return upstreamJson(backends.map((backend) => ({ backend, targetUrl: `${backend.base}/api/v33-functional/v42/health` })))
   }
 
   if (path === 'provision') {
-    return upstreamJson(`${base}/api/v33-functional/v39/${cid}/provision-safe`, backend, {
+    return upstreamJson(backends.map((backend) => ({ backend, targetUrl: `${backend.base}/api/v33-functional/v39/${cid}/provision-safe` })), {
       method: 'POST',
       body: JSON.stringify(body || {})
     })
   }
 
   if (path === 'customer-360' || path === 'customer360') {
-    return upstreamJson(`${base}/api/v33-functional/v38/${cid}/customer-360`, backend)
+    return upstreamJson(backends.map((backend) => ({ backend, targetUrl: `${backend.base}/api/v33-functional/v38/${cid}/customer-360` })))
   }
 
   // Generic escape hatch:
-  return upstreamJson(`${base}/api/${path}${new URL(req.url).search}`, backend, {
+  return upstreamJson(backends.map((backend) => ({ backend, targetUrl: `${backend.base}/api/${path}${new URL(req.url).search}` })), {
     method: req.method,
     body: req.method === 'GET' || req.method === 'HEAD' ? undefined : JSON.stringify(body || {})
   })
