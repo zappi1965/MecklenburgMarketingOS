@@ -2,7 +2,11 @@ const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const localFallback = process.env.NEXT_PUBLIC_USE_LOCAL_API_FALLBACK === 'true'
 
 function normalizeBase(url: string) {
-  return String(url || '').replace(/\/+$/, '')
+  const value = String(url || '').trim().replace(/\/+$/, '')
+  if (!value) return ''
+  if (value.startsWith('http://') || value.startsWith('https://')) return value
+  // V42.4: If Vercel env is pasted without protocol, fetch would hit the Next app relatively.
+  return `https://${value}`
 }
 
 export const V33_API_BASE = normalizeBase(rawBackendUrl)
@@ -35,6 +39,13 @@ async function request(path: string, init: RequestInit = {}) {
       })
 
       const text = await res.text()
+
+      // V42.4 HTML_RESPONSE_GUARD
+      // Wrong backend URLs often return a Next/Vercel HTML 404 page.
+      if (text.trim().startsWith('<!DOCTYPE html') || text.trim().startsWith('<html')) {
+        throw new Error(`API lieferte HTML statt JSON. Prüfe NEXT_PUBLIC_BACKEND_URL. Aktueller Ziel-URL: ${url}`)
+      }
+
       let payload: any = null
       try {
         payload = text ? JSON.parse(text) : null

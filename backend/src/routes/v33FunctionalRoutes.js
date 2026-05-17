@@ -2117,6 +2117,19 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
+
+  router.get('/v42/url-debug', async (req, res) => {
+    res.json({
+      ok: true,
+      service: 'v42-url-debug',
+      protocol: req.protocol,
+      host: req.get('host'),
+      origin: req.get('origin') || null,
+      url: req.originalUrl,
+      timestamp: new Date().toISOString()
+    })
+  })
+
   return router
 }
 

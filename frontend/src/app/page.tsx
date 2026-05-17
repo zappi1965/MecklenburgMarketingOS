@@ -19,6 +19,20 @@ type FileType='invoices'|'contracts'|'media'|'documents'|'reports'
 const uid=()=>crypto.randomUUID?.()||Math.random().toString(36).slice(2)
 const eur=(v:any)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(v||0))
 
+function v424ExternalQrUrls(value:string){
+ const encoded=encodeURIComponent(value)
+ return [
+  `https://api.qrserver.com/v1/create-qr-code/?size=520x520&margin=20&data=${encoded}`,
+  `https://quickchart.io/qr?size=520&margin=2&text=${encoded}`
+ ]
+}
+function V424QrImage({value}:{value:string}){
+ const urls=v424ExternalQrUrls(value)
+ const [idx,setIdx]=useState(0)
+ return <img src={urls[idx]} alt="QR Code" onError={()=>setIdx(Math.min(idx+1,urls.length-1))}/>
+}
+
+
 class V40ErrorBoundary extends React.Component<any,{hasError:boolean,error:any}>{
  constructor(props:any){super(props);this.state={hasError:false,error:null}}
  static getDerivedStateFromError(error:any){return {hasError:true,error}}
@@ -583,11 +597,19 @@ function V42AdminLoyaltyEditor({cid}:any){
 
 function V42QrCodePanel({cid}:any){
  const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
- async function create(){setMsg('Erstelle QR/Loyalty...');try{const r=await v33FunctionalClient.createQrCampaign(cid,{title:'',purpose:'loyalty',points_per_scan:10});setData(r);setMsg('QR Kampagne erstellt')}catch(e:any){setMsg(e.message)}}
- const slug=data?.qr_campaign?.slug
- const url=slug&&typeof window!=='undefined'?`${window.location.origin}/l/${slug}`:''
- const qr=url?`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(url)}`:''
- return <Card title="QR Kampagne erstellen" action={<button className="btn secondary" onClick={create}>QR + Loyalty erstellen</button>}>{qr?<div className="qrExport"><img src={qr}/><div><b>{url}</b><div className="toolbarActions"><button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button></div></div></div>:<div className="sub">Noch kein QR erstellt. Klicke auf „QR + Loyalty erstellen“.</div>}{msg&&<div className="sub">{msg}</div>}</Card>
+ const [manualSlug,setManualSlug]=useState('')
+ async function create(){
+  setMsg('Erstelle QR/Loyalty...')
+  try{
+   const r=await v33FunctionalClient.createQrCampaign(cid,{title:'QR Loyalty Kampagne',purpose:'loyalty',points_per_scan:10})
+   setData(r)
+   setMsg('QR Kampagne erstellt')
+  }catch(e:any){setMsg(e.message)}
+ }
+ const slug=data?.qr_campaign?.slug||data?.loyalty_program?.slug||manualSlug
+ const appBase=process.env.NEXT_PUBLIC_APP_URL || (typeof window!=='undefined'?window.location.origin:'')
+ const url=slug?`${appBase.replace(/\/+$/,'')}/l/${slug}`:''
+ return <Card title="QR Kampagne erstellen" action={<button className="btn secondary" onClick={create}>QR + Loyalty erstellen</button>}>{url?<div className="qrExport"><V424QrImage value={url}/><div><b>{url}</b><p className="sub">QR wird extern erzeugt. Fallback: qrserver.com → quickchart.io</p><div className="toolbarActions"><button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button><a className="btn secondary" href={v424ExternalQrUrls(url)[0]} target="_blank">QR extern öffnen</a></div></div></div>:<div className="sub">Noch kein QR erstellt. Klicke auf „QR + Loyalty erstellen“.</div>}<input className="input" value={manualSlug} onChange={e=>setManualSlug(e.target.value)} placeholder="Optional: vorhandenen Slug manuell eingeben, z. B. demo-cafe-morgenlicht"/>{msg&&<div className="sub">{msg}</div>}</Card>
 }
 
 function V42ReviewsHub({cid}:any){
