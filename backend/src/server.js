@@ -23,6 +23,7 @@ const app = express()
 
 
 // V42.2 CORS HOTFIX
+// V42.3 EXPRESS OPTIONS HOTFIX: uses route-less OPTIONS middleware for Express 5 compatibility
 // Allows Vercel/frontend domains to call the Railway backend.
 // For the demo stage we allow all origins. Credentials are disabled because
 // the current frontend does not rely on cookie-based auth.
@@ -32,7 +33,12 @@ app.use(cors({
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }))
-app.options('*', cors())
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204)
+  }
+  return next()
+})
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
