@@ -1,22 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const DEFAULT_BACKEND_URL = 'https://mecklenburgmarketingos-production.up.railway.app'
-
-function normalizeBackendBase(value: string | undefined) {
-  const raw = String(value || '').trim().replace(/\/+$/, '')
-  if (!raw) return ''
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
-  return `https://${raw}`
-}
-
-function getBackendBase() {
-  return normalizeBackendBase(
-    process.env.BACKEND_URL ||
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.RAILWAY_BACKEND_URL ||
-      DEFAULT_BACKEND_URL
-  )
-}
+import { isHtmlResponse, proxyErrorMessage, resolveBackendBase } from '../../_proxy/backend'
 
 async function readJson(req: NextRequest) {
   try {
@@ -38,7 +21,7 @@ function customerIdFrom(req: NextRequest, body: any) {
   )
 }
 
-async function upstreamJson(targetUrl: string, init: RequestInit = {}) {
+async function upstreamJson(targetUrl: string, backend: ReturnType<typeof resolveBackendBase>, init: RequestInit = {}) {
   try {
     const res = await fetch(targetUrl, {
       ...init,
@@ -50,12 +33,14 @@ async function upstreamJson(targetUrl: string, init: RequestInit = {}) {
     })
     const text = await res.text()
 
-    if (text.trim().startsWith('<!DOCTYPE html') || text.trim().startsWith('<html')) {
+    if (isHtmlResponse(text)) {
       return NextResponse.json({
         ok: false,
         code: 'UPSTREAM_HTML_RESPONSE',
         error: 'Backend lieferte HTML statt JSON.',
-        targetUrl
+        targetUrl,
+        backendSource: backend.source,
+        warning: backend.warning
       }, { status: 502 })
     }
 
@@ -72,8 +57,10 @@ async function upstreamJson(targetUrl: string, init: RequestInit = {}) {
     return NextResponse.json({
       ok: false,
       code: 'LEGACY_PROXY_FETCH_FAILED',
-      error: error?.message || 'Legacy Proxy konnte Backend nicht erreichen.',
-      targetUrl
+      error: proxyErrorMessage(error),
+      targetUrl,
+      backendSource: backend.source,
+      warning: backend.warning
     }, { status: 502 })
   }
 }
@@ -81,31 +68,32 @@ async function upstreamJson(targetUrl: string, init: RequestInit = {}) {
 async function handler(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
   const params = await context.params
   const path = (params.path || []).join('/')
-  const base = getBackendBase()
+  const backend = resolveBackendBase(req)
+  const base = backend.base
   const body = req.method === 'GET' ? {} : await readJson(req)
   const cid = customerIdFrom(req, body)
 
   if (path === 'health' || path === 'system/health') {
-    return upstreamJson(`${base}/api/system/health`)
+    return upstreamJson(`${base}/api/system/health`, backend)
   }
 
   if (path === 'v42/health') {
-    return upstreamJson(`${base}/api/v33-functional/v42/health`)
+    return upstreamJson(`${base}/api/v33-functional/v42/health`, backend)
   }
 
   if (path === 'provision') {
-    return upstreamJson(`${base}/api/v33-functional/v39/${cid}/provision-safe`, {
+    return upstreamJson(`${base}/api/v33-functional/v39/${cid}/provision-safe`, backend, {
       method: 'POST',
       body: JSON.stringify(body || {})
     })
   }
 
   if (path === 'customer-360' || path === 'customer360') {
-    return upstreamJson(`${base}/api/v33-functional/v38/${cid}/customer-360`)
+    return upstreamJson(`${base}/api/v33-functional/v38/${cid}/customer-360`, backend)
   }
 
   // Generic escape hatch:
-  return upstreamJson(`${base}/api/${path}${new URL(req.url).search}`, {
+  return upstreamJson(`${base}/api/${path}${new URL(req.url).search}`, backend, {
     method: req.method,
     body: req.method === 'GET' || req.method === 'HEAD' ? undefined : JSON.stringify(body || {})
   })

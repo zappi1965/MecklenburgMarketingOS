@@ -1,8 +1,6 @@
+import { BROWSER_BACKEND_BASE } from './backendUrl'
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  ''
+const API_BASE = BROWSER_BACKEND_BASE
 
 async function request(path: string, options: RequestInit = {}) {
   const res = await fetch(`${API_BASE}/api/demo-tools${path}`, {

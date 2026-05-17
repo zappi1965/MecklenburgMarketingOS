@@ -57,10 +57,6 @@ export function EnvCheckPanel() {
   const [health, setHealth] = useState<any>(null)
 
   useEffect(() => {
-    if (!API_BASE) {
-      setHealth({ ok: false, error: 'NEXT_PUBLIC_API_BASE fehlt' })
-      return
-    }
     fetch(`${API_BASE}/api/hardening/health`)
       .then(r => r.json())
       .then(setHealth)

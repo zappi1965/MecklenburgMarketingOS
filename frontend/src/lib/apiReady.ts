@@ -2,7 +2,6 @@
 import { API_BASE } from './config'
 
 export async function apiReadyHealth() {
-  if (!API_BASE) return { ok: false, error: 'NEXT_PUBLIC_API_BASE fehlt' }
   const r = await fetch(`${API_BASE}/api/hardening/health`)
   return r.json()
 }

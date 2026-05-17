@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cleanProxyHeaders, isHtmlResponse, proxyErrorMessage, resolveBackendBase } from '../../_proxy/backend'
-
-const API_PREFIX = '/api/v33-functional'
+import { cleanProxyHeaders, isHtmlResponse, proxyErrorMessage, resolveBackendBase } from '../_proxy/backend'
 
 async function proxy(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
-  const backend = resolveBackendBase(req)
   const params = await context.params
   const path = (params.path || []).join('/')
   const incomingUrl = new URL(req.url)
-  const targetUrl = `${backend.base}${API_PREFIX}/${path}${incomingUrl.search}`
+  const backend = resolveBackendBase(req)
+  const targetUrl = `${backend.base}/api/${path}${incomingUrl.search}`
+
+  if (path === 'proxy-health') {
+    return NextResponse.json({
+      ok: true,
+      service: 'mmos-next-api-proxy',
+      backendBase: backend.base,
+      backendSource: backend.source,
+      warning: backend.warning,
+      timestamp: new Date().toISOString()
+    })
+  }
 
   try {
     const method = req.method.toUpperCase()
@@ -25,7 +34,6 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path?: strin
 
     const upstream = await fetch(targetUrl, init)
     const text = await upstream.text()
-    const contentType = upstream.headers.get('content-type') || 'application/json'
 
     if (isHtmlResponse(text)) {
       return NextResponse.json({
@@ -35,7 +43,7 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path?: strin
         targetUrl,
         backendSource: backend.source,
         warning: backend.warning,
-        hint: 'Prüfe Railway-Backend-URL und Backend-Deploy.'
+        hint: 'Pruefe BACKEND_URL/NEXT_PUBLIC_BACKEND_URL und ob der Backend-Pfad existiert.'
       }, { status: 502 })
     }
 
@@ -43,20 +51,20 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path?: strin
       status: upstream.status,
       statusText: upstream.statusText,
       headers: {
-        'content-type': contentType,
+        'content-type': upstream.headers.get('content-type') || 'application/json',
         'cache-control': 'no-store',
-        'x-mmos-proxy': 'v42.5'
+        'x-mmos-proxy': 'generic-v42.6'
       }
     })
   } catch (error: any) {
     return NextResponse.json({
       ok: false,
-      code: 'PROXY_FETCH_FAILED',
+      code: 'GENERIC_PROXY_FETCH_FAILED',
       error: proxyErrorMessage(error),
       targetUrl,
       backendSource: backend.source,
       warning: backend.warning,
-      hint: 'Prüfe BACKEND_URL/NEXT_PUBLIC_BACKEND_URL in Vercel und Railway Public Networking.'
+      hint: 'Pruefe BACKEND_URL/NEXT_PUBLIC_BACKEND_URL in Vercel und Railway Public Networking.'
     }, { status: 502 })
   }
 }

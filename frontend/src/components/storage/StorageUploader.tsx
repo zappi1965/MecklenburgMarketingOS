@@ -18,7 +18,7 @@ export default function StorageUploader({
   const [files, setFiles] = useState<any[]>([])
 
   async function loadFiles() {
-    if (!API_BASE || !customerId) return
+    if (!customerId) return
     const res = await fetch(`${API_BASE}/api/storage/customer/${customerId}`)
     const json = await res.json()
     if (json.ok) setFiles(json.data || [])
@@ -37,11 +37,6 @@ export default function StorageUploader({
       size: file.size,
       localUrl: URL.createObjectURL(file)
     })
-
-    if (!API_BASE) {
-      alert('NEXT_PUBLIC_API_BASE fehlt. Upload kann nicht an Railway Backend gesendet werden.')
-      return
-    }
 
     const fd = new FormData()
     fd.append('file', file)
@@ -69,7 +64,6 @@ export default function StorageUploader({
   }
 
   async function openSigned(file: any) {
-    if (!API_BASE) return
     const res = await fetch(`${API_BASE}/api/storage/signed-url`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

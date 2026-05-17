@@ -8,8 +8,6 @@ export type ApiResult<T = any> = {
 }
 
 export async function apiRequest<T = any>(path: string, options: RequestInit = {}): Promise<ApiResult<T>> {
-  if (!API_BASE) return { ok: false, error: 'NEXT_PUBLIC_API_BASE fehlt' }
-
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,

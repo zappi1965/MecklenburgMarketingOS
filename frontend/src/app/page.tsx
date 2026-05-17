@@ -261,7 +261,6 @@ function ProfileUpload({activeAdmin,setAdminAvatars,adminAvatars}:any){
   const file=e.target.files?.[0]; if(!file)return
   const preview=URL.createObjectURL(file)
   setAdminAvatars((p:any)=>({...p,[activeAdmin]:preview}))
-  if(!API_BASE){alert('NEXT_PUBLIC_API_BASE fehlt. Profilbild ist nur als Preview gesetzt.');return}
   const fd=new FormData(); fd.append('file',file); fd.append('display_name',activeAdmin)
   setBusy(true)
   try{const res=await fetch(`${API_BASE}/api/avatars/upload`,{method:'POST',body:fd});const j=await res.json();if(!j.ok)throw new Error(j.error||'Upload fehlgeschlagen');setAdminAvatars((p:any)=>({...p,[activeAdmin]:j.data.avatar_url}))}catch(e:any){alert(e.message||'Avatar Upload fehlgeschlagen')}finally{setBusy(false)}
@@ -271,12 +270,11 @@ function ProfileUpload({activeAdmin,setAdminAvatars,adminAvatars}:any){
 
 function StorageUploader({store,cid,fileType='documents',refTable,refId,title='Datei hochladen',activeAdmin='DominiqueMM'}:any){
  const input=useRef<HTMLInputElement|null>(null); const [drag,setDrag]=useState(false); const [selected,setSelected]=useState<File|null>(null)
- async function upload(file:File|null=selected){
+async function upload(file:File|null=selected){
   if(!file)return alert('Bitte Datei auswählen')
-  if(API_BASE){
-   const fd=new FormData(); fd.append('file',file); fd.append('customer_id',cid); fd.append('file_type',fileType); if(refTable)fd.append('ref_table',refTable); if(refId)fd.append('ref_id',refId)
-   try{const res=await fetch(`${API_BASE}/api/storage/upload`,{method:'POST',body:fd});const j=await res.json(); if(!j.ok)throw new Error(j.error||'Upload fehlgeschlagen'); await store.load()}catch(e:any){alert(e.message)}
-  } else {
+  const fd=new FormData(); fd.append('file',file); fd.append('customer_id',cid); fd.append('file_type',fileType); if(refTable)fd.append('ref_table',refTable); if(refId)fd.append('ref_id',refId)
+  try{const res=await fetch(`${API_BASE}/api/storage/upload`,{method:'POST',body:fd});const j=await res.json(); if(!j.ok)throw new Error(j.error||'Upload fehlgeschlagen'); await store.load()}catch(e:any){
+   alert(e.message)
    await store.create('customer_files',{customer_id:cid,name:file.name,original_name:file.name,file_type:fileType,bucket:fileType,storage_path:'#',mime_type:file.type,size_bytes:file.size,version:1,ref_table:refTable,ref_id:refId,actor_name:activeAdmin,url:URL.createObjectURL(file)})
   }
   await store.create('notifications',{customer_id:cid,title:`${activeAdmin} hat Datei hochgeladen`,message:`${activeAdmin} hat ${file.name} hochgeladen.`,type:'admin_change',actor_name:activeAdmin})
