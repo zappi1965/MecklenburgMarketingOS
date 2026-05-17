@@ -65,7 +65,9 @@ async function upstreamJson(targetUrl: string, backend: ReturnType<typeof resolv
   }
 }
 
-async function handler(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+type RouteContext = { params: Promise<{ path?: string[] }> }
+
+async function handler(req: NextRequest, context: RouteContext) {
   const params = await context.params
   const path = (params.path || []).join('/')
   const backend = resolveBackendBase(req)
@@ -99,11 +101,11 @@ async function handler(req: NextRequest, context: { params: Promise<{ path?: str
   })
 }
 
-export async function GET(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+export async function GET(req: NextRequest, context: RouteContext) {
   return handler(req, context)
 }
 
-export async function POST(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+export async function POST(req: NextRequest, context: RouteContext) {
   return handler(req, context)
 }
 

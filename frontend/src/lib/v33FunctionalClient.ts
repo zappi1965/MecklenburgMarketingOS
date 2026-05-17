@@ -1,5 +1,7 @@
 const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-const localFallback = process.env.NEXT_PUBLIC_USE_LOCAL_API_FALLBACK === 'true'
+const directBackendFallback =
+  process.env.NEXT_PUBLIC_ENABLE_DIRECT_BACKEND === 'true' ||
+  process.env.NEXT_PUBLIC_ENABLE_DIRECT_BACKEND_FALLBACK === 'true'
 
 function normalizeBase(url: string) {
   const value = String(url || '').trim().replace(/\/+$/, '')
@@ -20,8 +22,9 @@ async function request(path: string, init: RequestInit = {}) {
   // This avoids browser CORS/cross-origin fetch problems.
   targets.push(`/api/v33-functional${normalizedPath}`)
 
-  // Direct Railway fallback remains available.
-  if (V33_API_BASE && !localFallback) {
+  // Direct Railway fallback is opt-in only. Default browser path stays same-origin
+  // to avoid Vercel/Railway browser fetch failures and CORS edge cases.
+  if (V33_API_BASE && directBackendFallback) {
     targets.push(`${V33_API_BASE}/api/v33-functional${normalizedPath}`)
   }
 
@@ -43,7 +46,7 @@ async function request(path: string, init: RequestInit = {}) {
       // V42.4 HTML_RESPONSE_GUARD
       // Wrong backend URLs often return a Next/Vercel HTML 404 page.
       if (text.trim().startsWith('<!DOCTYPE html') || text.trim().startsWith('<html')) {
-        throw new Error(`API lieferte HTML statt JSON. Prüfe NEXT_PUBLIC_BACKEND_URL. Aktueller Ziel-URL: ${url}`)
+        throw new Error(`API lieferte HTML statt JSON. Prüfe Next API Proxy und BACKEND_URL. Aktueller Ziel-URL: ${url}`)
       }
 
       let payload: any = null
@@ -65,9 +68,9 @@ async function request(path: string, init: RequestInit = {}) {
     }
   }
 
-  const baseHint = V33_API_BASE
+  const baseHint = directBackendFallback && V33_API_BASE
     ? `Backend nicht erreichbar: ${V33_API_BASE}`
-    : 'NEXT_PUBLIC_BACKEND_URL fehlt oder ist leer.'
+    : 'Backend-Proxy nicht erreichbar: /api/v33-functional'
 
   throw new Error(`${baseHint}. Originalfehler: ${lastError?.message || 'fetch failed'}`)
 }

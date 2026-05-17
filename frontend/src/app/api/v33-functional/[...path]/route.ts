@@ -3,7 +3,9 @@ import { cleanProxyHeaders, isHtmlResponse, proxyErrorMessage, resolveBackendBas
 
 const API_PREFIX = '/api/v33-functional'
 
-async function proxy(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+type RouteContext = { params: Promise<{ path?: string[] }> }
+
+async function proxy(req: NextRequest, context: RouteContext) {
   const backend = resolveBackendBase(req)
   const params = await context.params
   const path = (params.path || []).join('/')
@@ -61,23 +63,23 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path?: strin
   }
 }
 
-export async function GET(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+export async function GET(req: NextRequest, context: RouteContext) {
   return proxy(req, context)
 }
 
-export async function POST(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+export async function POST(req: NextRequest, context: RouteContext) {
   return proxy(req, context)
 }
 
-export async function PATCH(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+export async function PATCH(req: NextRequest, context: RouteContext) {
   return proxy(req, context)
 }
 
-export async function PUT(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+export async function PUT(req: NextRequest, context: RouteContext) {
   return proxy(req, context)
 }
 
-export async function DELETE(req: NextRequest, context: { params: Promise<{ path?: string[] }> | { path?: string[] } }) {
+export async function DELETE(req: NextRequest, context: RouteContext) {
   return proxy(req, context)
 }
 
