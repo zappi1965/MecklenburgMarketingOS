@@ -84,7 +84,8 @@ const optionalRoutes = [
   ['./routes/storageRoutes', '/api/storage'],
   ['./routes/pdfRoutes', '/api/pdf'],
   ['./routes/mailRoutes', '/api/mail'],
-  ['./routes/apiReadyRoutes', '/api/api-ready']
+  ['./routes/apiReadyRoutes', '/api/api-ready'],
+  ['./routes/googleRoutes', '/api/google']
 ]
 
 for (const [modulePath, routePath] of optionalRoutes) {

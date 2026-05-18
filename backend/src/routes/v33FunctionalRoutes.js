@@ -368,7 +368,7 @@ function v33FunctionalRoutes(supabase) {
       conversions: 0,
       active: true,
       status: 'Aktiv',
-      metadata: { v34_auto_created: true, purpose, customer_name: customerName }
+      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan }
     }).select('*').single()
 
     if (qrError) throw qrError
@@ -386,7 +386,7 @@ function v33FunctionalRoutes(supabase) {
         active: true,
         status: 'active',
         require_staff_code: true,
-        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose }
+        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan }
       }).select('*').single()
 
       if (programError) throw programError
@@ -593,6 +593,64 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
+  router.get('/public/loyalty/:slug/status', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = found.error ? null : (found.data || null)
+      if (!program) return res.status(404).json({ ok: false, error: `Kein Loyalty-Programm für /l/${slug} gefunden.` })
+
+      const customerId = program.customer_id
+      const [settings, qr, rewards, rules] = await Promise.all([
+        v37GetOrCreateLoyaltySettings(customerId).catch(() => null),
+        program.qr_campaign_id
+          ? supabase.from('qr_campaigns').select('*').eq('id', program.qr_campaign_id).maybeSingle()
+          : supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle(),
+        supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('active', true).order('points_required', { ascending: true }).limit(12),
+        supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_reward_rules').limit(50)
+      ])
+
+      const activeRules = (rules.data || [])
+        .map(r => r.payload || r)
+        .filter(r => r && r.active !== false)
+
+      const activeActions = activeRules.map(r => {
+        const action = String(r.action || '')
+        const condition = String(r.condition || '')
+        const points = Number(r.points || 0)
+        if (action === 'multiply_points' && points > 1) {
+          return {
+            label: `Doppelter Punkte-Vorteil ist aktiv`,
+            message: `Sammle jetzt ${points}x Punkte${condition === 'weekday' ? ' an Wochentagen' : condition === 'weekend' ? ' am Wochenende' : ''}.`,
+            type: 'points_multiplier'
+          }
+        }
+        if (action === 'add_points' && points > 0) {
+          return { label: 'Bonuspunkte-Aktion ist aktiv', message: `Sammle jetzt zusätzlich ${points} Punkte.`, type: 'bonus_points' }
+        }
+        if (action === 'unlock_reward') {
+          return { label: 'Reward-Aktion ist aktiv', message: 'Scanne jetzt und schalte einen Reward frei.', type: 'reward_unlock' }
+        }
+        return null
+      }).filter(Boolean)
+
+      const qrData = qr.error ? null : (qr.data || null)
+      res.json({
+        ok: true,
+        slug,
+        program,
+        customer_id: customerId,
+        qr_campaign: qrData,
+        settings,
+        rewards: rewards.error ? [] : (rewards.data || []),
+        active_actions: activeActions,
+        mode: qrData?.metadata?.purpose || qrData?.mode || program?.metadata?.purpose || 'loyalty',
+        google_review_url: qrData?.google_review_url || qrData?.metadata?.google_review_url || null,
+        active: program.active !== false && qrData?.active !== false
+      })
+    } catch (e) { next(e) }
+  })
+
   router.post('/public/loyalty/:slug/join-or-scan', async (req, res, next) => {
     try {
       const slug = String(req.params.slug || '').trim()
@@ -602,6 +660,7 @@ function v33FunctionalRoutes(supabase) {
       const displayName = clean(body.display_name || body.displayName || body.name) || 'QR Lead'
       const deviceId = clean(body.device_id)
       const now = new Date().toISOString()
+      const warnings = []
 
       let program = null
       const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()

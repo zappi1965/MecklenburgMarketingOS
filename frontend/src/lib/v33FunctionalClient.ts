@@ -135,6 +135,8 @@ export const v33FunctionalClient = {
   redeemReward: (localId: string, payload: any) =>
     request(`/rewards/${localId}/redeem`, { method: 'POST', body: JSON.stringify(payload) }),
 
+  publicStatus: (slug: string) => request(`/public/loyalty/${slug}/status`),
+
   publicJoinOrScan: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/join-or-scan`, { method: 'POST', body: JSON.stringify(payload) }),
 

@@ -38,7 +38,8 @@
         "staff-confirmation-codes",
         "loyalty-segments",
         "vip-levels",
-        "smart-loyalty-v2"
+        "smart-loyalty-v2",
+        "landingpage-texts"
       ],
       "mobilePriority": 3
     },
@@ -97,9 +98,13 @@
     },
     {
       "key": "analytics",
-      "label": "Analytics",
+      "label": "SEO & Analytics",
       "icon": "📈",
       "children": [
+        "kpi-analytics",
+        "seo-heatmap",
+        "seo-dashboard",
+        "integrations",
         "revenue-forecasting",
         "package-usage",
         "upsell-score",

@@ -43,6 +43,7 @@
       "label": "Marketing",
       "icon": "📣",
       "children": [
+        "workflow-center",
         "marketing-automation",
         "reactivation",
         "review-booster"
@@ -56,15 +57,20 @@
       "children": [
         "booking",
         "invoices",
-        "tickets"
+        "tickets",
+        "media-center"
       ],
       "mobilePriority": 99
     },
     {
       "key": "analytics",
-      "label": "Analytics",
+      "label": "SEO & Analytics",
       "icon": "📈",
       "children": [
+        "kpi-analytics",
+        "seo-heatmap",
+        "seo-dashboard",
+        "integrations",
         "customer-health",
         "customer-intelligence",
         "usage"

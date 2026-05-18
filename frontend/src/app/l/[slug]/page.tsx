@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { v33FunctionalClient } from '@/lib/v33FunctionalClient'
 
@@ -12,6 +12,15 @@ function titleFromSlug(slug: string) {
     .join(' ')
 }
 
+function deviceId() {
+  if (typeof window === 'undefined') return undefined
+  const existing = window.localStorage.getItem('mmos_device_id')
+  if (existing) return existing
+  const id = `dev_${Date.now()}_${Math.random().toString(16).slice(2)}`
+  window.localStorage.setItem('mmos_device_id', id)
+  return id
+}
+
 export default function PublicLoyaltyPage() {
   const params = useParams<{ slug: string }>()
   const slug = String(params?.slug || '')
@@ -20,47 +29,72 @@ export default function PublicLoyaltyPage() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [birthday, setBirthday] = useState('')
+  const [reviewText, setReviewText] = useState('')
+  const [rating, setRating] = useState(5)
   const [result, setResult] = useState<any>(null)
-  const [v37Settings, setV37Settings] = useState<any>(null)
+  const [status, setStatus] = useState<any>(null)
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    if (!slug) return
+    v33FunctionalClient.publicStatus(slug)
+      .then(setStatus)
+      .catch((e: any) => setHint(friendlyHint(e?.message || 'Status konnte nicht geladen werden.')))
+  }, [slug])
+
+  const settings = status?.settings || null
+  const mode = String(status?.mode || status?.qr_campaign?.metadata?.purpose || 'loyalty')
+  const showLoyalty = mode === 'loyalty' || mode === 'both'
+  const showReview = mode === 'review' || mode === 'both'
+
   const points = Number(result?.points_balance || result?.member?.points_balance || 0)
-  const pointsAdded = Number(result?.points_added || 0)
+  const pointsAdded = Number(result?.points_added || status?.program?.points_per_scan || 10)
   const progress = Math.min(100, Math.round((points / 100) * 100))
 
   const brandName =
-    v37Settings?.brand_name ||
+    settings?.brand_name ||
     result?.program?.name ||
-    result?.program?.title ||
+    status?.program?.name ||
+    status?.program?.title ||
     titleFromSlug(slug) ||
     'Bonusclub'
 
-  const brandFont = v37Settings?.brand_font || 'Pacifico'
-  const primary = v37Settings?.brand_primary || '#d4af37'
-  const secondary = v37Settings?.brand_secondary || '#111827'
-  const headline = v37Settings?.hero_headline || `Willkommen im ${brandName}`
+  const brandFont = settings?.brand_font || 'Pacifico'
+  const primary = settings?.brand_primary || '#d4af37'
+  const secondary = settings?.brand_secondary || '#111827'
+  const campaignTexts = status?.qr_campaign?.metadata || {}
+  const headline = campaignTexts.hero_headline || settings?.hero_headline || status?.qr_campaign?.headline || `Willkommen im ${brandName}`
   const subline =
-    v37Settings?.hero_subline ||
-    'Sammle Punkte, sichere dir Rewards und werde VIP.'
+    campaignTexts.hero_subline ||
+    settings?.hero_subline ||
+    (showReview && !showLoyalty
+      ? 'Bewerte deinen Besuch und hilf uns, noch besser zu werden.'
+      : 'Sammle Punkte, sichere dir Rewards und werde VIP.')
+  const loyaltyCta = campaignTexts.cta_label || 'Punkte sammeln'
+  const reviewCta = campaignTexts.review_cta_label || 'Bewertung absenden'
+  const successTitle = campaignTexts.success_title || 'Deine Punkte wurden gespeichert.'
+  const successMessage = campaignTexts.success_message || 'Danke für deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.'
+  const fineprint = campaignTexts.fineprint || 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Demo- und Testdaten werden dem jeweiligen Anbieter zugeordnet.'
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return `/l/${slug}`
     return `${window.location.origin}/l/${slug}`
   }, [slug])
 
+  const rewards = status?.rewards || []
+  const activeActions = status?.active_actions || []
+  const unlockedRewards = rewards.filter((r: any) => Number(r.points_required || 0) <= points)
+  const nextReward = rewards.find((r: any) => Number(r.points_required || 0) > points)
+
   function friendlyHint(message: string) {
     const m = String(message || '')
     if (m.includes('Tageslimit')) return 'Du hast heute bereits Punkte gesammelt.'
     if (m.includes('Wochenlimit')) return 'Diese Woche ist dein Limit erreicht.'
-    if (m.includes('nicht gefunden') || m.includes('Kein Loyalty')) {
-      return 'Dieser QR-Link ist noch nicht aktiv. Bitte prüfe die Kampagne im Adminbereich.'
-    }
-    if (m.includes('Failed to fetch') || m.includes('Network')) {
-      return 'Der Server ist gerade nicht erreichbar. Bitte versuche es gleich erneut.'
-    }
-    return 'Wir konnten deinen Punktestand gerade nicht speichern. Bitte versuche es später erneut.'
+    if (m.includes('nicht gefunden') || m.includes('Kein Loyalty')) return 'Dieser QR-Link ist noch nicht aktiv. Bitte prüfe die Kampagne im Adminbereich.'
+    if (m.includes('Failed to fetch') || m.includes('Network') || m.includes('fetch failed')) return 'Der Server ist gerade nicht erreichbar. Bitte versuche es gleich erneut.'
+    return 'Wir konnten deine Aktion gerade nicht speichern. Bitte versuche es später erneut.'
   }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -70,54 +104,55 @@ export default function PublicLoyaltyPage() {
     setHint('')
 
     try {
-      const response = await v33FunctionalClient.publicJoinOrScan(slug, {
-        name,
-        display_name: name,
-        email,
-        phone,
-        birthday,
-        device_id:
-          typeof window !== 'undefined'
-            ? window.localStorage.getItem('mmos_device_id') ||
-              (() => {
-                const id = `dev_${Date.now()}_${Math.random().toString(16).slice(2)}`
-                window.localStorage.setItem('mmos_device_id', id)
-                return id
-              })()
-            : undefined
-      })
+      let response: any = null
 
-      setResult(response)
+      if (showLoyalty) {
+        response = await v33FunctionalClient.publicJoinOrScan(slug, {
+          name,
+          display_name: name,
+          email,
+          phone,
+          birthday,
+          device_id: deviceId()
+        })
+        setResult(response)
+      }
 
-      if (response?.program?.customer_id) {
-        try {
-          const settings = await v33FunctionalClient.getLoyaltySettings(
-            response.program.customer_id
-          )
-          setV37Settings(settings?.settings || null)
-        } catch {
-          // Branding is optional. The scan must remain successful even if settings fail.
-        }
+      if (showReview) {
+        const review = await v33FunctionalClient.publicReview(slug, {
+          customer_id: response?.program?.customer_id || status?.customer_id,
+          loyalty_program_id: response?.program?.id || status?.program?.id,
+          loyalty_customer_id: response?.member?.id,
+          qr_campaign_id: response?.program?.qr_campaign_id || status?.program?.qr_campaign_id,
+          reviewer_name: name,
+          reviewer_email: email,
+          rating,
+          feedback_text: reviewText
+        })
+        setHint(review?.ok ? 'Danke für deine Bewertung.' : 'Bewertung gespeichert.')
+      }
+
+      if (status?.google_review_url && rating >= 4) {
+        setTimeout(() => window.open(status.google_review_url, '_blank'), 400)
       }
     } catch (e: any) {
       const message = e?.message || 'Speichern fehlgeschlagen'
-      const deviceId =
-        typeof window !== 'undefined'
-          ? window.localStorage.getItem('mmos_device_id') || email || name || 'guest'
-          : email || name || 'guest'
-      const localKey = `mmos_public_points_${slug}_${deviceId}`
-      const current =
-        typeof window !== 'undefined' ? Number(window.localStorage.getItem(localKey) || 0) : 0
-      const nextPoints = current + 10
-      if (typeof window !== 'undefined') window.localStorage.setItem(localKey, String(nextPoints))
-      setResult({
-        points_added: 10,
-        points_balance: nextPoints,
-        member: { points_balance: nextPoints, tier: nextPoints >= 100 ? 'VIP' : 'Basic' },
-        program: { name: brandName, title: brandName }
-      })
-      setError('')
-      setHint(`${friendlyHint(message)} Demo-Fallback aktiv: Punkte wurden lokal gespeichert.`)
+      if (showLoyalty) {
+        const id = deviceId() || email || name || 'guest'
+        const localKey = `mmos_public_points_${slug}_${id}`
+        const current = typeof window !== 'undefined' ? Number(window.localStorage.getItem(localKey) || 0) : 0
+        const nextPoints = current + Number(status?.program?.points_per_scan || 10)
+        if (typeof window !== 'undefined') window.localStorage.setItem(localKey, String(nextPoints))
+        setResult({
+          points_added: Number(status?.program?.points_per_scan || 10),
+          points_balance: nextPoints,
+          member: { points_balance: nextPoints, tier: nextPoints >= 100 ? 'VIP' : 'Basic' },
+          program: { name: brandName, title: brandName }
+        })
+        setHint(`${friendlyHint(message)} Demo-Fallback aktiv: Punkte wurden lokal gespeichert.`)
+      } else {
+        setError(friendlyHint(message))
+      }
     } finally {
       setLoading(false)
     }
@@ -137,97 +172,104 @@ export default function PublicLoyaltyPage() {
       <section className="publicHero">
         <div className="publicHeroGlow" />
         <div className="publicCard">
-          <div
-            className="v37-script-brand"
-            style={{ fontFamily: brandFont, color: primary }}
-          >
+          <div className="v37-script-brand" style={{ fontFamily: brandFont, color: primary }}>
             {brandName}
           </div>
 
           <h1>{headline}</h1>
           <p className="v37-subline">{subline}</p>
 
-          <div className="publicStats">
-            <div>
-              <strong>{points}</strong>
-              <span>Punkte</span>
+          {activeActions.length > 0 && (
+            <div className="publicActiveAction">
+              <b>{activeActions[0].label}</b>
+              <span>{activeActions[0].message}</span>
             </div>
-            <div>
-              <strong>{pointsAdded || 10}</strong>
-              <span>pro Scan</span>
-            </div>
-            <div>
-              <strong>{result?.loyalty_level?.tier || result?.member?.tier || 'Basic'}</strong>
-              <span>Level</span>
-            </div>
-          </div>
+          )}
 
-          <div className="publicProgress">
-            <span style={{ width: `${progress}%` }} />
-          </div>
+          {showLoyalty && (
+            <>
+              <div className="publicStats">
+                <div><strong>{points}</strong><span>Punkte</span></div>
+                <div><strong>{pointsAdded || 10}</strong><span>pro Scan</span></div>
+                <div><strong>{result?.loyalty_level?.tier || result?.member?.tier || 'Basic'}</strong><span>Level</span></div>
+              </div>
+
+              <div className="publicProgress"><span style={{ width: `${progress}%` }} /></div>
+            </>
+          )}
 
           {!result && (
             <form onSubmit={submit} className="publicForm">
               <label>
                 Dein Name
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Max Mustermann"
-                  required
-                />
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Vollständiger Name, z. B. Max Mustermann" required />
               </label>
 
               <label>
                 E-Mail
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="max@example.de"
-                  required
-                />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail-Adresse für dein Bonuskonto" required />
               </label>
 
               <label>
-                Telefon optional
-                <input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+49 ..."
-                />
+                Telefonnummer optional
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefonnummer für Rückfragen oder Rewards" />
               </label>
 
               <label>
                 Geburtstag optional
-                <input
-                  type="date"
-                  value={birthday}
-                  onChange={(e) => setBirthday(e.target.value)}
-                />
+                <input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
               </label>
 
-              <button disabled={loading} type="submit">
-                {loading ? 'Speichere...' : 'Punkte sammeln'}
+              {showReview && (
+                <>
+                  <label>
+                    Bewertung
+                    <input type="number" min="1" max="5" value={rating} onChange={(e) => setRating(Number(e.target.value))} placeholder="Sternebewertung von 1 bis 5" />
+                  </label>
+                  <label>
+                    Feedback optional
+                    <input value={reviewText} onChange={(e) => setReviewText(e.target.value)} placeholder="Kurze Beschreibung deiner Erfahrung" />
+                  </label>
+                </>
+              )}
+
+              <button disabled={loading || status?.active === false} type="submit">
+                {loading ? 'Speichere...' : showLoyalty && showReview ? `${loyaltyCta} & bewerten` : showReview ? reviewCta : loyaltyCta}
               </button>
             </form>
           )}
 
           {result && (
             <div className="publicSuccess">
-              <h2>Deine Punkte wurden gespeichert.</h2>
-              <p>
-                Du hast {pointsAdded || 0} Punkte gesammelt. Dein aktueller
-                Stand: <b>{points}</b> Punkte.
-              </p>
+              <h2>{successTitle}</h2>
+              <p>{successMessage}</p>
+              <p>Du hast {pointsAdded || 0} Punkte gesammelt. Dein aktueller Stand: <b>{points}</b> Punkte.</p>
+
+              {unlockedRewards.length > 0 && (
+                <div className="publicRewards">
+                  <b>Jetzt verfügbar</b>
+                  {unlockedRewards.map((r: any) => (
+                    <div key={r.id} className="publicRewardItem">
+                      <span>{r.title || r.name || 'Reward'}</span>
+                      <em>{Number(r.points_required || 0)} Punkte</em>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {nextReward && (
+                <div className="publicRewards locked">
+                  <b>Nächster Reward</b>
+                  <div className="publicRewardItem">
+                    <span>{nextReward.title || nextReward.name || 'Reward'}</span>
+                    <em>Noch {Math.max(0, Number(nextReward.points_required || 0) - points)} Punkte</em>
+                  </div>
+                </div>
+              )}
 
               <div className="publicActions">
-                <button type="button" onClick={() => setResult(null)}>
-                  Noch ein Scan
-                </button>
-                <button type="button" onClick={copyReferral}>
-                  Freund empfehlen
-                </button>
+                <button type="button" onClick={() => setResult(null)}>Noch ein Scan</button>
+                <button type="button" onClick={copyReferral}>Freund empfehlen</button>
               </div>
             </div>
           )}
@@ -236,32 +278,19 @@ export default function PublicLoyaltyPage() {
           {error && <div className="publicError">{error}</div>}
 
           <div className="publicFineprint">
-            Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Demo- und
-            Testdaten werden dem jeweiligen Anbieter zugeordnet.
+            {fineprint}
           </div>
         </div>
       </section>
 
       <div className="v38-mobile-actions">
-        <button
-          type="button"
-          onClick={() =>
-            document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })
-          }
-        >
-          Punkte sammeln
+        <button type="button" onClick={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}>
+          {showReview && !showLoyalty ? reviewCta : loyaltyCta}
         </button>
-        <button
-          type="button"
-          onClick={() =>
-            setHint('Rewards werden nach dem ersten Scan im Bonuskonto angezeigt.')
-          }
-        >
+        <button type="button" onClick={() => setHint(rewards.length ? 'Rewards werden nach dem Scan im Bonuskonto angezeigt.' : 'Aktuell sind noch keine Rewards hinterlegt.')}>
           Reward ansehen
         </button>
-        <button type="button" onClick={copyReferral}>
-          Freund empfehlen
-        </button>
+        <button type="button" onClick={copyReferral}>Freund empfehlen</button>
       </div>
     </main>
   )
