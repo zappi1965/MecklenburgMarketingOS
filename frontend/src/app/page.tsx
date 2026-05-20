@@ -317,7 +317,7 @@ function useStore(){
   if(table==='activity_logs')return
   const log={id:uid(),type:action,title:`${table}: ${action}`,ref_table:table,ref_id:refId,severity:action==='delete'?'warning':'success',metadata:extra,created_at:new Date().toISOString()}
   setData((p:any)=>({...p,activity_logs:[log,...(p.activity_logs||[])]}))
-  try{if(hasSupabase&&supabase)supabase.from('activity_logs').insert(log).then(()=>{}).catch(()=>{})}catch{}
+  try{if(hasSupabase&&supabase){void Promise.resolve(supabase.from('activity_logs').insert(log)).then(()=>undefined,()=>undefined)}}catch{}
  }
  async function create(table:string,row:any){
   const payload={id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()}
@@ -1609,6 +1609,9 @@ function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
  const redCustomers=(store.data.customer_health_scores||[]).filter((h:any)=>h.status==='Rot'||Number(h.score||0)<55)
  return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne Demo-Kunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><div className="grid2"><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=><div className="item" key={p.id}><div><b>{cname(store.data,p.customer_id)} möchte {p.package_name}</b><div className="sub">{p.billing_interval}</div></div><button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button></div>)}</Card>}</>
 }
+
+
+function CRM({store,cid,activeAdmin,adminAvatars}:any){return <><Head title="CRM Kundenakte" sub={cname(store.data,cid)} action={<LiveModeBadge/>}/><CustomerInfo store={store} cid={cid}/><PackageControl store={store} cid={cid} activeAdmin={activeAdmin}/><QuickCRM store={store} cid={cid}/><div className="grid2"><CRMInvoices store={store} cid={cid}/><CRMNotes store={store} cid={cid} activeAdmin={activeAdmin}/></div><div className="grid2"><Card title="Verträge"><FileList store={store} cid={cid} type="contracts"/></Card><Card title="Media"><FileList store={store} cid={cid}/></Card></div></>}
 
 function CustomerInfo({store,cid}:any){
  const c=cobj(store.data,cid)
