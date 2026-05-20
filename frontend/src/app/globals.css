@@ -2742,3 +2742,68 @@ button:disabled{
 /* V42.15 main landing logo editor */
 .logo.hasImage{gap:12px}.brandLogoImg{height:38px;max-width:190px;width:auto;object-fit:contain;border-radius:10px;display:block}.landingNav .brandLogoImg{height:44px;max-width:220px}.brandLogoText{display:inline-flex;align-items:center}.checkline{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;margin:0 0 10px}.checkline input{width:16px;height:16px}.landingMiniPreview .brandLogoImg{height:34px;max-width:180px}
 @media(max-width:700px){.landingNav .brandLogoImg{height:38px;max-width:165px}.brandLogoText{font-size:12px}}
+
+/* === V42.20 Professional UI & Customer Experience Polish === */
+.proLanding{padding:24px;overflow:hidden}.proLandingNav{max-width:1220px;margin:0 auto}.proHero{max-width:1220px;margin:70px auto 48px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);gap:32px;text-align:left;align-items:center}.proHero h1{font-size:clamp(42px,6vw,78px);line-height:.95;letter-spacing:-.08em}.proHero p{max-width:720px}.landingCtas{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.proMock{border:1px solid rgba(148,163,184,.22);border-radius:24px;padding:16px;background:linear-gradient(180deg,rgba(17,24,39,.9),rgba(13,20,32,.95));box-shadow:0 28px 90px rgba(0,0,0,.45)}.mockTop{display:flex;gap:7px;margin-bottom:14px}.mockTop span{width:11px;height:11px;border-radius:999px;background:rgba(148,163,184,.5)}.proSection{max-width:1220px;margin:34px auto}.proSection h2{font-size:clamp(24px,3vw,38px);letter-spacing:-.06em}.customerHero{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:14px;align-items:stretch;margin-bottom:14px;padding:18px;border:1px solid rgba(148,163,184,.18);border-radius:20px;background:radial-gradient(circle at 0% 0%,rgba(124,58,237,.22),transparent 45%),linear-gradient(180deg,rgba(17,24,39,.88),rgba(13,20,32,.92));box-shadow:var(--shadow)}.customerHero h1{font-size:clamp(28px,4vw,48px);margin:10px 0 8px}.customerHero p{color:var(--muted);max-width:760px}.customerHeroCard{border:1px solid rgba(148,163,184,.18);border-radius:18px;padding:16px;background:rgba(2,6,23,.35);display:grid;align-content:center;gap:8px}.customerHeroCard strong{font-size:34px;line-height:1;letter-spacing:-.06em}.progressTrack{height:10px;border-radius:999px;background:rgba(148,163,184,.14);overflow:hidden;margin-top:14px}.progressTrack span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22c55e,#38bdf8,#7c3aed)}.proEmpty{border:1px dashed rgba(148,163,184,.25);border-radius:18px;padding:28px;text-align:center;background:rgba(15,23,42,.38);color:var(--muted)}.proEmptyIcon{width:46px;height:46px;border-radius:16px;display:grid;place-items:center;background:rgba(124,58,237,.16);margin:0 auto 12px;font-size:22px}.proEmpty h2{color:#fff;margin:0 0 8px}.trustHint{display:flex;gap:10px;flex-wrap:wrap;color:#93c5fd;font-size:12px}.trustHint span{border:1px solid rgba(56,189,248,.18);background:rgba(56,189,248,.08);border-radius:999px;padding:6px 10px}.hintBox{border:1px solid rgba(168,85,247,.22);border-radius:16px;padding:14px;background:rgba(124,58,237,.10)}.hintBox p{margin:6px 0 0;color:var(--muted);line-height:1.5}.landingPackages .card:hover,.proSection .card:hover{transform:translateY(-2px);border-color:rgba(168,85,247,.38)}
+@media(max-width:980px){.proHero,.customerHero{grid-template-columns:1fr}.proMock{min-width:0}.customerHeroCard{min-height:150px}.landingCtas .btn{width:100%}}
+
+/* === V42.20.2 MOBILE APP-LIKE UX POLISH === */
+.mobileAppTitle,
+.mobileAppBottomNav{display:none}
+html{background:#070b12;overscroll-behavior-y:none}
+body{-webkit-tap-highlight-color:transparent;text-rendering:optimizeLegibility}
+button,.btn,.nav,input,select,textarea{touch-action:manipulation}
+
+@media (max-width: 860px){
+  body{background:#070b12;font-size:14px;overflow-x:hidden}
+  .appLike{display:block;background:#070b12;min-height:100dvh}
+  .appMainShell{
+    padding:calc(74px + env(safe-area-inset-top)) 14px calc(96px + env(safe-area-inset-bottom)) !important;
+    background:
+      radial-gradient(circle at 50% -10%,rgba(124,58,237,.28),transparent 32%),
+      linear-gradient(180deg,#080d18 0%,#070b12 45%,#070b12 100%) !important;
+  }
+  .mobileMenuBtn{
+    top:calc(12px + env(safe-area-inset-top));
+    left:14px;
+    width:46px;height:46px;border-radius:16px;
+    background:rgba(15,23,42,.78);
+    border:1px solid rgba(148,163,184,.24);
+    backdrop-filter:blur(18px);
+  }
+  .appMobileTop{
+    top:0!important;
+    min-height:calc(66px + env(safe-area-inset-top));
+    padding:calc(10px + env(safe-area-inset-top)) 12px 10px 70px!important;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background:linear-gradient(180deg,rgba(7,11,18,.94),rgba(7,11,18,.72))!important;
+    box-shadow:0 16px 50px rgba(0,0,0,.25);
+  }
+  .mobileAppTitle{display:flex;align-items:center;gap:10px;min-width:0;margin-right:auto}
+  .mobileAppTitle strong{display:block;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;letter-spacing:-.02em}
+  .mobileAppTitle span{display:block;color:var(--muted);font-size:11px;margin-top:1px}
+  .mobileAppIcon{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--purple),var(--purple2));font-weight:950;color:white;box-shadow:0 10px 26px rgba(124,58,237,.32)}
+  .appMobileTop .globalSearch,.appMobileTop .search{display:none!important}
+  .topActions{margin-left:auto}.topActions .profileBtn,.topActions .adminSwitch{display:none!important}.topActions .bellBtn{display:grid!important}
+  .side{width:min(88vw,360px);border-radius:0 28px 28px 0;padding-top:calc(82px + env(safe-area-inset-top))!important;padding-bottom:calc(22px + env(safe-area-inset-bottom))!important;overflow:auto;-webkit-overflow-scrolling:touch;background:linear-gradient(180deg,rgba(11,17,27,.98),rgba(7,11,18,.96))!important}
+  .logo{position:sticky;top:0;z-index:2;margin:-72px -8px 14px;padding:16px 8px 10px;background:linear-gradient(180deg,rgba(7,11,18,.96),rgba(7,11,18,.70));backdrop-filter:blur(18px)}
+  .navGroupHead{margin-top:14px}.nav{min-height:46px;border-radius:16px;margin:5px 0;padding:12px 14px;font-size:14px}.nav.active{box-shadow:0 14px 32px rgba(124,58,237,.22)}
+  .head h1{font-size:clamp(26px,8vw,38px)!important}.head .sub{font-size:13px;line-height:1.45}
+  .card,.metric,.package{border-radius:22px!important;padding:16px!important;background:linear-gradient(180deg,rgba(18,27,42,.98),rgba(11,17,27,.96))!important;border-color:rgba(148,163,184,.18)!important;box-shadow:0 18px 55px rgba(0,0,0,.26)!important}
+  .metric{display:grid;gap:4px}.metricValue{font-size:30px!important}.metricLabel{font-size:12px!important}.sub{font-size:12.5px;line-height:1.45}
+  .btn,.input,select,textarea{min-height:46px;border-radius:15px!important;font-size:14px}.btn{padding:0 16px}.textarea,textarea.input{min-height:118px!important;padding:13px!important}.input{padding:0 14px!important}
+  .row,.toolbarActions,.topActions{gap:8px!important}.toolbarActions .btn,.row .btn{flex:1 1 auto}
+  .item{border-radius:18px!important;padding:13px!important;background:rgba(13,20,32,.92)!important}
+  .badge{padding:6px 10px;font-size:10.5px}.table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}.table th,.table td{white-space:nowrap}
+  .calendar{display:flex!important;overflow-x:auto;gap:8px!important;padding-bottom:6px;scroll-snap-type:x mandatory}.calendar .day{min-width:128px;scroll-snap-align:start}
+  .mobileAppBottomNav{display:flex;position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:95;min-height:68px;align-items:center;justify-content:space-around;padding:8px;border:1px solid rgba(148,163,184,.20);border-radius:24px;background:rgba(11,17,27,.86);backdrop-filter:blur(22px);box-shadow:0 22px 70px rgba(0,0,0,.42)}
+  .mobileAppBottomNav button{appearance:none;border:0;background:transparent;color:var(--muted);display:grid;gap:3px;place-items:center;min-width:0;flex:1;border-radius:18px;min-height:52px;font-weight:850;cursor:pointer}
+  .mobileAppBottomNav button span{font-size:20px;line-height:1}.mobileAppBottomNav button small{font-size:10px;max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mobileAppBottomNav button.active{background:linear-gradient(135deg,rgba(124,58,237,.98),rgba(91,33,182,.82));color:#fff;box-shadow:0 12px 30px rgba(124,58,237,.30)}
+  .toast{left:12px;right:12px;bottom:calc(88px + env(safe-area-inset-bottom));border-radius:18px;text-align:center}
+  .modal{padding:14px;align-items:end}.modalCard{width:100%!important;max-height:calc(92dvh - env(safe-area-inset-bottom));overflow:auto;border-radius:24px 24px 0 0!important}
+}
+
+@media (max-width:430px){
+  .appMainShell{padding-left:10px!important;padding-right:10px!important;padding-bottom:calc(92px + env(safe-area-inset-bottom))!important}
+  .mobileAppTitle strong{max-width:36vw}.mobileAppBottomNav{left:8px;right:8px;border-radius:22px}.mobileAppBottomNav button small{font-size:9.5px}.card,.metric{border-radius:20px!important}
+}

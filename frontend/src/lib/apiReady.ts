@@ -1,14 +1,24 @@
-
 import { API_BASE } from './config'
+import { apiRequest, providerToApiKey } from './apiRequest'
 
 export async function apiReadyHealth() {
-  const r = await fetch(`${API_BASE}/api/hardening/health`)
-  return r.json()
+  return apiRequest(`${API_BASE}/api/hardening/health`)
+}
+
+export async function systemReady() {
+  return apiRequest(`${API_BASE}/api/system/ready`)
+}
+
+export async function systemSchema() {
+  return apiRequest(`${API_BASE}/api/system/schema`)
+}
+
+export async function googleHealth() {
+  return apiRequest(`${API_BASE}/api/google/health`)
 }
 
 export async function googleAuthUrl(customerId: string) {
-  const r = await fetch(`${API_BASE}/api/google/auth-url/${customerId}`)
-  return r.json()
+  return apiRequest(`${API_BASE}/api/google/auth-url/${customerId}`)
 }
 
 export async function startGoogleAuth(customerId: string) {
@@ -18,10 +28,12 @@ export async function startGoogleAuth(customerId: string) {
 }
 
 export async function syncGoogleProvider(provider: string, customerId: string, payload: any = {}) {
-  const r = await fetch(`${API_BASE}/api/google/sync/${provider}/${customerId}`, {
+  const providerKey = providerToApiKey(provider)
+  return apiRequest(`${API_BASE}/api/google/sync/${providerKey}/${customerId}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    timeoutMs: 20000
   })
-  return r.json()
 }
+
+export { providerToApiKey }

@@ -124,6 +124,31 @@
         "api-keys"
       ],
       "mobilePriority": 99
+    },
+    {
+      "key": "sales-acquisition",
+      "label": "Akquise & Sales",
+      "icon": "🎯",
+      "children": [
+        "google-business-audit",
+        "mini-audit-generator",
+        "lead-scraper",
+        "acquisition-campaign-center",
+        "offer-generator",
+        "contract-generator"
+      ],
+      "mobilePriority": 6
+    },
+    {
+      "key": "finance-system",
+      "label": "Finanzen & System",
+      "icon": "🧭",
+      "children": [
+        "customer-success-traffic-light",
+        "dunning-center",
+        "health-center"
+      ],
+      "mobilePriority": 7
     }
   ],
   "mobile": {

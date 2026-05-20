@@ -65,25 +65,30 @@ async function proxy(req: NextRequest, context: RouteContext) {
       }
 
       const upstream = await fetch(targetUrl, init)
-      const text = await upstream.text()
+      const contentType = upstream.headers.get('content-type') || 'application/json'
+      const bodyBuffer = await upstream.arrayBuffer()
 
-      if (isHtmlResponse(text)) {
-        attempts.push({
-          targetUrl,
-          backendSource: backend.source,
-          warning: backend.warning,
-          error: 'Backend lieferte HTML statt JSON.'
-        })
-        continue
+      if (contentType.includes('text/html')) {
+        const text = new TextDecoder().decode(bodyBuffer)
+        if (isHtmlResponse(text)) {
+          attempts.push({
+            targetUrl,
+            backendSource: backend.source,
+            warning: backend.warning,
+            error: 'Backend lieferte HTML statt JSON/PDF.'
+          })
+          continue
+        }
       }
 
-      return new NextResponse(text, {
+      return new NextResponse(bodyBuffer, {
         status: upstream.status,
         statusText: upstream.statusText,
         headers: {
-          'content-type': upstream.headers.get('content-type') || 'application/json',
+          'content-type': contentType,
           'cache-control': 'no-store',
-          'x-mmos-proxy': 'generic-v42.10',
+          'content-disposition': upstream.headers.get('content-disposition') || '',
+          'x-mmos-proxy': 'generic-v42.20.1-binary',
           'x-mmos-backend-source': backend.source
         }
       })

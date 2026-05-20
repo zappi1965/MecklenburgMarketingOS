@@ -12,7 +12,10 @@ import { supabaseAuth, getCurrentUserProfile } from '@/lib/authClient'
 import { DEMO_SANDBOX_KEY, markDemoMode, markLiveMode, clearDemoSandbox } from '@/lib/demoSandbox'
 import { demoToolsClient, openPdfBase64, openQrCampaign } from '@/lib/demoToolsClient'
 import { API_BASE, hasSupabase, supabase } from '@/lib/supabase'
-import { startGoogleAuth, syncGoogleProvider } from '@/lib/apiReady'
+import { startGoogleAuth, syncGoogleProvider, systemReady, systemSchema, providerToApiKey } from '@/lib/apiReady'
+import { apiRequest } from '@/lib/apiRequest'
+import { businessToolsClient } from '@/lib/businessToolsClient'
+import { safeLocalStorageGet, safeLocalStorageSet, safeLocalStorageText } from '@/lib/safeStorage'
 
 type Role='guest'|'admin'|'customer'
 type FileType='invoices'|'contracts'|'media'|'documents'|'reports'
@@ -132,33 +135,37 @@ Object.assign(featureDescriptions, {
   'Timeline Events':'Chronologische Verknüpfung aus QR, Loyalty, Reviews, Billing und Tickets.',
   'SEO Dashboard':'Gebündelte SEO-Übersicht mit Analytics, Search Console, lokalen Werten und Heatmap.',
   'Workflow Center':'Kunden-Workflows, erfüllte Aufgaben und Systemläufe transparent anzeigen.',
-  'KPI Analytics':'Leads, Conversion, Ticketlast, Umsatz und operative Kennzahlen für Kunden sichtbar machen.'
+  'KPI Analytics':'Leads, Conversion, Ticketlast, Umsatz und operative Kennzahlen für Kunden sichtbar machen.',
+  'Onboarding':'Geführter Start mit Google Business, Logo, Farben, QR, Rechnungen und ersten Aufgaben.',
+  'Reports':'Monatsberichte, PDF-Entwürfe und sichtbare Ergebnisse für Kunden.',
+  'Freigaben':'Kunden können Beiträge, Texte, Angebote, Reports und Kampagnen freigeben oder Änderungen wünschen.',
+  'Output Engine':'Einheitliche Mecklenburg-Marketing-Dokumente für Audit, Angebot, Vertrag, Mahnung und Report.'
 })
 
 const packageDefs:any={
   Starter:{
     price:199,
     base:null,
-    displayFeatures:['CRM','Tickets','Rechnungen','Booking','Media Center'],
-    tools:['Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing']
+    displayFeatures:['CRM','Tickets','Rechnungen','Booking','Media Center','Wissenscenter','Onboarding','Reports'],
+    tools:['Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing','Wissenscenter','Onboarding','Reports','Freigaben','Onboarding','Reports','Freigaben']
   },
   Growth:{
     price:499,
     base:'Starter',
-    displayFeatures:['Alles aus Starter-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics'],
+    displayFeatures:['Alles aus Starter-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich'],
     tools:[
-      'Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing',
-      'Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics',
+      'Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing','Wissenscenter','Onboarding','Reports','Freigaben',
+      'Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich',
       'QR Kampagnen','Öffentliche /l/[slug] Seite','Loyalty Programm','Rewards','Reviews'
     ]
   },
   Premium:{
     price:899,
     base:'Growth',
-    displayFeatures:['Alles aus Growth-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Smart Loyalty V2','Automation','AI','Revenue'],
+    displayFeatures:['Alles aus Growth-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich','Smart Loyalty V2','Automation','AI','Revenue'],
     tools:[
-      'Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing',
-      'Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics',
+      'Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing','Wissenscenter','Onboarding','Reports','Freigaben',
+      'Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich',
       'QR Kampagnen','Öffentliche /l/[slug] Seite','Loyalty Programm','Rewards','Reward Regeln',
       'Mitarbeiter-Bestätigungscode','Loyalty Segmente','Smart Loyalty V2',
       'Reviews',
@@ -174,19 +181,19 @@ const packageDefs:any={
 const defaultMainLandingSettings:any={
  id:'main',
  scope:'public_home',
- brand_name:'MecklenburgMarketingOS',
- nav_title:'MecklenburgMarketingOS',
+ brand_name:'Mecklenburg Marketing',
+ nav_title:'Mecklenburg Marketing',
  logo_url:'',
  logo_alt:'Mecklenburg Marketing Logo',
  logo_mark_text:'M',
  logo_show_text:true,
- hero_title:'MecklenburgMarketingOS',
- hero_subline:'Die All-in-One-Plattform für Kundenmanagement, SEO, Rechnungen, Termine, Dateien und digitale Abläufe. Kunden sehen Fortschritt, Dokumente und offene Aufgaben zentral an einem Ort – du steuerst alles sauber im Adminbereich.',
+ hero_title:'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.',
+ hero_subline:'Das lokale Marketing-Betriebssystem für Unternehmen in Mecklenburg-Vorpommern: Google Business Optimierung, Bewertungen, SEO, QR-Kampagnen, Reports und Kundenportal sauber verbunden.',
  primary_cta_label:'Anmelden',
  secondary_cta_label:'Demo',
  package_headline:'Pakete für lokale Unternehmen',
- package_subline:'Wähle Starter, Growth oder Premium – transparent mit Kundenportal, Adminsteuerung und skalierbaren Marketing-Modulen.',
- footer_note:'Made for Mecklenburg Marketing · Kundenportal, Adminbereich und öffentliche QR-Seiten in einem System.',
+ package_subline:'Transparente Pakete für lokale Betriebe – vom Kundenportal bis zur laufenden Google Business Optimierung mit Reports.',
+ footer_note:'Mecklenburg Marketing · Google Business Optimierung · lokale SEO · Reviews · QR-Kampagnen · Kundenportal.',
  packages:{
   Starter:{headline:'Starter',description:'Solider Einstieg für Termine, Rechnungen, Tickets und Dateien.'},
   Growth:{headline:'Growth',description:'Für aktive Kundengewinnung mit SEO Dashboard, Integrationen, Heatmap und Workflows.'},
@@ -247,13 +254,57 @@ const seed:any={
  notifications:[
   {id:'not1',customer_id:ids.restaurant,title:'Paketanfrage',message:'Alexas Inselblick hat Growth angefragt.',type:'package_request',actor_name:'Alexas Inselblick',created_at:'2026-05-10',is_read:false}
  ],
+ knowledge_articles:[
+  {id:'ka1',title:'Wie sammle ich mehr Google Bewertungen?',category:'Google Business',summary:'Aktiv nach dem Besuch fragen, QR-Code sichtbar platzieren und jede Bewertung beantworten.',content:'Nutze den Bewertungs-Booster, lege den QR-Code an Tresen oder Rechnung und bitte zufriedene Kunden direkt um Feedback.',package_scope:'Starter',created_at:'2026-05-01'},
+  {id:'ka2',title:'Was bedeutet lokale Sichtbarkeit?',category:'SEO',summary:'Lokale Sichtbarkeit beschreibt, wie häufig dein Betrieb bei relevanten Suchanfragen erscheint.',content:'Sichtbarkeit steigt durch vollständige Google Business Daten, aktuelle Fotos, Leistungen, gute Bewertungen und regelmäßige Beiträge.',package_scope:'Growth',created_at:'2026-05-02'}
+ ],
+ competitor_benchmarks:[
+  {id:'cb1',customer_id:ids.barber,name:'Barber Rostock Zentrum',rating:4.6,reviews:182,visibility:76,profile_score:82,keywords:['barber rostock','herrenschnitt rostock'],notes:'Starke Bewertungsanzahl, aber wenig Beiträge.',created_at:'2026-05-03'},
+  {id:'cb2',customer_id:ids.barber,name:'Herrenfriseur Altstadt',rating:4.4,reviews:94,visibility:62,profile_score:71,keywords:['friseur herren rostock'],notes:'Gute Kategorie, wenig Fotos.',created_at:'2026-05-03'}
+ ],
+ google_business_audits:[
+  {id:'gba1',customer_id:ids.barber,business_name:'Barber Lounge Rostock',city:'Rostock',score:78,status:'Geprüft',summary:'Profil solide, aber mehr Fotos, Leistungen und Beiträge empfohlen.',findings:['Bewertungen regelmäßig beantworten','Leistungen präziser beschreiben','Neue Fotos alle 2 Wochen hochladen'],created_at:'2026-05-12'}
+ ],
+ mini_audits:[
+  {id:'ma1',customer_id:ids.barber,audit_id:'gba1',title:'Mini-Audit Barber Lounge Rostock',status:'Erstellt',recommendations:['Google Business Leistungen ergänzen','Bewertungskampagne starten','Monatlichen Beitrag veröffentlichen'],created_at:'2026-05-12'}
+ ],
+ prospect_leads:[
+  {id:'pl1',name:'L.A. Nails Schwerin',branch:'Beauty',city:'Schwerin',rating:4.2,reviews:48,website:'',score:84,status:'Neu',reasons:['wenige Bewertungen','keine Website erkannt','Google Profil ausbaufähig'],created_at:'2026-05-13'},
+  {id:'pl2',name:'Wunderwerk Medical Beauty',branch:'Beauty',city:'Schwerin',rating:4.7,reviews:33,website:'https://example.de',score:71,status:'Neu',reasons:['wenige Fotos','wenige Beiträge','SEO-Potenzial'],created_at:'2026-05-13'}
+ ],
+ generated_offers:[
+  {id:'go1',customer_id:ids.barber,title:'Angebot Growth Paket + Google Business Optimierung',package_name:'Growth',amount:499,status:'Entwurf',created_at:'2026-05-11'}
+ ],
+ generated_contracts:[
+  {id:'gc1',customer_id:ids.barber,title:'Dienstleistungsvertrag Growth Paket',package_name:'Growth',status:'Entwurf',created_at:'2026-05-11'}
+ ],
+ dunning_cases:[
+  {id:'dc1',invoice_id:'i2',customer_id:ids.barber,level:1,status:'Vorbereitet',due_date:'2026-05-24',message:'Zahlungserinnerung für offene Rechnung vorbereitet.',created_at:'2026-05-15'}
+ ],
+ acquisition_campaigns:[
+  {id:'acq1',name:'Beauty-Schwerin Review & GBP Sprint',branch:'Beauty',city:'Schwerin',goal:'10 qualifizierte Betriebe ansprechen und 3 Mini-Audits versenden',channel:'E-Mail + Telefon',status:'Aktiv',stage:'Mini-Audit versendet',lead_ids:['pl1','pl2'],customer_ids:[],next_step:'Follow-up bei L.A. Nails und Wunderwerk vorbereiten',follow_up_at:'2026-05-22',notes:'Fokus auf Google Business Optimierung, Reviews und lokale Sichtbarkeit.',created_at:'2026-05-17'}
+ ],
+ customer_health_scores:[
+  {id:'chs1',customer_id:ids.barber,score:82,status:'Grün',reasons:['Paket aktiv','Bewertungen stabil','keine kritischen Tickets'],created_at:'2026-05-15'},
+  {id:'chs2',customer_id:ids.roof,score:63,status:'Gelb',reasons:['offene Rechnung','wenige neue Aktivitäten'],created_at:'2026-05-15'}
+ ],
+ onboarding_checklists:[
+  {id:'onb1',customer_id:ids.barber,status:'In Arbeit',steps:{company:true,google:false,brand:true,qr:true,invoice:false,first_tasks:false},created_at:'2026-05-18'}
+ ],
+ monthly_reports:[
+  {id:'mr1',customer_id:ids.barber,title:'Monatsreport Mai 2026',status:'Entwurf',summary:'Sichtbarkeit stabil, QR-Kampagne aktiv, Bewertungsaufbau empfohlen.',created_at:'2026-05-18'}
+ ],
+ approval_requests:[
+  {id:'ap1',customer_id:ids.barber,title:'Google Beitrag Mai freigeben',type:'Google Beitrag',status:'Offen',description:'Kurzbeitrag zur Sommeraktion prüfen und freigeben.',created_at:'2026-05-18'}
+ ],
+ output_documents:[],
  landing_page_settings:[defaultMainLandingSettings]
 }
 
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
- const tables=['customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','landing_page_settings']
+ const tables=['customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','landing_page_settings']
  function notify(m:string){setToast(m);setTimeout(()=>setToast(''),2500)}
  async function load(){
   if(!hasSupabase||!supabase)return
@@ -262,39 +313,52 @@ function useStore(){
   setData((p:any)=>({...p,...r}))
  }
  useEffect(()=>{load()},[])
+ function addActivity(action:string,table:string,refId:string,extra:any={}){
+  if(table==='activity_logs')return
+  const log={id:uid(),type:action,title:`${table}: ${action}`,ref_table:table,ref_id:refId,severity:action==='delete'?'warning':'success',metadata:extra,created_at:new Date().toISOString()}
+  setData((p:any)=>({...p,activity_logs:[log,...(p.activity_logs||[])]}))
+  try{if(hasSupabase&&supabase)supabase.from('activity_logs').insert(log).then(()=>{}).catch(()=>{})}catch{}
+ }
  async function create(table:string,row:any){
   const payload={id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()}
   try{
    if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
    else setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+   addActivity('create',table,payload.id,{live:hasSupabase})
    notify('Gespeichert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote create failed, using local fallback`,e)
    setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+   addActivity('create_local_fallback',table,payload.id,{error:e?.message})
    notify('Lokal gespeichert')
   }
   return payload
  }
  async function update(table:string,id:string,row:any){
+  const normalized={...row,updated_at:row.updated_at||new Date().toISOString()}
   try{
-   if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(row).eq('id',id);if(error)throw error;await load()}
-   else setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...row}:x)}))
+   if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
+   else setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
+   addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
    notify('Aktualisiert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote update failed, using local fallback`,e)
-   setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...row}:x)}))
+   setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
+   addActivity('update_local_fallback',table,id,{error:e?.message})
    notify('Lokal aktualisiert')
   }
-  return {id,...row}
+  return {id,...normalized}
  }
  async function remove(table:string,id:string){
   try{
    if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
    else setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
+   addActivity('delete',table,id,{live:hasSupabase})
    notify('Gelöscht')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote delete failed, using local fallback`,e)
    setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
+   addActivity('delete_local_fallback',table,id,{error:e?.message})
    notify('Lokal gelöscht')
   }
   return true
@@ -318,6 +382,45 @@ function Head({title,sub,action}:any){return <div className="head"><div><h1>{tit
 function Metric({label,value,sub}:any){return <div className="metric"><div className="metricLabel">{label}</div><div className="metricValue">{value}</div>{sub&&<div className="delta">{sub}</div>}</div>}
 function Search({items,value,onChange,placeholder}:any){const [q,setQ]=useState('');const s=items.find((x:any)=>x.id===value);const list=items.filter((x:any)=>(x.name+x.branch+x.email).toLowerCase().includes(q.toLowerCase()));return <div style={{position:'relative'}}><input className="input" placeholder={placeholder} value={s&&!q?s.name:q} onChange={e=>{setQ(e.target.value);if(s)onChange('')}}/>{q&&<div className="card floating">{list.map((x:any)=><button className="nav" key={x.id} onClick={()=>{onChange(x.id);setQ('')}}>{x.name}<div className="sub">{x.branch} · {x.package_name}</div></button>)}</div>}</div>}
 
+
+// V42.20 Professional UX & Output helpers
+function EmptyState({icon='✨',title,children,action}:any){return <div className="proEmpty"><div className="proEmptyIcon">{icon}</div><h2>{title}</h2><p>{children}</p>{action}</div>}
+function TrustHint({source='System',updated}:any){return <div className="trustHint"><span>Quelle: {source}</span><span>Zuletzt aktualisiert: {updated?new Date(updated).toLocaleString('de-DE'):'Demo/Fallback'}</span></div>}
+function LiveModeBadge(){return <Badge type={hasSupabase?'green':'yellow'}>{hasSupabase?'Live-Daten':'Lokaler Fallback'}</Badge>}
+function ToolTipHint({title,children}:any){return <div className="hintBox"><b>{title}</b><p>{children}</p></div>}
+function getDocumentCss(){return `<style>body{font-family:Inter,Arial,sans-serif;background:#f5f7fb;color:#111827;margin:0}.doc{max-width:860px;margin:0 auto;background:#fff;min-height:100vh;padding:42px}.top{display:flex;justify-content:space-between;border-bottom:2px solid #111827;padding-bottom:18px;margin-bottom:28px}.mark{width:46px;height:46px;border-radius:14px;background:#111827;color:#fff;display:grid;place-items:center;font-weight:900}.brand{display:flex;gap:12px;align-items:center}.badge{display:inline-block;border:1px solid #d4af37;color:#7c5c00;border-radius:999px;padding:6px 12px;font-size:12px}.metric{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.metric div{border:1px solid #e5e7eb;border-radius:12px;padding:12px}.section{margin:24px 0}.section h2{font-size:18px}.footer{margin-top:38px;border-top:1px solid #e5e7eb;padding-top:16px;color:#6b7280;font-size:12px}@media print{body{background:#fff}.doc{box-shadow:none}}</style>`}
+function buildBrandDocument(title:string, subtitle:string, body:string, meta:any={}){return `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title>${getDocumentCss()}</head><body><main class="doc"><div class="top"><div class="brand"><div class="mark">M</div><div><b>Mecklenburg Marketing</b><div>Google Business · lokale SEO · Reviews · Kampagnen</div></div></div><span class="badge">${meta.status||'Entwurf'}</span></div><h1>${title}</h1><p>${subtitle||''}</p>${body}<div class="footer">Erstellt mit Mecklenburg Marketing OS · ${new Date().toLocaleDateString('de-DE')} · Dieses Dokument ist ein professioneller Entwurf und kann vor Versand final geprüft werden.</div></main></body></html>`}
+function openBrandDocument(title:string, subtitle:string, body:string, meta:any={}){const w=window.open('','_blank');if(!w)return;w.document.write(buildBrandDocument(title,subtitle,body,meta));w.document.close();setTimeout(()=>w.focus(),150)}
+
+async function openPdfDocument(title:string, subtitle:string, body:string, meta:any={}){
+ const html=buildBrandDocument(title,subtitle,body,meta)
+ try{
+  const blob=await businessToolsClient.renderPdf({html,filename:title,title})
+  const url=URL.createObjectURL(blob)
+  window.open(url,'_blank')
+  setTimeout(()=>URL.revokeObjectURL(url),60000)
+ }catch(e:any){
+  alert(`PDF-Erzeugung über Gotenberg nicht möglich: ${e.message || e}. Öffne HTML/Print-Fallback.`)
+  openBrandDocument(title,subtitle,body,meta)
+ }
+}
+
+function downloadHtmlDocument(filename:string,title:string,subtitle:string,body:string,meta:any={}){const blob=new Blob([buildBrandDocument(title,subtitle,body,meta)],{type:'text/html'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename.replace(/[^a-z0-9äöüß_.-]+/gi,'_');a.click();URL.revokeObjectURL(url)}
+function packageProgress(pct:number){return <div className="progressTrack"><span style={{width:`${Math.max(0,Math.min(100,pct))}%`}}/></div>}
+function onboardingStepsFor(customer:any){return [
+ ['company','Firmendaten prüfen',Boolean(customer?.name&&customer?.phone)],
+ ['google','Google Business Link hinterlegen',Boolean(customer?.google_url||customer?.google_business_url)],
+ ['brand','Logo/Farben hochladen',Boolean(customer?.logo_url||customer?.brand_primary)],
+ ['qr','QR-/Slug-Seite vorbereiten',true],
+ ['invoice','erste Rechnung vorbereiten',true],
+ ['first_tasks','erste Aufgaben definieren',false]
+]}
+function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
+ const benefits=['Google Business Optimierung sichtbar machen','Bewertungen, QR-Kampagnen und Kundenbindung verbinden','Reports, Angebote und Verträge professionell ausgeben','Kundenportal mit klaren Aufgaben statt Tool-Chaos']
+ const steps=['Audit & Potenziale erkennen','Maßnahmen und Kampagnen starten','Monatlich Ergebnisse zeigen']
+ return <div className="landing proLanding"><div className="landingNav proLandingNav"><div className={lp.logo_url?'logo hasImage':'logo'}>{lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}{lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||'Mecklenburg Marketing'}</span>}</div><div className="row"><button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button><button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Demo ansehen'}</button></div></div><section className="hero proHero"><div><Badge>Lokales Marketing-Betriebssystem</Badge><h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1><p>{lp.hero_subline}</p><div className="landingCtas"><button className="btn" onClick={()=>{window.location.href='/auth'}}>Portal öffnen</button><button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>Live-Demo starten</button></div></div><div className="proMock"><div className="mockTop"><span></span><span></span><span></span></div><div className="grid4"><Metric label="Sichtbarkeit" value="+34%"/><Metric label="Reviews" value="128"/><Metric label="Leads" value="42"/><Metric label="Health" value="Grün"/></div><div className="chartLine">{Array.from({length:14},(_,i)=><span key={i} style={{height:`${22+(i*9)%70}px`}} />)}</div><div className="item"><b>Nächste Empfehlung</b><span>Google Business Fotos aktualisieren und Bewertungs-Booster starten.</span></div></div></section><section className="proSection"><h2>Was Unternehmen sofort verstehen</h2><div className="grid4">{benefits.map((b,i)=><Card key={b} title={`${i+1}. ${b}`}><p className="sub">Konkreter Nutzen, klare Zuständigkeit und sichtbare Entwicklung im Kundenportal.</p></Card>)}</div></section><section className="proSection"><h2>Ablauf in 3 Schritten</h2><div className="grid3">{steps.map((s,i)=><Card key={s} title={`${i+1}. ${s}`}><p className="sub">Aus Akquise, Google Business, SEO, Reviews und Reporting entsteht ein nachvollziehbarer Prozess.</p></Card>)}</div></section><section className="landingPackages proSection"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section><section className="proSection"><div className="grid2"><Card title="Beispiel-Ergebnis"><div className="grid3"><Metric label="neue Bewertungen" value="+34"/><Metric label="Profilaufrufe" value="+22%"/><Metric label="Klicks" value="+18%"/></div><p className="sub">Beispielhafte Darstellung für lokale Betriebe nach Google Business Optimierung und Review-Kampagne.</p></Card><Card title="FAQ"><div className="item"><b>Brauche ich eine Website?</b><span>Nein. QR-/Slug-Seiten und Google Business Optimierung funktionieren auch ohne eigene Website.</span></div><div className="item"><b>Was sieht der Kunde?</b><span>Ein einfaches Portal mit Aufgaben, Kennzahlen, Reports, Freigaben und Dateien.</span></div></Card></div></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
+}
+
 function Avatar({name,src,size=34}:any){return src?<img className="avatar" style={{width:size,height:size}} src={src}/>:<div className="avatar fallback" style={{width:size,height:size}}>{String(name||'?').slice(0,1)}</div>}
 function NotificationBell({store,cid,role,activeAdmin,adminAvatars}:any){
  const [open,setOpen]=useState(false)
@@ -336,7 +439,7 @@ function ProfileUpload({activeAdmin,setAdminAvatars,adminAvatars}:any){
   setAdminAvatars((p:any)=>({...p,[activeAdmin]:preview}))
   const fd=new FormData(); fd.append('file',file); fd.append('display_name',activeAdmin)
   setBusy(true)
-  try{const res=await fetch(`${API_BASE}/api/avatars/upload`,{method:'POST',body:fd});const j=await res.json();if(!j.ok)throw new Error(j.error||'Upload fehlgeschlagen');setAdminAvatars((p:any)=>({...p,[activeAdmin]:j.data.avatar_url}))}catch(e:any){alert(e.message||'Avatar Upload fehlgeschlagen')}finally{setBusy(false)}
+  try{const j:any=await apiRequest(`${API_BASE}/api/avatars/upload`,{method:'POST',body:fd,expectJson:false,timeoutMs:20000});setAdminAvatars((p:any)=>({...p,[activeAdmin]:j.data?.avatar_url||j.avatar_url||preview}))}catch(e:any){alert(e.message||'Avatar Upload fehlgeschlagen')}finally{setBusy(false)}
  }
  return <div className="profileWrap"><button className="profileBtn" onClick={()=>setOpen(!open)}><Avatar name={activeAdmin} src={current} size={38}/></button>{open&&<div className="profilePanel"><h2>{activeAdmin}</h2><Avatar name={activeAdmin} src={current} size={72}/><input className="input" type="file" accept="image/*" onChange={pick}/><div className="sub">{busy?'Speichert...':'Profilbild wird bei Backend-Verbindung dauerhaft gespeichert.'}</div></div>}</div>
 }
@@ -346,7 +449,7 @@ function StorageUploader({store,cid,fileType='documents',refTable,refId,title='D
 async function upload(file:File|null=selected){
   if(!file)return alert('Bitte Datei auswählen')
   const fd=new FormData(); fd.append('file',file); fd.append('customer_id',cid); fd.append('file_type',fileType); if(refTable)fd.append('ref_table',refTable); if(refId)fd.append('ref_id',refId)
-  try{const res=await fetch(`${API_BASE}/api/storage/upload`,{method:'POST',body:fd});const j=await res.json(); if(!j.ok)throw new Error(j.error||'Upload fehlgeschlagen'); await store.load()}catch(e:any){
+  try{await apiRequest(`${API_BASE}/api/storage/upload`,{method:'POST',body:fd,expectJson:false,timeoutMs:30000}); await store.load()}catch(e:any){
    alert(e.message)
    await store.create('customer_files',{customer_id:cid,name:file.name,original_name:file.name,file_type:fileType,bucket:fileType,storage_path:'#',mime_type:file.type,size_bytes:file.size,version:1,ref_table:refTable,ref_id:refId,actor_name:activeAdmin,url:URL.createObjectURL(file)})
   }
@@ -475,17 +578,17 @@ function applyDemoSandboxStorePatch(store:any){
  const oldUpdate=store.update?.bind(store)
  const oldRemove=(store.remove||store.delete)?.bind(store)
  store.create=async(table:string,row:any)=>{
-   const mode=typeof window!=='undefined'?localStorage.getItem('mmos_mode'):''
+   const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localCreate(table,row)
    try{return oldCreate?await oldCreate(table,row):await localCreate(table,row)}catch(e){return localCreate(table,row)}
  }
  store.update=async(table:string,rowId:string,patch:any)=>{
-   const mode=typeof window!=='undefined'?localStorage.getItem('mmos_mode'):''
+   const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localUpdate(table,rowId,patch)
    try{return oldUpdate?await oldUpdate(table,rowId,patch):await localUpdate(table,rowId,patch)}catch(e){return localUpdate(table,rowId,patch)}
  }
  store.remove=async(table:string,rowId:string)=>{
-   const mode=typeof window!=='undefined'?localStorage.getItem('mmos_mode'):''
+   const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localRemove(table,rowId)
    try{return oldRemove?await oldRemove(table,rowId):await localRemove(table,rowId)}catch(e){return localRemove(table,rowId)}
  }
@@ -580,7 +683,8 @@ export default function App(){
    'dashboard','main_landing','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr','demo_customers',
    'public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty',
    'reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','heatmap','kpi',
-   'customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events'
+   'customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events',
+   'business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine','monthly_reports','onboarding','approvals','health_scores','dunning','health_center'
  ]
  const packageToolRoutes:any={
    'QR Kampagnen':'qr',
@@ -612,9 +716,15 @@ export default function App(){
    'SEO Analytics':'seo',
    'SEO Heatmap':'heatmap',
    'Workflow Center':'customer_workflows',
-   'KPI Analytics':'kpi'
+   'KPI Analytics':'kpi',
+   'Wissenscenter':'knowledge',
+   'Wettbewerber Vergleich':'competitors',
+   'Onboarding':'onboarding',
+   'Reports':'reports',
+   'Freigaben':'approvals',
+   'Output Engine':'output_engine'
  }
- const customerBase=['dashboard','finance','tickets','booking','packages']
+ const customerBase=['dashboard','knowledge','onboarding','reports','approvals','finance','tickets','booking','packages']
  const packageRoutes=(packageDefs[cpkg(store.data,cid)]?.tools||[]).map((t:string)=>packageToolRoutes[t]).filter(Boolean)
  const accessRows=(store.data.customer_tool_access||[]).filter((x:any)=>x.customer_id===cid)
  const enabledRoutes=accessRows.filter((x:any)=>x.enabled!==false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean)
@@ -643,34 +753,38 @@ export default function App(){
    package_recommendations:'Package Recommendations',
    package_matrix:'Paket-Matrix',
    timeline_events:'Timeline Events',
-   seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports'
+   seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',
+   knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Health Center'
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
    {label:'Übersicht',hint:'Start, Landingpage & Demo',tools:['dashboard','main_landing','demo_customers']},
-   {label:'CRM & Betrieb',hint:'Kunden, Termine, Tickets',tools:['crm','finance','tickets','booking','pipeline','media','timeline_events']},
+   {label:'CRM & Betrieb',hint:'Kunden, Onboarding, Termine, Tickets',tools:['crm','onboarding','finance','tickets','booking','pipeline','media','timeline_events','health_scores']},
    {label:'QR & Loyalty',hint:'QR-Code, Endkundenseite, Punkte, Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
    {label:'Reviews',hint:'Feedback, KI-Auswertung, Vorlagen',tools:['reviews']},
+   {label:'Akquise & Sales',hint:'Audit, Leads, Angebote, Verträge',tools:['business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine']},
    {label:'Automation & Marketing',hint:'Kampagnen, Regeln, AI Assistant',tools:['automations','workflows','smart_automation','marketing_automation','ai_assistant']},
-   {label:'SEO & Analytics',hint:'Google/API, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']}
+   {label:'SEO & Analytics',hint:'Google/API, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']},
+   {label:'Reports & System',hint:'Reports, Output, Mahnwesen, Health',tools:['monthly_reports','approvals','dunning','health_center']}
  ]
  const customerNavGroups=[
-   {label:'Übersicht',hint:'Portalstart',tools:['dashboard']},
+   {label:'Übersicht',hint:'Portalstart',tools:['dashboard','onboarding','knowledge']},
    {label:'QR & Loyalty',hint:'QR, Endkundenseite, Punkte, Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
    {label:'Reviews',hint:'Bewertungen & Antworten',tools:['reviews']},
    {label:'Marketing & Automation',hint:'Workflows, Kampagnen & AI',tools:['customer_workflows','smart_automation','marketing_automation','ai_assistant']},
-   {label:'Betrieb',hint:'Termine, Rechnungen, Tickets, Dateien',tools:['booking','finance','tickets','media','packages']},
-   {label:'SEO & Analytics',hint:'Integrationen, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','customer_health','customer_intelligence']}
+   {label:'Betrieb',hint:'Termine, Rechnungen, Tickets, Dateien',tools:['reports','approvals','booking','finance','tickets','media','packages']},
+   {label:'SEO & Analytics',hint:'Integrationen, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence']}
  ]
  const navGroups=(role==='admin'?adminNavGroups:customerNavGroups)
    .map((g:any)=>({...g,tools:g.tools.filter((k:string)=>visibleNavKeys.includes(k))}))
    .filter((g:any)=>g.tools.length>0)
  if(role==='guest'){
   const lp=mainLandingSettings(store.data)
-  return <div className="landing"><div className="landingNav"><div className={lp.logo_url?'logo hasImage':'logo'}>{lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}{lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||lp.brand_name}</span>}</div><div className="row"><button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button><button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Demo'}</button></div></div><section className="hero"><h1>{lp.hero_title}</h1><p>{lp.hero_subline}</p></section><section className="landingPackages"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
+  return <ProfessionalLanding lp={lp} setRole={setRole} setActiveAdmin={setActiveAdmin}/>
  }
  const nav=role==='admin'?admin:customer
- return <div className={`app ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div>MMOS</div><div className="demoModeBadge">DEMO MODE</div>{role==='admin'&&view!=='demo_customers'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div><button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Demo zurücksetzen</button><button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();localStorage.removeItem('mmos_mode');setRole('guest')}}>Logout</button></aside><main className="main"><div className="top"><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions"><NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/>
+ const mobileBottomKeys=(role==='admin'?['dashboard','lead_scraper','acquisition_campaigns','crm','health_center']:['dashboard','seo','reviews','reports','finance']).filter((k:string)=>visibleNavKeys.includes(k))
+ return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div><div className="demoModeBadge">DEMO MODE</div>{role==='admin'&&view!=='demo_customers'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div><button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Demo zurücksetzen</button><button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions"><NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
  {view==='dashboard'&&<Dashboard store={store} cid={cid} role={role} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>}
  {view==='main_landing'&&role==='admin'&&<MainLandingPageEditor store={store}/>}
@@ -699,7 +813,30 @@ export default function App(){
  {view==='success'&&role==='customer'&&<CustomerSuccess/>}
  {view==='advanced_reports'&&role==='customer'&&<CustomerAdvancedReports/>}
 
+ {view==='knowledge'&&<KnowledgeCenter store={store} cid={cid} role={role}/>}
+ {view==='competitors'&&<LocalCompetitorComparison store={store} cid={cid} role={role}/>}
+ {view==='business_audit'&&role==='admin'&&<GoogleBusinessAuditTool store={store} cid={cid}/>}
+ {view==='mini_audit'&&role==='admin'&&<MiniAuditGenerator store={store} cid={cid}/>}
+ {view==='lead_scraper'&&role==='admin'&&<LeadScraperTool store={store} setCid={setCid} setView={setView}/>}
+ {view==='acquisition_campaigns'&&role==='admin'&&<AcquisitionCampaignCenter store={store} setCid={setCid} setView={setView}/>}
+ {view==='offer_generator'&&role==='admin'&&<OfferGenerator store={store} cid={cid}/>}
+ {view==='contract_generator'&&role==='admin'&&<ContractGenerator store={store} cid={cid}/>}
+ {view==='health_scores'&&role==='admin'&&<CustomerSuccessTrafficLight store={store} setCid={setCid} setView={setView}/>}
+ {view==='dunning'&&role==='admin'&&<DunningCenter store={store} setCid={setCid} setView={setView}/>}
+ {view==='health_center'&&role==='admin'&&<HealthCenterV42 store={store}/>} 
+ {view==='onboarding'&&<GuidedOnboardingCenter store={store} cid={cid} role={role} setCid={setCid} setView={setView}/>} 
+ {view==='reports'&&<MonthlyReportCenter store={store} cid={cid} role={role}/>} 
+ {view==='monthly_reports'&&role==='admin'&&<MonthlyReportCenter store={store} cid={cid} role={role}/>} 
+ {view==='output_engine'&&role==='admin'&&<BrandOutputEngine store={store} cid={cid}/>} 
+ {view==='approvals'&&<ApprovalCenter store={store} cid={cid} role={role}/>} 
+ <MobileAppBottomNav role={role} view={view} keys={mobileBottomKeys} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  </main></div>
+}
+
+function MobileAppBottomNav({role,view,keys,labels,setView,openMenu}:any){
+ const icon:any={dashboard:'⌂',seo:'◌',reviews:'★',reports:'▤',finance:'€',lead_scraper:'◎',acquisition_campaigns:'↗',crm:'◍',health_center:'✓'}
+ const short:any={dashboard:'Start',lead_scraper:'Leads',acquisition_campaigns:'Akquise',health_center:'Health'}
+ return <nav className="mobileAppBottomNav" aria-label="Mobile App Navigation">{keys.map((k:string)=><button key={k} type="button" className={view===k?'active':''} onClick={()=>setView(k)}><span>{icon[k]||'•'}</span><small>{short[k]||labels[k]||k}</small></button>)}<button type="button" onClick={openMenu}><span>☰</span><small>Mehr</small></button></nav>
 }
 
 
@@ -711,6 +848,338 @@ export default function App(){
 
 
 
+
+
+
+// V42.17 SALES, KNOWLEDGE & OPERATIONS TOOLS
+function downloadTextFile(filename:string, content:string, mime='text/plain'){
+ const blob=new Blob([content],{type:mime})
+ const url=URL.createObjectURL(blob)
+ const a=document.createElement('a')
+ a.href=url
+ a.download=safeFilename(filename.replace(/\.txt$/,''))+'.txt'
+ a.click()
+ setTimeout(()=>URL.revokeObjectURL(url),500)
+}
+function safeList(v:any){return Array.isArray(v)?v:[]}
+
+// V42.19 Stability & Data Integrity helpers
+const STATUS_OPTIONS:any={
+ acquisition:['Neu','Audit geplant','Mini-Audit erstellt','Mini-Audit versendet','Kontakt aufgenommen','Follow-up offen','Angebot gesendet','Vertrag gesendet','Gewonnen','Verloren','Archiviert'],
+ campaign:['Aktiv','Pausiert','Archiviert'],
+ lead:['Neu','Qualifiziert','Kontaktiert','Als Kunde angelegt','Nicht geeignet','Archiviert'],
+ audit:['Entwurf','Aus Kampagne','Erstellt','Geprüft','Archiviert'],
+ mini_audit:['Erstellt','Versendet','Nachfassen','Erledigt','Archiviert'],
+ offer:['Entwurf','Gesendet','Angenommen','Abgelehnt','Archiviert'],
+ contract:['Entwurf','Freigegeben','Gesendet','Unterschrieben','Abgelehnt','Archiviert'],
+ invoice:['Entwurf','Offen','Teilbezahlt','Bezahlt','Überfällig','Mahnung 1','Mahnung 2','Storniert','Archiviert'],
+ dunning:['Vorbereitet','Gesendet','Erinnert','Bezahlt','Eskaliert','Archiviert'],
+ pipeline:['Offen','Qualifiziert','Angebot gesendet','Gewonnen','Verloren','Archiviert'],
+ report:['Entwurf','Freigegeben','Gesendet','Archiviert'],
+ approval:['Offen','Freigegeben','Änderung gewünscht','Archiviert']
+}
+const STATUS_BADGE:any={Gewonnen:'green',Bezahlt:'green',Unterschrieben:'green',Angenommen:'green',Grün:'green',Verloren:'red',Abgelehnt:'red',Überfällig:'red','Mahnung 2':'red',Rot:'red','Mahnung 1':'yellow',Gesendet:'purple','Mini-Audit versendet':'purple','Angebot gesendet':'purple','Vertrag gesendet':'purple',Gelb:'yellow',Archiviert:'gray','Freigegeben':'green','Änderung gewünscht':'yellow'}
+function statusBadge(v:any){return STATUS_BADGE[String(v||'')]||'purple'}
+function normalizeStatus(kind:string,value:any){const opts=STATUS_OPTIONS[kind]||[];return opts.includes(value)?value:(opts[0]||String(value||'Neu'))}
+function StatusSelect({kind,value,onChange,compact=true}:any){const opts=STATUS_OPTIONS[kind]||['Neu'];return <select className={compact?'input compactInput':'input'} value={normalizeStatus(kind,value)} onChange={e=>onChange(e.target.value)}>{opts.map((s:string)=><option key={s}>{s}</option>)}</select>}
+function safeText(v:any,fallback=''){return String(v??fallback).trim()}
+function safeFilename(v:any){return slugifyLocal(String(v||'export')).replace(/-+/g,'_')}
+function v4219Export(title:string,body:string){return `Mecklenburg Marketing OS\n${title}\n${new Date().toLocaleString('de-DE')}\n${'-'.repeat(54)}\n\n${body}\n\n${'-'.repeat(54)}\nHinweis: Export aus MMOS. Bitte vor Versand prüfen.`}
+function confirmAction(label:string){return typeof window==='undefined'||window.confirm(label)}
+async function archiveOrRemove(store:any,table:string,row:any,label='Eintrag'){if(!row?.id)return;if(!confirmAction(`${label} wirklich archivieren?`))return; if(['prospect_leads','generated_offers','generated_contracts','dunning_cases','acquisition_campaigns','google_business_audits','mini_audits'].includes(table)){await store.update(table,row.id,{status:'Archiviert',stage:row.stage==='Gewonnen'||row.stage==='Verloren'?row.stage:'Archiviert',archived_at:new Date().toISOString()})}else await store.remove(table,row.id)}
+function LocalLiveBadge(){return <Badge type={hasSupabase?'green':'yellow'}>{hasSupabase?'Live/Supabase':'Lokal/Fallback'}</Badge>}
+function validateRequired(payload:any,fields:string[]){const missing=fields.filter(f=>!safeText(payload?.[f]));return {ok:missing.length===0,missing,message:missing.length?`Bitte ausfüllen: ${missing.join(', ')}`:''}}
+function uniqueIds(ids:any[]){return Array.from(new Set(safeList(ids).filter(Boolean)))}
+function cleanCampaignPayload(p:any){return {...p,name:safeText(p.name,'Neue Akquise-Kampagne'),branch:safeText(p.branch),city:safeText(p.city),goal:safeText(p.goal),channel:safeText(p.channel,'Telefon + E-Mail'),lead_ids:uniqueIds(p.lead_ids),follow_up_at:p.follow_up_at||new Date().toISOString().slice(0,10),stage:normalizeStatus('acquisition',p.stage||'Neu'),status:normalizeStatus('campaign',p.status||'Aktiv')}}
+function healthColor(score:number){return score>=75?'Grün':score>=50?'Gelb':'Rot'}
+function healthBadge(score:number){return score>=75?'green':score>=50?'yellow':'red'}
+function customerHealthSnapshot(d:any,cid:string){
+ const inv=safeList(d.invoices).filter((i:any)=>i.customer_id===cid)
+ const openInv=inv.filter((i:any)=>['Offen','Überfällig','Mahnung 1','Mahnung 2'].includes(i.status||'')).length
+ const openTickets=safeList(d.tickets).filter((t:any)=>t.customer_id===cid&&t.status!=='Geschlossen').length
+ const integrations=safeList(d.integrations).filter((i:any)=>i.customer_id===cid&&String(i.status||'').toLowerCase().includes('verbunden')).length
+ const reviews=safeList(d.review_feedback).filter((r:any)=>r.customer_id===cid).length
+ const seo=safeList(d.seo_snapshots).filter((s:any)=>s.customer_id===cid).length
+ let score=86-openInv*14-openTickets*8+(integrations?8:0)+(reviews?4:0)+(seo?4:0)
+ score=Math.max(18,Math.min(100,score))
+ const reasons=[
+  openInv?`${openInv} offene Rechnung(en)`:'Rechnungen unkritisch',
+  openTickets?`${openTickets} offene Tickets`:'Tickets unkritisch',
+  integrations?'Integration verbunden':'Keine aktive Integration',
+  seo?'SEO-Daten vorhanden':'Noch wenig SEO-Daten'
+ ]
+ return {score,status:healthColor(score),reasons,openInv,openTickets,integrations,seo}
+}
+function auditScoreFromPayload(p:any){
+ let score=62
+ if(p.website)score+=8
+ if(p.google_url)score+=8
+ if(p.category)score+=4
+ if(p.reviews&&Number(p.reviews)>50)score+=6
+ if(p.rating&&Number(p.rating)>=4.5)score+=6
+ return Math.max(20,Math.min(96,score))
+}
+
+function KnowledgeCenter({store,cid,role}:any){
+ const [q,setQ]=useState('')
+ const [category,setCategory]=useState('Alle')
+ const articles=safeList(store.data.knowledge_articles)
+ const cats=['Alle',...Array.from(new Set(articles.map((a:any)=>a.category||'Allgemein')))]
+ const filtered=articles.filter((a:any)=>{
+  const hay=`${a.title} ${a.category} ${a.summary} ${a.content}`.toLowerCase()
+  return (category==='Alle'||a.category===category)&&hay.includes(q.toLowerCase())
+ })
+ const [form,setForm]=useState<any>({title:'',category:'Google Business',summary:'',content:'',package_scope:'Alle'})
+ async function addArticle(){
+  if(!form.title.trim())return store.notify('Titel fehlt')
+  await store.create('knowledge_articles',{...form,created_at:new Date().toISOString()})
+  setForm({title:'',category:'Google Business',summary:'',content:'',package_scope:'Alle'})
+ }
+ return <><Head title="Kunden Wissenscenter" sub="Anleitungen, FAQ und kurze Handlungsempfehlungen für Kunden"/>
+ <div className="grid2"><Card title="Wissen suchen"><input className="input" value={q} onChange={e=>setQ(e.target.value)} placeholder="Suche nach Google Bewertungen, QR, SEO, Öffnungszeiten..."/><select className="input" value={category} onChange={e=>setCategory(e.target.value)}>{cats.map((c:any)=><option key={c}>{c}</option>)}</select><div className="sub">Für Kunden als Self-Service-Hilfe. Für Admins als zentrale Wissensdatenbank.</div></Card>
+ {role==='admin'&&<Card title="Artikel hinzufügen"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Titel der Anleitung"/><input className="input" value={form.category} onChange={e=>setForm({...form,category:e.target.value})} placeholder="Kategorie, z. B. Google Business"/><input className="input" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})} placeholder="Kurzbeschreibung für die Übersicht"/><textarea className="input textarea" value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Ausführliche Erklärung oder Schritt-für-Schritt-Anleitung"/><button className="btn" onClick={addArticle}>Artikel speichern</button></Card>}</div>
+ <Card title="Artikel">{filtered.map((a:any)=><div className="item" key={a.id}><div><b>{a.title}</b><div className="sub">{a.category} · {a.package_scope||'Alle Pakete'} · {a.summary}</div><p className="sub">{a.content}</p></div>{role==='admin'&&<button className="btn secondary" onClick={()=>store.remove('knowledge_articles',a.id)}>Löschen</button>}</div>)}{filtered.length===0&&<div className="sub">Keine passenden Artikel gefunden.</div>}</Card></>
+}
+
+function LocalCompetitorComparison({store,cid,role}:any){
+ const customer=cobj(store.data,cid)||{}
+ const rows=safeList(store.data.competitor_benchmarks).filter((x:any)=>x.customer_id===cid)
+ const avg=rows.length?Math.round(rows.reduce((s:number,x:any)=>s+Number(x.visibility||0),0)/rows.length):0
+ const [form,setForm]=useState<any>({name:'',rating:'',reviews:'',visibility:'',profile_score:'',keywords:'',notes:''})
+ async function add(){
+  if(!form.name)return store.notify('Name des Wettbewerbers fehlt')
+  await store.create('competitor_benchmarks',{customer_id:cid,...form,rating:Number(form.rating||0),reviews:Number(form.reviews||0),visibility:Number(form.visibility||0),profile_score:Number(form.profile_score||0),keywords:String(form.keywords||'').split(',').map((x:string)=>x.trim()).filter(Boolean)})
+  setForm({name:'',rating:'',reviews:'',visibility:'',profile_score:'',keywords:'',notes:''})
+ }
+ return <><Head title="Lokaler Wettbewerber Vergleich" sub={`${customer.name||'Kunde'} · Bewertungen, Sichtbarkeit und Google-Profil-Stärke vergleichen`}/>
+ <div className="grid4"><Metric label="Wettbewerber" value={rows.length}/><Metric label="Ø Sichtbarkeit" value={`${avg}%`}/><Metric label="Bester Score" value={rows.length?Math.max(...rows.map((r:any)=>Number(r.profile_score||0))):0}/><Metric label="Kundenpaket" value={cpkg(store.data,cid)}/></div>
+ {role==='admin'&&<Card title="Wettbewerber hinzufügen"><div className="grid4"><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Name des lokalen Wettbewerbers"/><input className="input" type="number" value={form.rating} onChange={e=>setForm({...form,rating:e.target.value})} placeholder="Google Bewertung, z. B. 4.6"/><input className="input" type="number" value={form.reviews} onChange={e=>setForm({...form,reviews:e.target.value})} placeholder="Anzahl Bewertungen"/><input className="input" type="number" value={form.visibility} onChange={e=>setForm({...form,visibility:e.target.value})} placeholder="Sichtbarkeit 0-100"/></div><div className="grid2"><input className="input" type="number" value={form.profile_score} onChange={e=>setForm({...form,profile_score:e.target.value})} placeholder="Profil-Score 0-100"/><input className="input" value={form.keywords} onChange={e=>setForm({...form,keywords:e.target.value})} placeholder="Keywords kommagetrennt"/></div><textarea className="input textarea" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Notizen, Chancen oder Schwächen"/><button className="btn" onClick={add}>Vergleich speichern</button></Card>}
+ <Card title="Vergleichstabelle">{rows.map((r:any)=><div className="item" key={r.id}><div><b>{r.name}</b><div className="sub">⭐ {r.rating||'-'} · {r.reviews||0} Bewertungen · Sichtbarkeit {r.visibility||0}% · Profil {r.profile_score||0}%</div><div className="sub">{safeList(r.keywords).join(', ')}</div><p className="sub">{r.notes}</p></div>{role==='admin'&&<button className="btn secondary" onClick={()=>store.remove('competitor_benchmarks',r.id)}>Löschen</button>}</div>)}{!rows.length&&<div className="sub">Noch keine Wettbewerber hinterlegt.</div>}</Card></>
+}
+
+function GoogleBusinessAuditTool({store,cid}:any){
+ const c=cobj(store.data,cid)||{}
+ const [form,setForm]=useState<any>({business_name:c.name||'',city:c.city||'',branch:c.branch||'',website:'',google_url:'',rating:'',reviews:''})
+ const [msg,setMsg]=useState('')
+ const audits=safeList(store.data.google_business_audits)
+ async function runAudit(){
+  setMsg('Audit wird erstellt...')
+  try{
+   const remote=await businessToolsClient.googleBusinessAudit({...form,customer_id:cid})
+   const score=remote?.audit?.score||auditScoreFromPayload(form)
+   const findings=remote?.audit?.findings||[
+    'Google Business Leistungen und Kategorien prüfen',
+    'Bewertungsantworten und Review-Frequenz verbessern',
+    'Fotos, Beiträge und Öffnungszeiten regelmäßig aktualisieren'
+   ]
+   await store.create('google_business_audits',{customer_id:cid,business_name:form.business_name,city:form.city,branch:form.branch,website:form.website,google_url:form.google_url,rating:Number(form.rating||0),reviews:Number(form.reviews||0),score,status:'Geprüft',summary:remote?.audit?.summary||`Google Business Audit mit Score ${score}/100 erstellt.`,findings,created_at:new Date().toISOString()})
+   setMsg('Audit erstellt und gespeichert.')
+  }catch(e:any){
+   const score=auditScoreFromPayload(form)
+   await store.create('google_business_audits',{customer_id:cid,business_name:form.business_name,city:form.city,branch:form.branch,website:form.website,google_url:form.google_url,rating:Number(form.rating||0),reviews:Number(form.reviews||0),score,status:'Entwurf',summary:`Lokaler Audit-Fallback mit Score ${score}/100 erstellt.`,findings:['Google Places API nicht erreichbar oder nicht konfiguriert','Manuelle Profildaten wurden bewertet','Für Live-Daten GOOGLE_PLACES_API_KEY in Railway setzen'],created_at:new Date().toISOString()})
+   setMsg(e.message||'Lokal gespeichert')
+  }
+ }
+ return <><Head title="Google Business Audit Tool" sub="Akquise- und Bestandskunden-Audit für Google Business Optimierung" action={<button className="btn" onClick={runAudit}>Audit durchführen</button>}/>
+ <div className="grid2"><Card title="Betrieb prüfen"><input className="input" value={form.business_name} onChange={e=>setForm({...form,business_name:e.target.value})} placeholder="Firmenname"/><input className="input" value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Ort"/><input className="input" value={form.branch} onChange={e=>setForm({...form,branch:e.target.value})} placeholder="Branche"/><input className="input" value={form.website} onChange={e=>setForm({...form,website:e.target.value})} placeholder="Website URL, falls vorhanden"/><input className="input" value={form.google_url} onChange={e=>setForm({...form,google_url:e.target.value})} placeholder="Google Business / Maps Link, falls vorhanden"/><div className="grid2"><input className="input" type="number" value={form.rating} onChange={e=>setForm({...form,rating:e.target.value})} placeholder="Google Sterne, z. B. 4.4"/><input className="input" type="number" value={form.reviews} onChange={e=>setForm({...form,reviews:e.target.value})} placeholder="Anzahl Bewertungen"/></div>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Bewertungskriterien"><div className="item"><b>Profil-Vollständigkeit</b><span>Kategorien, Leistungen, Öffnungszeiten, Beschreibung</span></div><div className="item"><b>Bewertungen</b><span>Sterne, Anzahl, Antwortquote, Review-Frequenz</span></div><div className="item"><b>Lokale SEO</b><span>Website, Keywords, Fotos, Beiträge, Aktionen</span></div></Card></div>
+ <Card title="Gespeicherte Audits">{audits.filter((a:any)=>a.status!=='Archiviert').map((a:any)=><div className="item" key={a.id}><div><b>{a.business_name}</b><div className="sub">{a.city} · Score {a.score}/100 · {a.status}</div><p className="sub">{a.summary}</p></div><div className="toolbarActions"><StatusSelect kind="audit" value={a.status||'Entwurf'} onChange={(v:string)=>store.update('google_business_audits',a.id,{status:v})}/><button className="btn secondary" onClick={()=>store.create('mini_audits',{customer_id:a.customer_id,audit_id:a.id,title:`Mini-Audit ${a.business_name}`,status:'Erstellt',recommendations:a.findings||[],created_at:new Date().toISOString()})}>Mini-Audit erzeugen</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'google_business_audits',a,'Audit')}>Archivieren</button></div></div>)}</Card></>
+}
+
+function MiniAuditGenerator({store,cid}:any){
+ const audits=safeList(store.data.google_business_audits).filter((a:any)=>a.customer_id===cid)
+ const mini=safeList(store.data.mini_audits).filter((m:any)=>m.customer_id===cid)
+ async function generate(a:any){
+  const recs=safeList(a.findings).length?safeList(a.findings):['Google Business Profil optimieren','Bewertungen aktiv sammeln','Neue Fotos und Beiträge veröffentlichen']
+  await store.create('mini_audits',{customer_id:cid,audit_id:a.id,title:`Mini-Audit ${a.business_name}`,status:'Erstellt',recommendations:recs,created_at:new Date().toISOString()})
+ }
+ function text(m:any){
+  const a=audits.find((x:any)=>x.id===m.audit_id)||{}
+  return v4219Export('Mini-Audit', `Mini-Audit: ${m.title}\nStatus: ${m.status}\n\nScore: ${a.score||'-'}/100\nBetrieb: ${a.business_name||cname(store.data,cid)}\n\nWichtigste Empfehlungen:\n${safeList(m.recommendations).map((r:any,i:number)=>`${i+1}. ${r}`).join('\n')}\n\nAngebot: Google Business Optimierung durch Mecklenburg Marketing.`)
+ }
+ return <><Head title="Mini-Audit Generator" sub="Aus Google Business Audits verkaufsfähige 1-Seiten-Audits erzeugen"/>
+ <Card title="Aus Audit erzeugen">{audits.map((a:any)=><div className="item" key={a.id}><div><b>{a.business_name}</b><span>Score {a.score}/100 · {a.summary}</span></div><button className="btn" onClick={()=>generate(a)}>Mini-Audit erstellen</button></div>)}{!audits.length&&<div className="sub">Noch kein Audit vorhanden. Erstelle zuerst einen Google Business Audit.</div>}</Card>
+ <Card title="Mini-Audits">{mini.filter((m:any)=>m.status!=='Archiviert').map((m:any)=><div className="item" key={m.id}><div><b>{m.title}</b><div className="sub">{m.status} · {safeList(m.recommendations).join(' · ')}</div></div><div className="toolbarActions"><StatusSelect kind="mini_audit" value={m.status||'Erstellt'} onChange={(v:string)=>store.update('mini_audits',m.id,{status:v})}/><button className="btn secondary" onClick={()=>downloadTextFile(`${m.title}.txt`,text(m))}>Export TXT</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'mini_audits',m,'Mini-Audit')}>Archivieren</button></div></div>)}</Card></>
+}
+
+function LeadScraperTool({store,setCid,setView}:any){
+ const [form,setForm]=useState<any>({branch:'Friseur',city:'Schwerin',min_rating:'',max_reviews:'80',without_website:true})
+ const [msg,setMsg]=useState('')
+ const leads=safeList(store.data.prospect_leads).filter((l:any)=>l.status!=='Archiviert')
+ async function search(){
+  setMsg('Suche Leads...')
+  try{
+   const r=await businessToolsClient.leadSearch(form)
+   const result=safeList(r?.leads)
+   for(const lead of result){await store.create('prospect_leads',{...lead,status:'Neu',created_at:new Date().toISOString()})}
+   setMsg(`${result.length} Leads importiert.`)
+  }catch(e:any){
+   const samples=['Musterbetrieb '+form.branch+' Mitte','Lokaler Anbieter '+form.city,'Studio '+form.city].map((name,i)=>({name,branch:form.branch,city:form.city,rating:4.1+i/10,reviews:28+i*17,website:i===0?'':'',score:86-i*8,status:'Neu',reasons:['Demo-Fallback','Google Places API nicht konfiguriert','Profil für Akquise geeignet']}))
+   for(const lead of samples){await store.create('prospect_leads',{...lead,created_at:new Date().toISOString()})}
+   setMsg('Live-Suche nicht verfügbar, Demo-Leads erzeugt. Für echte Daten GOOGLE_PLACES_API_KEY in Railway setzen.')
+  }
+ }
+ async function convert(l:any){
+  const c=await store.create('customers',{name:l.name,branch:l.branch,city:l.city,email:'',phone:'',address:'',package_name:'Starter',contact_person:'',is_demo:false})
+  await store.create('customer_subscriptions',{customer_id:c.id,package_name:'Starter',status:'lead',price_monthly:199})
+  setCid(c.id);setView('business_audit')
+ }
+ return <><Head title="Lead Scraper" sub="Google-Places-basierte Lead-Recherche mit Demo-Fallback – keine aggressive Webseiten-Scraping-Logik" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={search}>Lead-Suche starten</button></div>}/>
+ <Card title="Suchparameter"><div className="grid4"><input className="input" value={form.branch} onChange={e=>setForm({...form,branch:e.target.value})} placeholder="Branche, z. B. Friseur, Beauty, Kiosk"/><input className="input" value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Ort, z. B. Schwerin"/><input className="input" type="number" value={form.min_rating} onChange={e=>setForm({...form,min_rating:e.target.value})} placeholder="Mindestbewertung"/><input className="input" type="number" value={form.max_reviews} onChange={e=>setForm({...form,max_reviews:e.target.value})} placeholder="Max. Bewertungen"/></div><label className="checkline"><input type="checkbox" checked={form.without_website} onChange={e=>setForm({...form,without_website:e.target.checked})}/> Betriebe ohne Website bevorzugen</label>{msg&&<div className="sub">{msg}</div>}</Card>
+ <Card title="Lead-Liste">{leads.map((l:any)=><div className="item" key={l.id}><div><b>{l.name}</b><div className="sub">{l.branch} · {l.city} · ⭐ {l.rating||'-'} · {l.reviews||0} Bewertungen · Score {l.score||0}</div><div className="sub">{safeList(l.reasons).join(' · ')}</div></div><div className="toolbarActions"><StatusSelect kind="lead" value={l.status||'Neu'} onChange={(v:string)=>store.update('prospect_leads',l.id,{status:v})}/><button className="btn secondary" onClick={()=>convert(l)}>Als Kunde anlegen</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'prospect_leads',l,'Lead')}>Archivieren</button></div></div>)}</Card></>
+}
+
+
+function AcquisitionCampaignCenter({store,setCid,setView}:any){
+ const today=new Date().toISOString().slice(0,10)
+ const stages=STATUS_OPTIONS.acquisition
+ const campaigns=safeList(store.data.acquisition_campaigns).filter((c:any)=>c.status!=='Archiviert'&&c.stage!=='Archiviert')
+ const archived=safeList(store.data.acquisition_campaigns).filter((c:any)=>c.status==='Archiviert'||c.stage==='Archiviert')
+ const leads=safeList(store.data.prospect_leads).filter((l:any)=>l.status!=='Archiviert')
+ const [statusFilter,setStatusFilter]=useState('Alle')
+ const [form,setForm]=useState<any>({name:'Neue Akquise-Kampagne',branch:'Friseur',city:'Schwerin',goal:'5 qualifizierte Betriebe kontaktieren und 2 Mini-Audits versenden',channel:'Telefon + E-Mail',lead_ids:[],follow_up_at:today,notes:'Fokus auf Google Business Optimierung, Bewertungen und lokale Sichtbarkeit.'})
+ const [msg,setMsg]=useState('')
+ const activeCampaigns=campaigns.filter((c:any)=>!['Verloren','Gewonnen'].includes(c.stage))
+ const followUps=campaigns.filter((c:any)=>String(c.follow_up_at||'').slice(0,10)<=today&&!['Gewonnen','Verloren'].includes(c.stage))
+ const won=campaigns.filter((c:any)=>c.stage==='Gewonnen').length
+ const filtered=campaigns.filter((c:any)=>statusFilter==='Alle'||c.stage===statusFilter||c.status===statusFilter)
+ const campaignLeads=(c:any)=>uniqueIds(c.lead_ids).map((id:string)=>leads.find((l:any)=>l.id===id)||safeList(store.data.prospect_leads).find((l:any)=>l.id===id)).filter(Boolean)
+ function toggleLead(id:string){setForm((p:any)=>({...p,lead_ids:p.lead_ids.includes(id)?p.lead_ids.filter((x:string)=>x!==id):[...p.lead_ids,id]}))}
+ async function cleanupCampaigns(){let fixed=0;for(const c of safeList(store.data.acquisition_campaigns)){const next=uniqueIds(c.lead_ids).filter((id:string)=>safeList(store.data.prospect_leads).some((l:any)=>l.id===id&&l.status!=='Archiviert'));if(JSON.stringify(next)!==JSON.stringify(c.lead_ids||[])){fixed++;await store.update('acquisition_campaigns',c.id,{lead_ids:next})}}setMsg(fixed?`${fixed} Kampagne(n) bereinigt.`:'Keine verwaisten Leads gefunden.')}
+ async function createCampaign(){
+  const payload=cleanCampaignPayload({...form,status:'Aktiv',stage:'Neu',customer_ids:[],created_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+  const valid=validateRequired(payload,['name','branch','city','goal'])
+  if(!valid.ok){setMsg(valid.message);return}
+  if(payload.lead_ids.length===0&&!confirmAction('Kampagne ohne Leads erstellen?'))return
+  await store.create('acquisition_campaigns',payload)
+  setForm((p:any)=>({...p,name:'Neue Akquise-Kampagne',lead_ids:[]}))
+  setMsg('Akquise-Kampagne erstellt und validiert.')
+ }
+ async function updateCampaign(c:any, patch:any){await store.update('acquisition_campaigns',c.id,cleanCampaignPayload({...c,...patch,updated_at:new Date().toISOString()}))}
+ async function ensureCustomerForLead(l:any){
+  if(l.customer_id){setCid(l.customer_id);return l.customer_id}
+  const c=await store.create('customers',{name:l.name,branch:l.branch,city:l.city,email:l.email||'',phone:l.phone||'',address:l.address||'',website:l.website||'',package_name:'Starter',contact_person:'',is_demo:false,source:'Akquise-Kampagne'})
+  await store.create('customer_subscriptions',{customer_id:c.id,package_name:'Starter',status:'lead',price_monthly:199})
+  await store.update('prospect_leads',l.id,{customer_id:c.id,status:'Als Kunde angelegt'})
+  setCid(c.id)
+  return c.id
+ }
+ async function createAuditMiniForLead(l:any,campaign?:any){
+  const customerId=await ensureCustomerForLead(l)
+  const score=auditScoreFromPayload({website:l.website,rating:l.rating,reviews:l.reviews,branch:l.branch})
+  const audit=await store.create('google_business_audits',{customer_id:customerId,prospect_lead_id:l.id,business_name:l.name,city:l.city,branch:l.branch,website:l.website,google_url:l.google_url,rating:Number(l.rating||0),reviews:Number(l.reviews||0),score,status:'Aus Kampagne',summary:`Akquise-Audit für ${l.name} mit ${score}/100 Punkten.`,findings:['Google Business Profil optimieren','Bewertungsstrategie aufbauen','Leistungen, Fotos und Beiträge regelmäßig pflegen'],created_at:new Date().toISOString()})
+  await store.create('mini_audits',{customer_id:customerId,audit_id:audit.id,prospect_lead_id:l.id,title:`Mini-Audit ${l.name}`,status:'Erstellt',recommendations:['Google Business Profil vollständig pflegen','Bewertungen aktiv sammeln','lokale Sichtbarkeit mit Fotos, Beiträgen und Leistungen erhöhen'],created_at:new Date().toISOString()})
+  if(campaign)await updateCampaign(campaign,{stage:'Mini-Audit erstellt',next_step:`Mini-Audit an ${l.name} versenden`})
+  setMsg('Audit und Mini-Audit wurden erstellt.')
+ }
+ async function createOfferForLead(l:any,campaign?:any){
+  const customerId=await ensureCustomerForLead(l)
+  await store.create('generated_offers',{customer_id:customerId,prospect_lead_id:l.id,campaign_id:campaign?.id,title:`Angebot Google Business Optimierung für ${l.name}`,package_name:'Growth',amount:499,setup_fee:249,status:'Entwurf',services:['Google Business Optimierung','Bewertungsaufbau','lokale SEO-Grundbetreuung','SEO Dashboard und Monatsauswertung'],created_at:new Date().toISOString()})
+  await store.create('offers',{customer_id:customerId,title:`Akquise: ${l.name}`,package_name:'Growth',amount:499,status:'Angebot gesendet',probability:45,created_at:new Date().toISOString()})
+  if(campaign)await updateCampaign(campaign,{stage:'Angebot gesendet',next_step:`Angebot für ${l.name} nachfassen`})
+  setCid(customerId);setMsg('Angebot und Pipeline-Eintrag vorbereitet.')
+ }
+ async function createContractForLead(l:any,campaign?:any){
+  const customerId=await ensureCustomerForLead(l)
+  await store.create('generated_contracts',{customer_id:customerId,prospect_lead_id:l.id,campaign_id:campaign?.id,title:`Dienstleistungsvertrag Growth Paket – ${l.name}`,package_name:'Growth',term:'monatlich kündbar mit 30 Tagen Frist',scope:'Google Business Optimierung, lokales SEO, Bewertungsmanagement, Kundenportal und vereinbarte Paketleistungen',dpa:'AVV/Datenschutz-Hinweis erforderlich',status:'Entwurf',created_at:new Date().toISOString()})
+  if(campaign)await updateCampaign(campaign,{stage:'Vertrag gesendet',next_step:`Vertrag bei ${l.name} nachfassen`})
+  setCid(customerId);setMsg('Vertragsentwurf vorbereitet.')
+ }
+ function outreachText(c:any){
+  const list=campaignLeads(c)
+  const body=`Akquise-Kampagne: ${c.name}\nBranche/Ort: ${c.branch || '-'} / ${c.city || '-'}\nZiel: ${c.goal || '-'}\nKanal: ${c.channel || '-'}\nStatus: ${c.stage || c.status}\nFollow-up: ${c.follow_up_at || '-'}\n\nLeads:\n${list.map((l:any,i:number)=>`${i+1}. ${l.name} · ${l.city || ''} · ${l.reviews || 0} Bewertungen · Score ${l.score || '-'}`).join('\n')}\n\nTelefon-Skript:\nGuten Tag, hier ist Dominique von Mecklenburg Marketing. Mir ist aufgefallen, dass Ihr Google-Unternehmensprofil noch Potenzial bei Sichtbarkeit, Bewertungen und Kundenanfragen hat. Ich habe dazu einen kurzen Mini-Audit vorbereitet und würde Ihnen gern 2–3 konkrete Verbesserungen zeigen.\n\nE-Mail/WhatsApp:\nHallo ${list[0]?.name || 'zusammen'}, ich habe Ihr Google Business Profil kurz geprüft. Dabei sind mir konkrete Chancen aufgefallen, mit denen Sie lokal sichtbarer werden und mehr Anfragen erhalten können. Ich sende Ihnen gern einen kurzen Mini-Audit mit den wichtigsten Punkten.`
+  return v4219Export('Akquise-Kampagnen-Export',body)
+ }
+ const openLeadCount=leads.filter((l:any)=>!l.customer_id).length
+ return <><Head title="Akquise-Kampagnen-Center" sub="Leads, Audits, Mini-Audits, Angebote und Verträge in einem Akquise-Workflow verbinden" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={createCampaign}>Kampagne erstellen</button></div>}/>
+ <div className="grid4"><Metric label="Aktive Kampagnen" value={activeCampaigns.length}/><Metric label="Offene Leads" value={openLeadCount}/><Metric label="Follow-ups fällig" value={followUps.length}/><Metric label="Archiviert" value={archived.length}/></div>
+ <Card title="V42.19 Datenintegrität"><div className="toolbarActions"><button className="btn secondary" onClick={cleanupCampaigns}>Verwaiste Leads bereinigen</button><button className="btn secondary" onClick={()=>setView('health_center')}>Health Center öffnen</button></div><div className="sub">Statuswerte laufen jetzt über Dropdowns. Doppelte Lead-IDs und gelöschte Leads werden bereinigt.</div>{msg&&<div className="sub">{msg}</div>}</Card>
+ <div className="grid2"><Card title="Neue Kampagne planen"><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Kampagnenname, z. B. Friseur-Schwerin Google Business Sprint"/><div className="grid3"><input className="input" value={form.branch} onChange={e=>setForm({...form,branch:e.target.value})} placeholder="Zielbranche"/><input className="input" value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Zielort"/><input className="input" type="date" value={form.follow_up_at} onChange={e=>setForm({...form,follow_up_at:e.target.value})}/></div><input className="input" value={form.channel} onChange={e=>setForm({...form,channel:e.target.value})} placeholder="Kontaktkanal, z. B. Telefon + E-Mail"/><textarea className="input textarea" value={form.goal} onChange={e=>setForm({...form,goal:e.target.value})} placeholder="Kampagnenziel"/><textarea className="input textarea" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Notizen, Positionierung oder Angebotsschwerpunkt"/><div className="toolbarActions"><button className="btn" onClick={createCampaign}>Kampagne erstellen</button><button className="btn secondary" onClick={()=>setView('lead_scraper')}>Lead Scraper öffnen</button></div></Card>
+ <Card title="Leads für Kampagne auswählen">{leads.length===0&&<div className="sub">Noch keine Leads vorhanden. Starte zuerst eine Lead-Suche.</div>}{leads.slice(0,12).map((l:any)=><label className="item" key={l.id}><span><b>{l.name}</b><div className="sub">{l.branch} · {l.city} · ⭐ {l.rating||'-'} · {l.reviews||0} Bewertungen · Score {l.score||'-'}</div></span><input type="checkbox" checked={form.lead_ids.includes(l.id)} onChange={()=>toggleLead(l.id)}/></label>)}</Card></div>
+ <Card title="Kampagnen-Board" action={<StatusSelect kind="acquisition" value={statusFilter==='Alle'?'Neu':statusFilter} onChange={(v:string)=>setStatusFilter(v)}/>}>{statusFilter!=='Alle'&&<button className="btn secondary" onClick={()=>setStatusFilter('Alle')}>Alle anzeigen</button>}{filtered.length===0&&<div className="sub">Keine Kampagne im aktuellen Filter.</div>}{filtered.map((c:any)=><div className="v42PackageEdit" key={c.id}><div className="item"><div><b>{c.name}</b><div className="sub">{c.branch || 'Branche offen'} · {c.city || 'Ort offen'} · {c.channel || 'Kanal offen'} · Follow-up {c.follow_up_at || '-'}</div><p className="sub">{c.goal}</p></div><div className="toolbarActions"><Badge type={statusBadge(c.stage)}>{c.stage||c.status}</Badge><StatusSelect kind="acquisition" value={c.stage||'Neu'} onChange={(v:string)=>updateCampaign(c,{stage:v})}/></div></div><div className="grid2"><Card title="Verknüpfte Leads">{campaignLeads(c).length===0&&<div className="sub">Keine aktiven Leads verknüpft.</div>}{campaignLeads(c).map((l:any)=><div className="item" key={l.id}><div><b>{l.name}</b><div className="sub">{l.branch} · {l.city} · Score {l.score||'-'} · Status {l.status||'Neu'}</div></div><div className="toolbarActions"><button className="btn secondary" onClick={()=>createAuditMiniForLead(l,c)}>Audit + Mini</button><button className="btn secondary" onClick={()=>createOfferForLead(l,c)}>Angebot</button><button className="btn secondary" onClick={()=>createContractForLead(l,c)}>Vertrag</button></div></div>)}</Card><Card title="Nächster Schritt & Export"><input className="input" value={c.next_step||''} onChange={e=>updateCampaign(c,{next_step:e.target.value})} placeholder="Nächster Schritt"/><input className="input" type="date" value={String(c.follow_up_at||'').slice(0,10)} onChange={e=>updateCampaign(c,{follow_up_at:e.target.value})}/><textarea className="input textarea" value={c.notes||''} onChange={e=>updateCampaign(c,{notes:e.target.value})} placeholder="Notizen"/><div className="toolbarActions"><button className="btn secondary" onClick={()=>downloadTextFile(`${c.name}.txt`,outreachText(c))}>Kampagne exportieren</button><button className="btn secondary" onClick={()=>updateCampaign(c,{stage:'Follow-up offen',follow_up_at:today})}>Follow-up heute</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'acquisition_campaigns',c,'Kampagne')}>Archivieren</button></div></Card></div></div>)}</Card>
+ </>
+}
+
+function OfferGenerator({store,cid}:any){
+ const c=cobj(store.data,cid)||{}
+ const [form,setForm]=useState<any>({title:`Angebot für ${c.name||'Kunde'}`,package_name:cpkg(store.data,cid),amount:pprice(cpkg(store.data,cid)),setup_fee:249,services:['Google Business Optimierung','SEO Dashboard','Bewertungsmanagement']})
+ const offers=safeList(store.data.generated_offers).filter((o:any)=>o.customer_id===cid&&o.status!=='Archiviert')
+ const [msg,setMsg]=useState('')
+ async function createOffer(){const valid=validateRequired(form,['title','package_name']); if(!valid.ok){setMsg(valid.message);return} await store.create('generated_offers',{customer_id:cid,...form,amount:Number(form.amount||0),setup_fee:Number(form.setup_fee||0),status:'Entwurf',created_at:new Date().toISOString()});setMsg('Angebot erstellt.')}
+ function offerText(o:any){return v4219Export('Angebot',`Angebot: ${o.title}\nKunde: ${cname(store.data,o.customer_id)}\nPaket: ${o.package_name}\nMonatlich: ${eur(o.amount)}\nEinrichtung: ${eur(o.setup_fee||0)}\nStatus: ${o.status}\n\nLeistungen:\n${safeList(o.services).map((s:any)=>'- '+s).join('\n')}\n\nMecklenburg Marketing · Google Business Optimierung · lokale SEO · Reviews`)}
+ return <><Head title="Angebotsgenerator" sub="Aus Paket, Kunde und Zusatzleistungen ein Angebotsdokument erzeugen" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={createOffer}>Angebot erstellen</button></div>}/>
+ <Card title="Angebot konfigurieren"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Angebotstitel"/><div className="grid3"><select className="input" value={form.package_name} onChange={e=>setForm({...form,package_name:e.target.value,amount:pprice(e.target.value)})}>{Object.keys(packageDefs).map(p=><option key={p}>{p}</option>)}</select><input className="input" type="number" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})} placeholder="Monatlicher Preis"/><input className="input" type="number" value={form.setup_fee} onChange={e=>setForm({...form,setup_fee:e.target.value})} placeholder="Einrichtungsgebühr"/></div><textarea className="input textarea" value={safeList(form.services).join('\n')} onChange={e=>setForm({...form,services:e.target.value.split('\n').filter(Boolean)})} placeholder="Leistungen, je Zeile eine"/>{msg&&<div className="sub">{msg}</div>}</Card>
+ <Card title="Gespeicherte Angebote">{offers.map((o:any)=><div className="item" key={o.id}><div><b>{o.title}</b><div className="sub">{o.package_name} · {eur(o.amount)} mtl. · Setup {eur(o.setup_fee||0)} · {o.status}</div></div><div className="toolbarActions"><StatusSelect kind="offer" value={o.status||'Entwurf'} onChange={(v:string)=>store.update('generated_offers',o.id,{status:v})}/><button className="btn secondary" onClick={()=>downloadTextFile(`${o.title}.txt`,offerText(o))}>Export TXT</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'generated_offers',o,'Angebot')}>Archivieren</button></div></div>)}</Card></>
+}
+
+function ContractGenerator({store,cid}:any){
+ const [form,setForm]=useState<any>({title:`Dienstleistungsvertrag ${cname(store.data,cid)}`,package_name:cpkg(store.data,cid),term:'monatlich kündbar mit 30 Tagen Frist',scope:'Google Business Optimierung, lokales SEO, Kundenportal und vereinbarte Paketleistungen',dpa:'AVV/Datenschutz-Hinweis erforderlich'})
+ const contracts=safeList(store.data.generated_contracts).filter((x:any)=>x.customer_id===cid&&x.status!=='Archiviert')
+ const [msg,setMsg]=useState('')
+ async function createContract(){const valid=validateRequired(form,['title','package_name','scope']); if(!valid.ok){setMsg(valid.message);return} await store.create('generated_contracts',{customer_id:cid,...form,status:'Entwurf',created_at:new Date().toISOString()});setMsg('Vertragsentwurf erstellt.')}
+ function contractText(cn:any){return v4219Export('Vertragsentwurf',`Dienstleistungsvertrag\n\nAuftragnehmer: Mecklenburg Marketing\nAuftraggeber: ${cname(store.data,cn.customer_id)}\nPaket: ${cn.package_name}\nStatus: ${cn.status}\nLaufzeit/Kündigung: ${cn.term}\n\nLeistungsumfang:\n${cn.scope}\n\nDatenschutz:\n${cn.dpa}\n\nHinweis: Finale rechtliche Prüfung empfohlen.`)}
+ return <><Head title="Vertragsgenerator" sub="Paketbezogene Vertragsentwürfe mit Leistungsumfang und Datenschutz-Hinweis" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={createContract}>Vertrag erstellen</button></div>}/>
+ <Card title="Vertrag konfigurieren"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Vertragstitel"/><select className="input" value={form.package_name} onChange={e=>setForm({...form,package_name:e.target.value})}>{Object.keys(packageDefs).map(p=><option key={p}>{p}</option>)}</select><input className="input" value={form.term} onChange={e=>setForm({...form,term:e.target.value})} placeholder="Laufzeit/Kündigung"/><textarea className="input textarea" value={form.scope} onChange={e=>setForm({...form,scope:e.target.value})} placeholder="Leistungsumfang"/><textarea className="input textarea" value={form.dpa} onChange={e=>setForm({...form,dpa:e.target.value})} placeholder="Datenschutz / AVV Hinweis"/>{msg&&<div className="sub">{msg}</div>}</Card>
+ <Card title="Vertragsentwürfe">{contracts.map((cn:any)=><div className="item" key={cn.id}><div><b>{cn.title}</b><div className="sub">{cn.package_name} · {cn.status}</div></div><div className="toolbarActions"><StatusSelect kind="contract" value={cn.status||'Entwurf'} onChange={(v:string)=>store.update('generated_contracts',cn.id,{status:v})}/><button className="btn secondary" onClick={()=>downloadTextFile(`${cn.title}.txt`,contractText(cn))}>Export TXT</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'generated_contracts',cn,'Vertrag')}>Archivieren</button></div></div>)}</Card></>
+}
+
+function CustomerSuccessTrafficLight({store,setCid,setView}:any){
+ const rows=allCustomers(store.data).filter((c:any)=>!c.is_demo).map((c:any)=>{
+  const existing=safeList(store.data.customer_health_scores).filter((x:any)=>x.customer_id===c.id).at(-1)
+  const calc=customerHealthSnapshot(store.data,c.id)
+  return {customer:c,...calc,stored:existing}
+ }).sort((a:any,b:any)=>a.score-b.score)
+ async function saveSnapshot(r:any){await store.create('customer_health_scores',{customer_id:r.customer.id,score:r.score,status:r.status,reasons:r.reasons,created_at:new Date().toISOString()})}
+ return <><Head title="Kunden-Erfolgsampel" sub="Frühwarnsystem für Kündigungsrisiko, offene Themen und Upsell-Chancen"/>
+ <div className="grid4"><Metric label="Rot" value={rows.filter((r:any)=>r.status==='Rot').length}/><Metric label="Gelb" value={rows.filter((r:any)=>r.status==='Gelb').length}/><Metric label="Grün" value={rows.filter((r:any)=>r.status==='Grün').length}/><Metric label="Kunden" value={rows.length}/></div>
+ <Card title="Ampelübersicht">{rows.map((r:any)=><div className="item" key={r.customer.id}><div><b>{r.customer.name}</b><div className="sub">Score {r.score}/100 · {r.reasons.join(' · ')}</div></div><div className="toolbarActions"><Badge type={healthBadge(r.score)}>{r.status}</Badge><button className="btn secondary" onClick={()=>saveSnapshot(r)}>Snapshot</button><button className="btn secondary" onClick={()=>{setCid(r.customer.id);setView('crm')}}>Kundenakte</button></div></div>)}</Card></>
+}
+
+function DunningCenter({store,setCid,setView}:any){
+ const invoices=safeList(store.data.invoices).filter((i:any)=>STATUS_OPTIONS.invoice.includes(i.status||'')&&!['Bezahlt','Storniert','Archiviert'].includes(i.status||''))
+ async function prepare(i:any){
+  const level=i.status==='Mahnung 2'?3:i.status==='Mahnung 1'?2:1
+  await store.create('dunning_cases',{invoice_id:i.id,customer_id:i.customer_id,level,status:'Vorbereitet',due_date:new Date(Date.now()+7*86400000).toISOString().slice(0,10),message:`Zahlungserinnerung Stufe ${level} für ${i.invoice_number}`,created_at:new Date().toISOString()})
+ }
+ const cases=safeList(store.data.dunning_cases).filter((c:any)=>c.status!=='Archiviert')
+ function dunningText(c:any){return v4219Export('Mahnung / Zahlungserinnerung',`${c.message}\n\nSehr geehrte Damen und Herren,\nbitte gleichen Sie die offene Rechnung zeitnah aus. Bei Rückfragen melden Sie sich gerne.\n\nMecklenburg Marketing`)}
+ return <><Head title="Rechnungs- und Mahnwesen" sub="Offene Rechnungen überwachen, Zahlungserinnerungen vorbereiten und Status per Dropdown ändern"/>
+ <Card title="Offene Rechnungen">{invoices.map((i:any)=><div className="item" key={i.id}><div><b>{i.invoice_number}</b><div className="sub">{cname(store.data,i.customer_id)} · {eur(i.amount)} · {i.status}</div></div><div className="toolbarActions"><StatusSelect kind="invoice" value={i.status||'Offen'} onChange={(v:string)=>store.update('invoices',i.id,{status:v})}/><button className="btn secondary" onClick={()=>prepare(i)}>Mahnung vorbereiten</button><button className="btn secondary" onClick={()=>{setCid(i.customer_id);setView('finance')}}>Rechnungen</button></div></div>)}</Card>
+ <Card title="Mahnfälle">{cases.map((c:any)=><div className="item" key={c.id}><div><b>{c.message}</b><div className="sub">{cname(store.data,c.customer_id)} · Stufe {c.level} · Fällig bis {c.due_date} · {c.status}</div></div><div className="toolbarActions"><StatusSelect kind="dunning" value={c.status||'Vorbereitet'} onChange={(v:string)=>store.update('dunning_cases',c.id,{status:v})}/><button className="btn secondary" onClick={()=>downloadTextFile(`Mahnung_${c.invoice_id}.txt`,dunningText(c))}>Text exportieren</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'dunning_cases',c,'Mahnfall')}>Archivieren</button></div></div>)}</Card></>
+}
+
+function HealthCenterV42({store}:any){
+ const [ready,setReady]=useState<any>(null)
+ const [schema,setSchema]=useState<any>(null)
+ const [bt,setBt]=useState<any>(null)
+ const [msg,setMsg]=useState('')
+ async function run(){
+  setMsg('Prüfe System...')
+  try{setReady(await systemReady())}catch(e:any){setReady({ok:false,error:e.message})}
+  try{setSchema(await systemSchema())}catch(e:any){setSchema({ok:false,error:e.message})}
+  try{setBt(await businessToolsClient.health())}catch(e:any){setBt({ok:false,error:e.message})}
+  setMsg('Prüfung abgeschlossen')
+ }
+ useEffect(()=>{run()},[])
+ const migrations=[
+  {version:'V42.14',file:'SQL_LANDING_PAGE_SETTINGS_V42_14.sql',tables:['landing_page_settings']},
+  {version:'V42.16',file:'SQL_V42_16_STABILITY_INTEGRATION_STATUS.sql',tables:['integrations','oauth_tokens']},
+  {version:'V42.17',file:'SQL_V42_17_BUSINESS_TOOLS.sql',tables:['knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores']},
+  {version:'V42.18',file:'SQL_V42_18_AKQUISE_KAMPAGNEN_CENTER.sql',tables:['acquisition_campaigns']},
+  {version:'V42.19',file:'SQL_V42_19_STABILITY_DATA_INTEGRITY.sql',tables:['activity_logs','api_usage_cache','data_integrity_checks']},
+  {version:'V42.20',file:'SQL_V42_20_PROFESSIONAL_CX_OUTPUT.sql',tables:['onboarding_checklists','monthly_reports','approval_requests','output_documents']}
+ ]
+ const missing=Array.isArray(schema?.missing)?schema.missing:[]
+ const migrationRows=migrations.map(m=>({...m,missing:m.tables.filter(t=>missing.includes(t)),local:m.tables.every(t=>Array.isArray(store.data[t]))}))
+ const localTables=Array.from(new Set(migrations.flatMap(m=>m.tables)))
+ const activity=safeList(store.data.activity_logs).slice(0,8)
+ return <><Head title="Health Center" sub="Systemstatus, Migrationen, Live/Lokal-Status, API-Keys und Datenintegrität" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={run}>Neu prüfen</button></div>}/>
+ <div className="grid4"><Metric label="Backend" value={ready?.ok?'OK':'Prüfen'}/><Metric label="Schema" value={missing.length?`${missing.length} fehlt`:'OK'}/><Metric label="Business Tools" value={bt?.ok?'OK':'Fallback'}/><Metric label="Aktivitäten" value={safeList(store.data.activity_logs).length}/></div>
+ <div className="grid2"><Card title="Backend / Supabase"><pre className="codeBox">{JSON.stringify(ready,null,2)}</pre></Card><Card title="Business Tools & ENV"><pre className="codeBox">{JSON.stringify(bt,null,2)}</pre><div className="sub">Live Lead-Suche und echte Places-Daten benötigen GOOGLE_PLACES_API_KEY in Railway. Ohne Key arbeitet das System mit Demo-/Fallback-Modus.</div>{msg&&<div className="sub">{msg}</div>}</Card></div>
+ <Card title="Migrationen & SQL-Status">{migrationRows.map((m:any)=><div className="item" key={m.version}><div><b>{m.version} · {m.file}</b><div className="sub">Tabellen: {m.tables.join(', ')}</div>{m.missing.length>0&&<div className="sub">Fehlend laut Backend: {m.missing.join(', ')}</div>}</div><Badge type={m.missing.length?'yellow':'green'}>{m.missing.length?'prüfen':'OK'}</Badge></div>)}</Card>
+ <Card title="Live/Lokal Datenzählung">{localTables.map(t=><div className="item" key={t}><b>{t}</b><span>{safeList(store.data[t]).length} Einträge</span><Badge type={Array.isArray(store.data[t])?'green':'yellow'}>{Array.isArray(store.data[t])?'verfügbar':'nicht geladen'}</Badge></div>)}</Card>
+ <Card title="Aktivitätslog">{activity.length===0&&<div className="sub">Noch keine kritischen Aktionen protokolliert.</div>}{activity.map((a:any)=><div className="item" key={a.id}><div><b>{a.title||a.type}</b><div className="sub">{a.ref_table||a.type} · {new Date(a.created_at).toLocaleString('de-DE')}</div></div><Badge type={a.severity==='warning'?'yellow':'green'}>{a.type||'log'}</Badge></div>)}</Card>
+ <Card title="Schema Rohdaten"><pre className="codeBox">{JSON.stringify(schema,null,2)}</pre></Card></>
+}
 
 function V42BackendStatus(){
  const [status,setStatus]=useState<any>(null)
@@ -792,8 +1261,8 @@ function V42PackageMatrixEditor({cid}:any){
  const [msg,setMsg]=useState('')
  const fallbackPackages=Object.keys(packageDefs).map((key:string)=>({id:key.toLowerCase(),name:key,price:pprice(key),billing_interval:'month',features:packageDefs[key].tools,visible_on_landing:true,visible_to_customer:true,active:true}))
  const localKey=`v42_package_matrix_${cid}`
- function readLocalPackages(){try{const raw=localStorage.getItem(localKey);return raw?JSON.parse(raw):null}catch{return null}}
- function persistPackages(next:any[]){setPackages(next);try{localStorage.setItem(localKey,JSON.stringify(next))}catch{}}
+ function readLocalPackages(){return safeLocalStorageGet(localKey,null)}
+ function persistPackages(next:any[]){setPackages(next);safeLocalStorageSet(localKey,next)}
  async function load(){const local=readLocalPackages();if(local?.length){setPackages(local);setMsg('Lokale Paket-Matrix geladen');return}try{const r=await v33FunctionalClient.getPackageMatrix(cid);setPackages((r.packages&&r.packages.length?r.packages:fallbackPackages)||[]);setMsg('Paket-Matrix geladen')}catch(e:any){setPackages(fallbackPackages);setMsg('Backend nicht erreichbar, lokale Paket-Matrix geladen')}}
  useEffect(()=>{load()},[cid])
  function patch(i:number,k:string,v:any){const next=[...packages];next[i]={...next[i],[k]:v};persistPackages(next)}
@@ -891,8 +1360,8 @@ function V40AutomationStudio({cid}:any){
  const triggers=['QR Scan','Neuer Lead','Reward eingelöst','VIP Level-Up','Negative Review','Inaktiv 30 Tage','Upsell > 80']
  const actions=['Ticket','Pipeline Lead','AI Hinweis','Marketing Kampagne','Punktebonus','Reward freischalten']
  const localKey=`v40_automation_flows_${cid}`
- function persistFlows(next:any[]){setFlows(next);try{localStorage.setItem(localKey,JSON.stringify(next))}catch{}}
- useEffect(()=>{try{const raw=localStorage.getItem(localKey);setFlows(raw?JSON.parse(raw):[])}catch{setFlows([])}},[cid])
+ function persistFlows(next:any[]){setFlows(next);safeLocalStorageSet(localKey,next)}
+ useEffect(()=>{setFlows(safeLocalStorageGet(localKey,[]))},[cid])
  async function create(t=selectedTrigger,a=selectedAction){const flow={id:uid(),customer_id:cid,name:`${t} → ${a}`,trigger:t,action:a,active:true,runs:0};persistFlows([flow,...flows]);setMsg('Speichere Flow...');try{await v33FunctionalClient.createRecord('smart_automations',flow);setMsg('Flow gespeichert')}catch(e:any){setMsg('Flow lokal gespeichert · Backend später synchronisieren')}}
  async function run(){setMsg('Automation Engine läuft...');try{await v33FunctionalClient.runAutomation(cid,{trigger:selectedTrigger,action:selectedAction});setMsg('Automation Engine gelaufen')}catch(e:any){setMsg('Demo-Lauf lokal simuliert: Aktion wurde vorgemerkt')}}
  return <><Head title="Smart Automation Studio" sub="Automation · Flow Builder · Trigger und Aktion wählbar"/><div className="grid2"><Card title="Flow konfigurieren"><select className="input" value={selectedTrigger} onChange={e=>setSelectedTrigger(e.target.value)}>{triggers.map(t=><option key={t}>{t}</option>)}</select><select className="input" value={selectedAction} onChange={e=>setSelectedAction(e.target.value)}>{actions.map(a=><option key={a}>{a}</option>)}</select><div className="item"><b>{selectedTrigger}</b><span>führt aus</span><Badge>{selectedAction}</Badge></div><button className="btn" onClick={()=>create()}>Flow speichern</button><button className="btn secondary" onClick={run}>Ausgewählten Flow testen</button></Card><Card title="Trigger-Bibliothek"><div className="v40Flow"><div className="v40FlowCol"><h3>Trigger</h3>{triggers.map(t=><button className={selectedTrigger===t?'active':''} key={t} onClick={()=>setSelectedTrigger(t)}>{t}</button>)}</div><div className="v40FlowArrow">→</div><div className="v40FlowCol"><h3>Aktionen</h3>{actions.map(a=><button className={selectedAction===a?'active':''} key={a} onClick={()=>setSelectedAction(a)}>{a}</button>)}</div></div></Card></div><Card title="Gespeicherte Flows">{flows.length===0&&<div className="sub">Noch kein Flow gespeichert.</div>}{flows.map(f=><div className="item" key={f.id}><b>{f.name}</b><button className="btn secondary" onClick={()=>persistFlows(flows.map(x=>x.id===f.id?{...x,active:!x.active}:x))}>{f.active?'Aktiv':'Inaktiv'}</button></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
@@ -1097,6 +1566,22 @@ function V33LeadQuickCheck({cid}:any){
  return <Card title="QR/Loyalty Leads" action={<button className="btn secondary" onClick={load}>Leads laden</button>}><div className="sub">Lead-Test: Öffne /l/demo-cafe-morgenlicht, sammle Punkte und lade danach hier die Leads.</div>{error&&<Badge type="red">{error}</Badge>}{data?.leads?.slice(0,5).map((l:any)=><div className="item" key={l.id}><b>{l.name||l.email||'QR Lead'}</b><span>{l.email||l.phone||'ohne Kontakt'} · {l.points_added||0} Punkte</span><Badge type="green">Lead</Badge></div>)}</Card>
 }
 
+
+function SystemStabilityPanel(){
+ const [ready,setReady]=useState<any>(null)
+ const [schema,setSchema]=useState<any>(null)
+ const [msg,setMsg]=useState('')
+ async function run(){
+  setMsg('Systemcheck läuft...')
+  try{
+   const r=await systemReady(); setReady(r)
+   try{setSchema(await systemSchema())}catch(e:any){setSchema({ok:false,error:e.message})}
+   setMsg(r?.ready?'System bereit':'System mit Warnungen – Details prüfen')
+  }catch(e:any){setReady({ok:false,error:e.message});setMsg(e.message||'Systemcheck fehlgeschlagen')}
+ }
+ return <Card title="System Stability" action={<button className="btn secondary" onClick={run}>Ready Check</button>}><div className="sub">Prüft Backend, Supabase-Erreichbarkeit und wichtige Migrationstabellen.</div>{msg&&<div className="sub">{msg}</div>}{ready&&<div className="grid4"><Metric label="Backend" value={ready.ok?'OK':'Prüfen'}/><Metric label="Ready" value={ready.ready?'Ja':'Nein'}/><Metric label="Optionale Tabellen fehlen" value={(ready.missing_optional_schema||schema?.missing||[]).length||0}/><Metric label="Google OAuth" value={ready.checks?'prüfbar':'separat'}/></div>}{ready?.error&&<Badge type="red">{ready.error}</Badge>}{(ready?.missing_optional_schema||schema?.missing||[]).slice(0,6).map((t:string)=><div className="item" key={t}><b>{t}</b><span>Migration/Tabelle prüfen</span><Badge type="red">optional fehlt</Badge></div>)}</Card>
+}
+
 function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
  const inv=role==='admin'?store.data.invoices:store.data.invoices.filter((i:any)=>i.customer_id===cid)
  const open=store.data.tickets.filter((t:any)=>(role==='admin'||t.customer_id===cid)&&t.status!=='Geschlossen').length
@@ -1104,10 +1589,27 @@ function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
  const seo=store.data.seo_snapshots.filter((s:any)=>s.customer_id===cid)
  const growth=seo.length>=2?Math.round(((seo.at(-1).organic_traffic-seo[0].organic_traffic)/seo[0].organic_traffic)*100):0
  const revenue=inv.filter((i:any)=>i.status==='Bezahlt'&&!isDemoCustomer(store.data,i.customer_id)&&!i.is_demo).reduce((s:number,i:any)=>s+Number(i.amount||0),0)
- return <><Head title={role==='admin'?'Dashboard':'Dashboard'} sub={role==='admin'?`Herzlich Willkommen ${activeAdmin}`:'Willkommen in deinem Kundenbereich'}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne Demo-Kunden"/><Metric label="Offene Tickets" value={open}/><Metric label="SEO Growth 7 Tage" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Paketanfragen" value={pending.length}/></div>{role==='admin'&&<div className="grid2"><V34CustomerProvisioning cid={cid}/><V33LeadQuickCheck cid={cid}/></div>}{role==='admin'&&<><V35BusinessEnginePanel cid={cid}/><V36DemoQaPanel cid={cid}/><V39StabilityPanel cid={cid}/><V40QualityPanel cid={cid}/></>}<div className="grid2"><V38Customer360 cid={cid}/><V38PublicPreview cid={cid} store={store}/></div><div className="grid2"><V38BillingRevenueHub cid={cid}/><V38ResetControls cid={cid}/></div>{role==='admin'&&<Card title="Paketanfragen">{pending.map((p:any)=><div className="item" key={p.id}><div><b>{cname(store.data,p.customer_id)}</b><div className="sub">möchte {p.package_name}</div></div><button className="btn secondary" onClick={()=>{setCid(p.customer_id);setView('crm')}}>CRM öffnen</button></div>)}</Card>}</>
+ const customer=cobj(store.data,cid)
+ const onboarding=(store.data.onboarding_checklists||[]).find((o:any)=>o.customer_id===cid)
+ const steps=onboardingStepsFor(customer).map(([key,label,auto]:any)=>({key,label,done:Boolean(onboarding?.steps?.[key]??auto)}))
+ const pct=Math.round((steps.filter((s:any)=>s.done).length/steps.length)*100)
+ const approvals=(store.data.approval_requests||[]).filter((a:any)=>role==='admin'||a.customer_id===cid).filter((a:any)=>a.status!=='Archiviert')
+ const reports=(store.data.monthly_reports||[]).filter((r:any)=>role==='admin'||r.customer_id===cid)
+ if(role==='customer'){
+  const overdue=inv.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length
+  const actions=[
+   {title:'Onboarding fortsetzen',desc:`${pct}% abgeschlossen`,view:'onboarding',badge:pct>=80?'green':'yellow'},
+   {title:'Offene Freigaben prüfen',desc:`${approvals.filter((a:any)=>a.status==='Offen').length} offen`,view:'approvals',badge:'purple'},
+   {title:'Monatsreport ansehen',desc:reports[0]?.title||'Noch kein Report erstellt',view:'reports',badge:'blue'},
+   {title:'Google & SEO prüfen',desc:'Sichtbarkeit, Quellen und Wettbewerber',view:'seo',badge:'green'}
+  ]
+  return <><Head title="Mein Marketing-Portal" sub={`Willkommen zurück, ${cname(store.data,cid)} · klarer Überblick statt Tool-Suche`} action={<LiveModeBadge/>}/><div className="customerHero"><div><Badge type="green">Betreut durch Mecklenburg Marketing</Badge><h1>Das ist heute wichtig</h1><p>Du siehst die nächsten Aufgaben, offene Freigaben, Rechnungen und aktuelle Empfehlungen auf einen Blick.</p>{packageProgress(pct)}</div><div className="customerHeroCard"><b>Setup-Fortschritt</b><strong>{pct}%</strong><span>{steps.filter((s:any)=>!s.done)[0]?.label||'Setup vollständig'}</span></div></div><div className="grid4"><Metric label="Offene Tickets" value={open}/><Metric label="SEO-Wachstum" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Offene Rechnungen" value={inv.filter((i:any)=>i.status!=='Bezahlt').length}/><Metric label="Warnungen" value={overdue}/></div><Card title="Nächste Schritte">{actions.map((a:any)=><div className="item" key={a.title}><div><b>{a.title}</b><div className="sub">{a.desc}</div></div><div className="toolbarActions"><Badge type={a.badge}>{a.badge==='green'?'OK':'Offen'}</Badge><button className="btn secondary" onClick={()=>setView(a.view)}>Öffnen</button></div></div>)}</Card><div className="grid2"><Card title="Aktuelle Empfehlung"><ToolTipHint title="Google Business Optimierung">Aktualisiere regelmäßig Fotos, Leistungen und Beiträge. Das stärkt lokale Sichtbarkeit und Vertrauen bei neuen Kunden.</ToolTipHint><button className="btn secondary" onClick={()=>setView('knowledge')}>Erklärung im Wissenscenter öffnen</button></Card><Card title="Datenvertrauen"><TrustHint source={seo.length?'SEO Snapshot / Google Sync':'Demo-/Fallback-Daten'} updated={seo.at(-1)?.created_at}/><div className="sub">Live-/Fallback-Hinweise zeigen, ob Daten aus Supabase/API oder aus dem lokalen Demo-Modus stammen.</div></Card></div></>
+ }
+ const todayFollowUps=(store.data.acquisition_campaigns||[]).filter((c:any)=>String(c.follow_up_at||'').slice(0,10)<=new Date().toISOString().slice(0,10)&&!['Gewonnen','Verloren','Archiviert'].includes(c.stage||c.status))
+ const redCustomers=(store.data.customer_health_scores||[]).filter((h:any)=>h.status==='Rot'||Number(h.score||0)<55)
+ return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne Demo-Kunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><div className="grid2"><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=><div className="item" key={p.id}><div><b>{cname(store.data,p.customer_id)} möchte {p.package_name}</b><div className="sub">{p.billing_interval}</div></div><button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button></div>)}</Card>}</>
 }
 
-function CRM({store,cid,activeAdmin,adminAvatars}:any){return <><Head title="CRM Detail" sub={cname(store.data,cid)}/><CustomerInfo store={store} cid={cid}/><PackageControl store={store} cid={cid} activeAdmin={activeAdmin}/><QuickCRM store={store} cid={cid}/><div className="grid2"><CRMInvoices store={store} cid={cid}/><CRMNotes store={store} cid={cid} activeAdmin={activeAdmin}/></div><div className="grid2"><Card title="Verträge"><FileList store={store} cid={cid} type="contracts"/></Card><Card title="Media"><FileList store={store} cid={cid}/></Card></div></>}
 function CustomerInfo({store,cid}:any){
  const c=cobj(store.data,cid)
  const [f,setF]=useState<any>(c)
@@ -1151,7 +1653,7 @@ async function toggleTool(t:string){
 function QuickCRM({store,cid}:any){return <Card title="Smart Quick Actions"><button className="btn secondary" onClick={async()=>{const invoice={id:uid(),customer_id:cid,invoice_number:invName(store.data,cid),service_type:'Quick Rechnung',amount:199,status:'Offen',is_demo:isDemoCustomer(store.data,cid),created_at:new Date().toISOString()};await store.create('invoices',invoice);await generateInvoicePdf(store,invoice)}}>Rechnung + PDF erstellen</button> <button className="btn secondary" onClick={()=>store.create('tickets',{customer_id:cid,title:'Neues Ticket',description:'Interner Vorgang',status:'Offen',priority:'Mittel'})}>Ticket erstellen</button></Card>}
 function CRMInvoices({store,cid}:any){
  const rows=store.data.invoices.filter((i:any)=>i.customer_id===cid).sort((a:any,b:any)=>String(b.created_at).localeCompare(String(a.created_at)))
- const invoiceStatuses=['Entwurf','Offen','Teilbezahlt','Bezahlt','Überfällig','Storniert']
+ const invoiceStatuses=STATUS_OPTIONS.invoice
  return <Card title="Aktuelle Rechnungen"><div className="scrollBox">{rows.map((i:any)=><div className="item" key={i.id}><div><b>{i.invoice_number}</b><div className="sub">{i.service_type} · {eur(i.amount)} · {i.status}</div></div><div className="toolbarActions"><select className="input compactInput" value={i.status||'Offen'} onChange={e=>store.update('invoices',i.id,{status:e.target.value,customer_id:i.customer_id})}>{invoiceStatuses.map(s=><option key={s}>{s}</option>)}</select><button className="btn secondary" onClick={()=>i.pdf_url||i.pdf_base64?openInvoicePdf(i):generateInvoicePdf(store,i)}>PDF öffnen</button><button className="btn secondary" onClick={()=>deleteInvoiceAndPdf(store,i)}>Löschen</button></div></div>)}</div><div className="sub">Hochgeladene Rechnungs-PDFs:</div><FileList store={store} cid={cid} type="invoices"/></Card>
 }
 function CRMNotes({store,cid,activeAdmin}:any){const [note,setNote]=useState('');return <Card title="Notizen" action={<button className="btn" onClick={()=>{if(note)store.create('customer_notes',{customer_id:cid,note,actor_name:activeAdmin});setNote('')}}>Notiz speichern</button>}><textarea className="input textarea" value={note} onChange={e=>setNote(e.target.value)} placeholder="Neue Notiz"/>{store.data.customer_notes.filter((n:any)=>n.customer_id===cid).map((n:any)=><div className="item" key={n.id}><span>{n.note}</span><div className="sub">{n.actor_name||'Unbekannt'} · {new Date(n.created_at).toLocaleString('de-DE')}</div></div>)}</Card>}
@@ -1160,7 +1662,7 @@ function Finance({store,cid,role,activeAdmin}:any){
  const [target,setTarget]=useState(cid)
  const [service,setService]=useState('Paketgebühr')
  const [amount,setAmount]=useState(pprice(cpkg(store.data,target)))
- const invoiceStatuses=['Entwurf','Offen','Teilbezahlt','Bezahlt','Überfällig','Storniert']
+ const invoiceStatuses=STATUS_OPTIONS.invoice
  async function createInv(){const invoice={id:uid(),customer_id:target,invoice_number:invName(store.data,target),service_type:service,amount,status:'Offen',is_demo:isDemoCustomer(store.data,target),created_at:new Date().toISOString()};await store.create('invoices',invoice);await generateInvoicePdf(store,invoice); if(role==='admin') await store.create('notifications',{customer_id:target,title:`${activeAdmin} hat Rechnung erstellt`,message:`${activeAdmin} hat ${service} für ${cname(store.data,target)} erstellt.`,type:'admin_change',actor_name:activeAdmin})}
  return <><Head title="Rechnungen" action={<button className="btn" onClick={createInv}>Rechnung + PDF erzeugen</button>}/><div className="grid2"><Card title="Neue Rechnung">{role==='admin'&&<Search items={allCustomers(store.data)} value={target} onChange={(id:string)=>{setTarget(id);setAmount(pprice(cpkg(store.data,id)))}} placeholder="Kunde für Rechnung suchen"/>}<select className="input" value={service} onChange={e=>setService(e.target.value)}><option>Paketgebühr</option><option>Google Business Optimierung</option><option>SEO Betreuung</option><option>Webseite / Landingpage</option><option>Review Funnel</option><option>Individuelle Dienstleistung</option></select><input className="input" placeholder="Leistungsbeschreibung für die Rechnung" value={service} onChange={e=>setService(e.target.value)}/><input className="input" type="number" value={amount} onChange={e=>setAmount(Number(e.target.value))} placeholder="Rechnungsbetrag in Euro"/><div className="sub">Nächster Name: {invName(store.data,target)}</div></Card><Card title="Rechnungsvorlage Word/Keynote"><StorageUploader store={store} cid={target} fileType="documents" refTable="invoice_templates" title="Rechnungsvorlage hochladen" activeAdmin={activeAdmin}/><div className="sub"><b>Platzhalter:</b> {'{{KUNDENNAME}}'}, {'{{ADRESSE}}'}, {'{{RECHNUNGSNUMMER}}'}, {'{{BETRAG}}'}, {'{{LEISTUNG}}'}, {'{{DATUM}}'}, {'{{FAELLIGKEIT}}'}</div><div className="sub">Word-Dateien können als Vorlage gespeichert werden. Echte Word→PDF-Konvertierung benötigt LibreOffice/Gotenberg im Backend.</div></Card></div><Card title="Rechnungen">{store.data.invoices.filter((i:any)=>role==='admin'||i.customer_id===cid).map((i:any)=><div className="item" key={i.id}><div><b>{i.invoice_number}</b><div className="sub">{cname(store.data,i.customer_id)} · {eur(i.amount)} · {i.status}</div></div><div className="toolbarActions"><select className="input compactInput" value={i.status||'Offen'} onChange={e=>store.update('invoices',i.id,{status:e.target.value,customer_id:i.customer_id})}>{invoiceStatuses.map(s=><option key={s}>{s}</option>)}</select><button className="btn secondary" onClick={()=>i.pdf_url||i.pdf_base64?openInvoicePdf(i):generateInvoicePdf(store,i)}>PDF öffnen</button><button className="btn secondary" onClick={()=>deleteInvoiceAndPdf(store,i)}>Löschen</button></div></div>)}</Card>{role==='customer'&&<CustomerServiceCategories store={store} cid={cid}/>}</>
 }
@@ -1233,7 +1735,7 @@ function Integrations({store,cid,role}:any){
  async function sync(name:string){
   const provider=providerMap[name]||name
   if(provider==='meta'){setMsg('Meta Sync ist als Integration vorbereitet, aber noch nicht angebunden.');return}
-  try{const r=await syncGoogleProvider(provider,cid,{site_url:f.site_url,property_id:f.property_id});setMsg(r?.ok?'Sync gestartet/ausgeführt. SEO Dashboard nutzt die neuesten Daten bzw. Fallbackdaten.':(r?.error||'Sync konnte nicht abgeschlossen werden.'))}catch(e:any){setMsg(e.message||'Sync nicht erreichbar')}
+  try{const r=await syncGoogleProvider(provider,cid,{site_url:f.site_url,property_id:f.property_id});const providerKey=providerToApiKey(provider);setMsg(r?.ok?`Sync für ${providerKey} ausgeführt. SEO Dashboard nutzt neue Daten bzw. Fallbackdaten.`:(r?.error||'Sync konnte nicht abgeschlossen werden.')); const target=rows.find((i:any)=>(i.name||i.provider)===provider); if(target) await store.update('integrations',target.id,{provider:providerKey,status:r?.ok?'Verbunden':'Fehler',last_sync_at:new Date().toISOString(),last_sync_status:r?.ok?'synced':'error',last_sync_error:r?.ok?'':r?.error})}catch(e:any){setMsg(e.message||'Sync nicht erreichbar')}
  }
  return <><Head title="Integrationen" sub="Google/API-Zugänge kundenbezogen hinterlegen und mit dem SEO Dashboard verbinden" action={<button className="btn" onClick={save}>Integration speichern</button>}/><div className="grid2"><Card title="Tool verbinden"><select className="input" value={f.name} onChange={e=>setF({...f,name:e.target.value})}><option>Google Business Profile</option><option>Google Search Console</option><option>Google Analytics</option><option>Meta Business Suite</option></select><input className="input" placeholder="API-Key oder Token, falls vorhanden – wird nur serverseitig benötigt" value={f.api_key} onChange={e=>setF({...f,api_key:e.target.value})}/><input className="input" placeholder="Search Console Property / Website-URL, z. B. https://kunde.de" value={f.site_url} onChange={e=>setF({...f,site_url:e.target.value})}/><input className="input" placeholder="GA4 Property-ID, z. B. 123456789" value={f.property_id} onChange={e=>setF({...f,property_id:e.target.value})}/><div className="toolbarActions"><button className="btn secondary" onClick={oauth}>Google OAuth starten</button><button className="btn secondary" onClick={()=>sync(f.name)}>Jetzt ins SEO Dashboard syncen</button></div><div className="sub">Saubere Verbindung: Integrationen → Google Sync → SEO Dashboard / KPI Analytics / Heatmap.</div></Card><Card title="SEO-Verknüpfung"><div className="item"><b>SEO Dashboard</b><span>Nutzt Search Console, Analytics und Google Business Daten.</span></div><div className="item"><b>SEO Heatmap</b><span>Nutzt lokale Google-Business-/Maps-Signale.</span></div><div className="item"><b>KPI Analytics</b><span>Übernimmt Leads, Klicks, Conversion und Aktivität.</span></div>{msg&&<div className="sub">{msg}</div>}</Card></div><Card title="Verbindungen">{rows.length===0&&<div className="sub">Noch keine Integration gespeichert.</div>}{rows.map((i:any)=><div className="item" key={i.id}><div><b>{i.name||i.provider}</b><div className="sub">{i.site_url||'Keine Website hinterlegt'} · {i.property_id||'Keine GA4-ID'}</div></div><div className="toolbarActions"><Badge>{i.status||'Bereit'}</Badge><button className="btn secondary" onClick={()=>sync(i.name||i.provider)}>Sync</button><button className="btn secondary" onClick={()=>store.remove('integrations',i.id)}>Löschen</button></div></div>)}</Card></>}
 
@@ -1266,8 +1768,65 @@ function CustomerRoles({store,cid}:any){return <CustomerToolPage title="Rechte &
 function CustomerKPI({store,cid}:any){return <CustomerToolPage title="KPI Analytics"><div className="grid4"><Metric label="Leads" value="37"/><Metric label="Conversion" value="12%"/><Metric label="Tickets offen" value={(store.data.tickets||[]).filter((t:any)=>t.customer_id===cid&&t.status!=='Geschlossen').length}/><Metric label="Umsatz" value={eur((store.data.invoices||[]).filter((i:any)=>i.customer_id===cid&&i.status==='Bezahlt').reduce((s:number,i:any)=>s+Number(i.amount||0),0))}/></div><div className="chartLine">{Array.from({length:16},(_,i)=><span key={i} style={{height:`${20+(i*11)%70}px`}} />)}</div></CustomerToolPage>}
 function CustomerHeatmap(){return <CustomerToolPage title="SEO Heatmap"><div className="mapMock"><b>Lokale SEO Heatmap</b><span>Live-Karte wird nach Google Business/Maps API Sync befüllt.</span></div><div className="sub">Die Heatmap ist mit dem SEO Dashboard und den gespeicherten Integrationen verknüpft.</div></CustomerToolPage>}
 function CustomerSuccess(){return <CustomerToolPage title="Client Success Score"><div className="successCircle">84</div><div className="sub">Score aus Tickets, SEO, Rechnungen, Aktivität und Review-Funnel.</div></CustomerToolPage>}
-function CustomerAdvancedReports(){return <CustomerToolPage title="Advanced Reports"><div className="item"><b>Monatsreport</b><button className="btn secondary">PDF vorbereiten</button></div><div className="item"><b>SEO Report</b><button className="btn secondary">Report ansehen</button></div></CustomerToolPage>}
+function CustomerAdvancedReports(){return <CustomerToolPage title="Advanced Reports"><div className="item"><b>Monatsreport</b><button className="btn secondary" onClick={()=>alert('Bitte Reports im Kundenbereich öffnen.')}>PDF vorbereiten</button></div><div className="item"><b>SEO Report</b><button className="btn secondary">Report ansehen</button></div></CustomerToolPage>}
 
+function GuidedOnboardingCenter({store,cid,role,setCid,setView}:any){
+ const [target,setTarget]=useState(cid)
+ const customer=cobj(store.data,target)||cobj(store.data,cid)
+ const existing=(store.data.onboarding_checklists||[]).find((o:any)=>o.customer_id===target)
+ const [msg,setMsg]=useState('')
+ const baseSteps=onboardingStepsFor(customer)
+ const steps=baseSteps.map(([key,label,auto]:any)=>({key,label,done:Boolean(existing?.steps?.[key]??auto)}))
+ const pct=Math.round((steps.filter((s:any)=>s.done).length/steps.length)*100)
+ async function saveStep(key:string,done:boolean){
+  const payload={customer_id:target,status:done?'In Arbeit':'In Arbeit',steps:{...(existing?.steps||{}),[key]:done},updated_at:new Date().toISOString()}
+  if(existing) await store.update('onboarding_checklists',existing.id,payload); else await store.create('onboarding_checklists',{id:uid(),...payload,created_at:new Date().toISOString()})
+ }
+ async function bootstrap(){
+  if(!customer)return
+  await saveStep('company',true)
+  if(!(store.data.qr_campaigns||[]).some((q:any)=>q.customer_id===target)) await store.create('qr_campaigns',{customer_id:target,title:`${customer.name} QR Start`,slug:slugifyLocal(`${customer.name}-start`),purpose:'both',points_per_scan:10,status:'Aktiv',active:true,created_at:new Date().toISOString()})
+  if(!(store.data.invoices||[]).some((i:any)=>i.customer_id===target)) await store.create('invoices',{customer_id:target,invoice_number:invName(store.data,target),service_type:'Starter Einrichtung',amount:pprice(cpkg(store.data,target)),status:'Entwurf',created_at:new Date().toISOString()})
+  setMsg('Onboarding-Grundstruktur vorbereitet: Kundenakte, QR-Start und erste Rechnung geprüft.')
+ }
+ return <><Head title="Geführtes Onboarding" sub={role==='admin'?'Kunden sauber starten: Daten, Google Business, Branding, QR, Rechnung und Aufgaben.':'Dein Start mit Mecklenburg Marketing Schritt für Schritt.'} action={<div className="toolbarActions"><LiveModeBadge/>{role==='admin'&&<button className="btn" onClick={bootstrap}>Setup vorbereiten</button>}</div>}/>{role==='admin'&&<Card title="Kunde auswählen"><Search items={allCustomers(store.data)} value={target} onChange={(id:string)=>{setTarget(id);setCid?.(id)}} placeholder="Kunde für Onboarding suchen"/></Card>}<div className="customerHero"><div><Badge type={pct>=80?'green':'yellow'}>{pct}% abgeschlossen</Badge><h1>{customer?.name||'Kunde'} startklar machen</h1><p>Geführter Workflow für professionelle Übergabe, weniger Rückfragen und klare Verantwortlichkeiten.</p>{packageProgress(pct)}</div><div className="customerHeroCard"><b>Nächster Schritt</b><strong>{steps.find((s:any)=>!s.done)?.label||'Abgeschlossen'}</strong><span>{role==='admin'?'im Admin prüfen':'bitte bei Bedarf nachreichen'}</span></div></div><Card title="Setup-Checkliste">{steps.map((s:any)=><div className="item" key={s.key}><div><b>{s.label}</b><div className="sub">{s.done?'Erledigt':'offen'} · wird im Monatsreport und Kundenstatus berücksichtigt.</div></div><div className="toolbarActions"><Badge type={s.done?'green':'yellow'}>{s.done?'erledigt':'offen'}</Badge><button className="btn secondary" onClick={()=>saveStep(s.key,!s.done)}>{s.done?'Zurücksetzen':'Erledigt markieren'}</button></div></div>)}{msg&&<div className="sub">{msg}</div>}</Card><div className="grid2"><Card title="Was der Kunde erlebt"><ToolTipHint title="Geführter Start">Der Kunde sieht keine Tool-Flut, sondern klare Aufgaben, Fortschritt und die nächsten Schritte.</ToolTipHint></Card><Card title="Verknüpfte Module"><div className="item"><b>QR & Slug</b><span>Startkampagne automatisch vorbereiten.</span></div><div className="item"><b>Rechnung</b><span>erste Rechnung oder Entwurf erzeugen.</span></div><div className="item"><b>Reports</b><span>Onboarding-Fortschritt im Monatsreport erwähnen.</span></div></Card></div></>
+}
+
+function reportBody(store:any,cid:string,report:any={}){
+ const seo=(store.data.seo_snapshots||[]).filter((s:any)=>s.customer_id===cid).at(-1)||{}
+ const reviews=(store.data.review_feedback||[]).filter((r:any)=>r.customer_id===cid)
+ const campaigns=(store.data.qr_campaigns||[]).filter((q:any)=>q.customer_id===cid)
+ const invoices=(store.data.invoices||[]).filter((i:any)=>i.customer_id===cid)
+ const competitors=(store.data.competitor_benchmarks||[]).filter((c:any)=>c.customer_id===cid)
+ return `<div class="metric"><div><b>${seo.organic_traffic||seo.clicks||1450}</b><br/>Klicks/Traffic</div><div><b>${reviews.length}</b><br/>Bewertungen</div><div><b>${campaigns.length}</b><br/>QR-Kampagnen</div><div><b>${invoices.filter((i:any)=>i.status!=='Bezahlt').length}</b><br/>offene Rechnungen</div></div><div class="section"><h2>Executive Summary</h2><p>${report.summary||'Die Online-Präsenz wurde geprüft. Fokus bleibt auf Google Business Optimierung, Reviews, lokalen SEO-Signalen und klaren nächsten Aufgaben.'}</p></div><div class="section"><h2>Empfehlungen für den nächsten Monat</h2><ol><li>Google Business Fotos und Leistungen aktualisieren.</li><li>Bewertungs-Booster aktiv nutzen.</li><li>Wettbewerberentwicklung prüfen und lokale Keywords nachschärfen.</li></ol></div><div class="section"><h2>Wettbewerber</h2><p>${competitors.length?competitors.map((c:any)=>`${c.name}: ${c.rating} Sterne / ${c.reviews} Reviews`).join('<br/>'):'Noch keine Wettbewerber hinterlegt.'}</p></div>`
+}
+function MonthlyReportCenter({store,cid,role}:any){
+ const [target,setTarget]=useState(cid)
+ const rows=(store.data.monthly_reports||[]).filter((r:any)=>role==='admin'||r.customer_id===cid)
+ const [form,setForm]=useState<any>({title:`Monatsreport ${new Date().toLocaleDateString('de-DE',{month:'long',year:'numeric'})}`,summary:'Google Business, Reviews, SEO, QR-Kampagnen und nächste Empfehlungen zusammengefasst.'})
+ async function create(){await store.create('monthly_reports',{customer_id:target,title:form.title,summary:form.summary,status:'Entwurf',created_at:new Date().toISOString()})}
+ function openReport(r:any){openPdfDocument(r.title,`Monatsreport für ${cname(store.data,r.customer_id)}`,reportBody(store,r.customer_id,r),{status:r.status||'Entwurf'})}
+ return <><Head title={role==='admin'?'Monatsreport Generator':'Reports'} sub="Monatlichen Wert sichtbar machen: Google Business, SEO, Reviews, QR, Wettbewerber und nächste Aufgaben." action={role==='admin'?<button className="btn" onClick={create}>Report erstellen</button>:<LiveModeBadge/>}/>{role==='admin'&&<Card title="Neuen Report vorbereiten"><Search items={allCustomers(store.data)} value={target} onChange={setTarget} placeholder="Kunde für Monatsreport suchen"/><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Report-Titel"/><textarea className="input textarea" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})} placeholder="Executive Summary"/></Card>}<Card title="Reports">{rows.length===0&&<EmptyState icon="📄" title="Noch kein Report vorhanden">Sobald ein Monatsreport erstellt wurde, erscheint er hier für den Kunden mit klarer Zusammenfassung und Empfehlungen.</EmptyState>}{rows.map((r:any)=><div className="item" key={r.id}><div><b>{r.title}</b><div className="sub">{cname(store.data,r.customer_id)} · {r.status||'Entwurf'} · {new Date(r.created_at).toLocaleDateString('de-DE')}</div><p className="sub">{r.summary}</p></div><div className="toolbarActions"><StatusSelect kind="report" value={r.status||'Entwurf'} onChange={(v:string)=>store.update('monthly_reports',r.id,{status:v})}/><button className="btn secondary" onClick={()=>openReport(r)}>PDF öffnen</button><button className="btn secondary" onClick={()=>downloadHtmlDocument(`${r.title}.html`,r.title,`Monatsreport für ${cname(store.data,r.customer_id)}`,reportBody(store,r.customer_id,r),{status:r.status})}>HTML exportieren</button></div></div>)}</Card></>
+}
+
+function BrandOutputEngine({store,cid}:any){
+ const customer=cobj(store.data,cid)
+ const audits=(store.data.mini_audits||[]).filter((m:any)=>m.customer_id===cid)
+ const offers=(store.data.generated_offers||[]).filter((o:any)=>o.customer_id===cid)
+ const contracts=(store.data.generated_contracts||[]).filter((c:any)=>c.customer_id===cid)
+ const dunning=(store.data.dunning_cases||[]).filter((d:any)=>d.customer_id===cid)
+ function genericBody(type:string,row:any){return `<div class="section"><h2>${type}</h2><p><b>Kunde:</b> ${cname(store.data,row.customer_id||cid)}</p><p><b>Status:</b> ${row.status||'Entwurf'}</p><p>${row.summary||row.message||row.description||'Dieses Dokument wurde im Mecklenburg Marketing OS vorbereitet.'}</p></div><div class="section"><h2>Leistungsbezug</h2><ul><li>Google Business Optimierung</li><li>Lokale SEO und Sichtbarkeit</li><li>Bewertungsmanagement</li><li>Reporting und Kundenbindung</li></ul></div>`}
+ const docs=[...audits.map((x:any)=>({type:'Mini-Audit',row:x,title:x.title})),...offers.map((x:any)=>({type:'Angebot',row:x,title:x.title})),...contracts.map((x:any)=>({type:'Vertrag',row:x,title:x.title})),...dunning.map((x:any)=>({type:'Mahnung',row:x,title:`Mahnung ${x.level||''} · ${cname(store.data,x.customer_id)}`}))]
+ return <><Head title="Mecklenburg Marketing Output Engine" sub="Einheitliche Dokumente im Markenlook direkt als PDF über Gotenberg öffnen oder als HTML-Fallback exportieren." action={<LiveModeBadge/>}/><Card title="Dokumente für aktuellen Kunden"><div className="item"><b>{customer?.name||'Kunde'}</b><span>{cpkg(store.data,cid)} · Logo/Farben können später aus der Kundenakte gezogen werden.</span></div>{docs.length===0&&<EmptyState icon="🧾" title="Noch keine Dokumente">Erstelle zuerst Mini-Audit, Angebot, Vertrag oder Mahnfall. Danach erscheinen sie hier als gebrandete Ausgaben.</EmptyState>}{docs.map((d:any)=><div className="item" key={`${d.type}-${d.row.id}`}><div><b>{d.title}</b><div className="sub">{d.type} · {d.row.status||'Entwurf'}</div></div><div className="toolbarActions"><button className="btn secondary" onClick={()=>openPdfDocument(d.title,d.type,genericBody(d.type,d.row),{status:d.row.status})}>PDF öffnen</button><button className="btn secondary" onClick={()=>downloadHtmlDocument(`${d.title}.html`,d.title,d.type,genericBody(d.type,d.row),{status:d.row.status})}>HTML exportieren</button></div></div>)}</Card><Card title="Design-Standard"><div className="grid3"><Metric label="Brand" value="MM"/><Metric label="Format" value="PDF via Gotenberg"/><Metric label="Fallback" value="HTML Export"/></div><p className="sub">Gotenberg ist als serverseitiger PDF-Renderer eingebunden. Falls der Dienst nicht erreichbar ist, bleibt der HTML-Export als Fallback erhalten.</p></Card></>
+}
+
+function ApprovalCenter({store,cid,role}:any){
+ const [f,setF]=useState<any>({title:'',type:'Google Beitrag',description:''})
+ const rows=(store.data.approval_requests||[]).filter((a:any)=>role==='admin'||a.customer_id===cid).filter((a:any)=>a.status!=='Archiviert')
+ async function create(){if(!f.title)return;await store.create('approval_requests',{customer_id:cid,...f,status:'Offen',created_at:new Date().toISOString()});setF({title:'',type:'Google Beitrag',description:''})}
+ async function setStatus(row:any,status:string){await store.update('approval_requests',row.id,{status,decided_at:new Date().toISOString()})}
+ return <><Head title="Freigabe-Center" sub={role==='admin'?'Kundenfreigaben für Beiträge, Angebote, Reports, Texte und Kampagnen bündeln.':'Bitte prüfe offene Freigaben und gib Rückmeldung.'} action={role==='admin'?<button className="btn" onClick={create}>Freigabe anlegen</button>:<LiveModeBadge/>}/>{role==='admin'&&<Card title="Neue Freigabe"><div className="grid2"><input className="input" value={f.title} onChange={e=>setF({...f,title:e.target.value})} placeholder="Titel, z. B. Google Beitrag Sommeraktion"/><select className="input" value={f.type} onChange={e=>setF({...f,type:e.target.value})}><option>Google Beitrag</option><option>Landingpage Text</option><option>Angebot</option><option>Vertrag</option><option>Monatsreport</option><option>QR-Kampagne</option></select></div><textarea className="input textarea" value={f.description} onChange={e=>setF({...f,description:e.target.value})} placeholder="Was soll der Kunde prüfen oder freigeben?"/></Card>}<Card title="Freigaben">{rows.length===0&&<EmptyState icon="✅" title="Keine offenen Freigaben">Alles erledigt. Neue Beiträge, Reports oder Kampagnen erscheinen hier zur Prüfung.</EmptyState>}{rows.map((r:any)=><div className="item" key={r.id}><div><b>{r.title}</b><div className="sub">{r.type} · {r.status}</div><p className="sub">{r.description}</p></div><div className="toolbarActions"><Badge type={r.status==='Freigegeben'?'green':r.status==='Änderung gewünscht'?'yellow':'purple'}>{r.status}</Badge><button className="btn secondary" onClick={()=>setStatus(r,'Freigegeben')}>Freigeben</button><button className="btn secondary" onClick={()=>setStatus(r,'Änderung gewünscht')}>Änderung</button>{role==='admin'&&<button className="btn secondary" onClick={()=>setStatus(r,'Archiviert')}>Archivieren</button>}</div></div>)}</Card></>
+}
 
 
 const v33ToolConfigs:any={
@@ -1324,8 +1883,7 @@ function V30ToolModule({view,store,cid,role}:any){
  const [verifyResult,setVerifyResult]=useState<any>(null)
 
  useEffect(()=>{
-  const local=typeof window!=='undefined'?localStorage.getItem(v33LocalKey(view,cid)):null
-  const initial=local?JSON.parse(local):cfg.defaults.map((x:any)=>({customer_id:cid,...x}))
+  const initial=safeLocalStorageGet(v33LocalKey(view,cid),cfg.defaults.map((x:any)=>({customer_id:cid,...x})))
   setItems(initial)
   const f:any={}
   cfg.fields.forEach((k:string)=>f[k]=k==='points'||k==='score'||k==='quantity'||k==='unit'||k==='expected'||k==='confidence'||k==='gross'||k==='percent'||k==='tools'||k==='price'?0:`Neue ${cfg.title}`)
@@ -1334,13 +1892,13 @@ function V30ToolModule({view,store,cid,role}:any){
   v33FunctionalClient.listRecords(cfg.resource,cid)
    .then((r:any)=>{
     const serverItems=(r.records||[]).map((x:any)=>({id:x.local_id||x.id,customer_id:x.customer_id,...(x.payload||{})}))
-    if(serverItems.length){setItems(serverItems);localStorage.setItem(v33LocalKey(view,cid),JSON.stringify(serverItems))}
+    if(serverItems.length){setItems(serverItems);safeLocalStorageSet(v33LocalKey(view,cid),serverItems)}
    })
    .catch(()=>null)
    .finally(()=>setLoading(false))
  },[view,cid])
 
- function persist(next:any[]){setItems(next);try{localStorage.setItem(v33LocalKey(view,cid),JSON.stringify(next))}catch{}}
+ function persist(next:any[]){setItems(next);safeLocalStorageSet(v33LocalKey(view,cid),next)}
  function add(){
   const row={id:uid(),customer_id:cid,...form,active:true}
   const next=[row,...items]

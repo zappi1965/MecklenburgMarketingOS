@@ -1,0 +1,15 @@
+{
+  "name": "Mecklenburg Marketing OS",
+  "short_name": "MMOS",
+  "description": "Lokales Marketing-Betriebssystem für Google Business, SEO, Reviews und QR-Kampagnen.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "background_color": "#070b12",
+  "theme_color": "#070b12",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icons/mmos-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -53,14 +53,22 @@ async function request(path: string, init: RequestInit = {}) {
 
   for (const target of targets) {
     try {
-      const res = await fetch(target.url, {
-        ...init,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(init.headers || {})
-        },
-        cache: 'no-store'
-      })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15000)
+      let res: Response
+      try {
+        res = await fetch(target.url, {
+          ...init,
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(init.headers || {})
+          },
+          cache: 'no-store'
+        })
+      } finally {
+        clearTimeout(timeout)
+      }
 
       const text = await res.text()
 
@@ -98,7 +106,7 @@ async function request(path: string, init: RequestInit = {}) {
   if (lastError?.fromResponse) throw lastError
 
   const attempted = targets.map((target) => target.label).join(' -> ')
-  throw new Error(`Backend-Verbindung fehlgeschlagen (${attempted}). Originalfehler: ${lastError?.message || 'fetch failed'}`)
+  throw new Error(`Backend-Verbindung fehlgeschlagen (${attempted}). Originalfehler: ${lastError?.name === 'AbortError' ? 'Backend antwortet nicht innerhalb von 15 Sekunden' : (lastError?.message || 'fetch failed')}`)
 }
 
 export const v33FunctionalClient = {

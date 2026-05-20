@@ -25,6 +25,51 @@ class GotenbergService {
     return Buffer.from(arr)
   }
 
+
+  async convertHtmlToPdf(html, filename = 'document.pdf') {
+    if (!this.enabled) {
+      return { dryRun: true, note: 'GOTENBERG_URL fehlt. HTML→PDF vorbereitet, aber nicht aktiv.' }
+    }
+    if (!html || !String(html).trim()) throw new Error('HTML-Inhalt für PDF-Erzeugung fehlt')
+
+    const NativeFormData = globalThis.FormData
+    const NativeBlob = globalThis.Blob
+    const form = NativeFormData && NativeBlob ? new NativeFormData() : new FormData()
+    if (NativeFormData && NativeBlob) {
+      form.append('files', new NativeBlob([String(html)], { type: 'text/html; charset=utf-8' }), 'index.html')
+    } else {
+      form.append('files', Buffer.from(String(html), 'utf8'), {
+        filename: 'index.html',
+        contentType: 'text/html; charset=utf-8'
+      })
+    }
+    form.append('paperWidth', '8.27')
+    form.append('paperHeight', '11.69')
+    form.append('marginTop', '0.35')
+    form.append('marginBottom', '0.35')
+    form.append('marginLeft', '0.35')
+    form.append('marginRight', '0.35')
+    form.append('printBackground', 'true')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), Number(process.env.GOTENBERG_TIMEOUT_MS || 30000))
+    let res
+    try {
+      const init = {
+        method: 'POST',
+        body: form,
+        signal: controller.signal
+      }
+      if (typeof form.getHeaders === 'function') init.headers = form.getHeaders()
+      res = await fetch(`${this.url.replace(/\/$/,'')}/forms/chromium/convert/html`, init)
+    } finally {
+      clearTimeout(timer)
+    }
+    if (!res.ok) throw new Error(`Gotenberg HTML→PDF Fehler: ${res.status} ${await res.text()}`)
+    const arr = await res.arrayBuffer()
+    return Buffer.from(arr)
+  }
+
   async convertAndStore({ customer_id, fileBuffer, filename, file_type = 'documents' }) {
     const pdf = await this.convertOfficeToPdf(fileBuffer, filename)
     if (pdf?.dryRun) return pdf

@@ -7,7 +7,8 @@
       "children": [
         "overview",
         "tasks",
-        "ai-assistant"
+        "ai-assistant",
+        "knowledge-center"
       ],
       "mobilePriority": 1
     },
@@ -87,6 +88,19 @@
         "integrations"
       ],
       "mobilePriority": 99
+    },
+    {
+      "key": "seo-analytics",
+      "label": "SEO & Analytics",
+      "icon": "📈",
+      "children": [
+        "integrations",
+        "seo-dashboard",
+        "seo-heatmap",
+        "kpi-analytics",
+        "competitor-comparison"
+      ],
+      "mobilePriority": 5
     }
   ],
   "mobile": {
