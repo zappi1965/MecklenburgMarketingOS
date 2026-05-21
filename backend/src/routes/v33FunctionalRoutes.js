@@ -601,27 +601,33 @@ function v33FunctionalRoutes(supabase) {
       if (!program) return res.status(404).json({ ok: false, error: `Kein Loyalty-Programm für /l/${slug} gefunden.` })
 
       const customerId = program.customer_id
-      const [settings, qr, rewards, rules] = await Promise.all([
+      const [settings, qr, rewards, rewardRecords, rules] = await Promise.all([
         v37GetOrCreateLoyaltySettings(customerId).catch(() => null),
         program.qr_campaign_id
           ? supabase.from('qr_campaigns').select('*').eq('id', program.qr_campaign_id).maybeSingle()
           : supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle(),
-        supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('active', true).order('points_required', { ascending: true }).limit(12),
+        supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('active', true).limit(50),
+        supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_rewards').limit(100),
         supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_reward_rules').limit(50)
       ])
 
+      const qrData = qr.error ? null : (qr.data || null)
+      const campaignId = qrData?.id || program.qr_campaign_id || null
       const activeRules = (rules.data || [])
         .map(r => r.payload || r)
         .filter(r => r && r.active !== false)
+        .filter(r => !r.qr_campaign_id || !campaignId || String(r.qr_campaign_id) === String(campaignId))
 
       const activeActions = activeRules.map(r => {
         const action = String(r.action || '')
         const condition = String(r.condition || '')
         const points = Number(r.points || 0)
-        if (action === 'multiply_points' && points > 1) {
+        const multiplier = Number(r.multiplier || 0)
+        if ((action === 'multiply_points' && points > 1) || multiplier > 1) {
+          const factor = multiplier > 1 ? multiplier : points
           return {
             label: `Doppelter Punkte-Vorteil ist aktiv`,
-            message: `Sammle jetzt ${points}x Punkte${condition === 'weekday' ? ' an Wochentagen' : condition === 'weekend' ? ' am Wochenende' : ''}.`,
+            message: `Sammle jetzt ${factor}x Punkte${condition === 'weekday' ? ' an Wochentagen' : condition === 'weekend' ? ' am Wochenende' : ''}.`,
             type: 'points_multiplier'
           }
         }
@@ -634,7 +640,14 @@ function v33FunctionalRoutes(supabase) {
         return null
       }).filter(Boolean)
 
-      const qrData = qr.error ? null : (qr.data || null)
+      const tableRewards = rewards.error ? [] : (rewards.data || [])
+      const recordRewards = rewardRecords.error ? [] : (rewardRecords.data || []).map(r => ({ id: r.local_id || r.id, customer_id: r.customer_id, ...(r.payload || {}) }))
+      const mergedRewards = [...tableRewards, ...recordRewards]
+        .filter(r => r && r.active !== false)
+        .filter(r => !r.qr_campaign_id || !campaignId || String(r.qr_campaign_id) === String(campaignId))
+        .map(r => ({ ...r, points_required: Number(r.points_required ?? r.required_points ?? r.points ?? 0), required_points: Number(r.required_points ?? r.points_required ?? r.points ?? 0) }))
+        .sort((a, b) => Number(a.points_required || 0) - Number(b.points_required || 0))
+        .slice(0, 12)
       res.json({
         ok: true,
         slug,
@@ -642,7 +655,7 @@ function v33FunctionalRoutes(supabase) {
         customer_id: customerId,
         qr_campaign: qrData,
         settings,
-        rewards: rewards.error ? [] : (rewards.data || []),
+        rewards: mergedRewards,
         active_actions: activeActions,
         mode: qrData?.metadata?.purpose || qrData?.mode || program?.metadata?.purpose || 'loyalty',
         google_review_url: qrData?.google_review_url || qrData?.metadata?.google_review_url || null,

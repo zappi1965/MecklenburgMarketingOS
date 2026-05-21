@@ -85,8 +85,9 @@ export default function PublicLoyaltyPage() {
 
   const rewards = status?.rewards || []
   const activeActions = status?.active_actions || []
-  const unlockedRewards = rewards.filter((r: any) => Number(r.points_required || 0) <= points)
-  const nextReward = rewards.find((r: any) => Number(r.points_required || 0) > points)
+  const rewardPoints = (r: any) => Number(r.points_required ?? r.required_points ?? r.points ?? 0)
+  const unlockedRewards = rewards.filter((r: any) => rewardPoints(r) <= points)
+  const nextReward = rewards.find((r: any) => rewardPoints(r) > points)
 
   function friendlyHint(message: string) {
     const m = String(message || '')
@@ -251,7 +252,7 @@ export default function PublicLoyaltyPage() {
                   {unlockedRewards.map((r: any) => (
                     <div key={r.id} className="publicRewardItem">
                       <span>{r.title || r.name || 'Reward'}</span>
-                      <em>{Number(r.points_required || 0)} Punkte</em>
+                      <em>{rewardPoints(r)} Punkte</em>
                     </div>
                   ))}
                 </div>
@@ -262,7 +263,7 @@ export default function PublicLoyaltyPage() {
                   <b>Nächster Reward</b>
                   <div className="publicRewardItem">
                     <span>{nextReward.title || nextReward.name || 'Reward'}</span>
-                    <em>Noch {Math.max(0, Number(nextReward.points_required || 0) - points)} Punkte</em>
+                    <em>Noch {Math.max(0, rewardPoints(nextReward) - points)} Punkte</em>
                   </div>
                 </div>
               )}
