@@ -1864,6 +1864,34 @@ function reportBody(store:any,cid:string,report:any={}){
  const competitors=(store.data.competitor_benchmarks||[]).filter((c:any)=>c.customer_id===cid)
  return `<div class="metric"><div><b>${seo.organic_traffic||seo.clicks||1450}</b><br/>Klicks/Traffic</div><div><b>${reviews.length}</b><br/>Bewertungen</div><div><b>${campaigns.length}</b><br/>QR-Kampagnen</div><div><b>${invoices.filter((i:any)=>i.status!=='Bezahlt').length}</b><br/>offene Rechnungen</div></div><div class="section"><h2>Executive Summary</h2><p>${report.summary||'Die Online-Präsenz wurde geprüft. Fokus bleibt auf Google Business Optimierung, Reviews, lokalen SEO-Signalen und klaren nächsten Aufgaben.'}</p></div><div class="section"><h2>Empfehlungen für den nächsten Monat</h2><ol><li>Google Business Fotos und Leistungen aktualisieren.</li><li>Bewertungs-Booster aktiv nutzen.</li><li>Wettbewerberentwicklung prüfen und lokale Keywords nachschärfen.</li></ol></div><div class="section"><h2>Wettbewerber</h2><p>${competitors.length?competitors.map((c:any)=>`${c.name}: ${c.rating} Sterne / ${c.reviews} Reviews`).join('<br/>'):'Noch keine Wettbewerber hinterlegt.'}</p></div>`
 }
+
+function BrandOutputEngine({store,cid}:any){
+ const d=store.data||{}
+ const [target,setTarget]=useState(cid)
+ useEffect(()=>{setTarget(cid)},[cid])
+ const customerName=cname(d,target)
+ const customerFilter=(x:any)=>!target||x.customer_id===target
+ const mini=(d.mini_audits||[]).filter(customerFilter)
+ const offers=(d.generated_offers||[]).filter(customerFilter)
+ const contracts=(d.generated_contracts||[]).filter(customerFilter)
+ const dunning=(d.dunning_cases||[]).filter(customerFilter)
+ const reports=(d.monthly_reports||[]).filter(customerFilter)
+ function miniBody(m:any){return `<div class="section"><h2>Google Business Mini-Audit</h2><p><b>Score:</b> ${m.score||m.audit_score||'–'} / 100</p><p>${m.summary||m.description||'Kurzbewertung zur lokalen Sichtbarkeit und Google-Business-Optimierung.'}</p></div><div class="section"><h2>Wichtigste Empfehlungen</h2><ol>${safeList(m.recommendations).map((r:any)=>`<li>${r}</li>`).join('')||'<li>Google Business Profil vervollständigen</li><li>Bewertungen aktiv aufbauen</li><li>Fotos und Leistungen regelmäßig aktualisieren</li>'}</ol></div>`}
+ function offerBody(o:any){return `<div class="section"><h2>Angebot</h2><p><b>Paket:</b> ${o.package_name||o.package||'Growth'}</p><p><b>Monatlich:</b> ${eur(o.monthly_price||o.price||0)}</p><p><b>Einrichtung:</b> ${eur(o.setup_fee||0)}</p></div><div class="section"><h2>Leistungsumfang</h2><ul>${safeList(o.services||o.items).map((r:any)=>`<li>${typeof r==='string'?r:(r.title||r.name||'Leistung')}</li>`).join('')||'<li>Google Business Optimierung</li><li>lokale SEO-Grundlage</li><li>Bewertungs- und QR-Kampagnen</li>'}</ul></div>`}
+ function contractBody(c:any){return `<div class="section"><h2>Vertragsentwurf</h2><p><b>Paket:</b> ${c.package_name||c.package||'Growth'}</p><p><b>Laufzeit:</b> ${c.term||c.duration||'monatlich kündbar nach Vereinbarung'}</p><p>${c.scope||c.description||'Leistungsumfang gemäß gebuchtem Paket inklusive Google Business Optimierung und laufender Betreuung.'}</p></div><div class="section"><h2>Hinweis</h2><p>Dieser Entwurf ersetzt keine finale rechtliche Prüfung.</p></div>`}
+ function dunningBody(m:any){return `<div class="section"><h2>Mahnung</h2><p><b>Status:</b> ${m.status||'Offen'}</p><p><b>Betrag:</b> ${eur(m.amount||m.open_amount||0)}</p><p>${m.message||'Bitte begleichen Sie die offene Rechnung innerhalb der angegebenen Frist.'}</p></div>`}
+ const sections=[
+  {key:'mini',title:'Mini-Audits',rows:mini,subtitle:(r:any)=>`${cname(d,r.customer_id)} · Score ${r.score||r.audit_score||'–'}`,body:miniBody},
+  {key:'offer',title:'Angebote',rows:offers,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Entwurf'} · ${eur(r.monthly_price||r.price||0)}`,body:offerBody},
+  {key:'contract',title:'Verträge',rows:contracts,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Entwurf'}`,body:contractBody},
+  {key:'dunning',title:'Mahnungen',rows:dunning,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Offen'}`,body:dunningBody},
+  {key:'report',title:'Monatsreports',rows:reports,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Entwurf'}`,body:(r:any)=>reportBody(store,r.customer_id,r)}
+ ]
+ function openItem(section:any,row:any){openPdfDocument(row.title||row.name||section.title,section.subtitle(row),section.body(row),{status:row.status||'Entwurf'})}
+ function exportItem(section:any,row:any){downloadHtmlDocument(`${row.title||row.name||section.title}.html`,row.title||row.name||section.title,section.subtitle(row),section.body(row),{status:row.status||'Entwurf'})}
+ return <><Head title="Output Engine" sub={`Gebrandete PDFs und HTML-Dokumente für ${customerName}: Mini-Audits, Angebote, Verträge, Mahnungen und Reports.`} action={<LiveModeBadge/>}/><CentralCustomerSelector store={store} cid={target} setCid={setTarget} title="Output Engine · Kunde" sub="Dokumente werden nach Kunde gefiltert und im Mecklenburg-Marketing-Design ausgegeben."/><div className="grid2"><Card title="Dokumentenquellen"><div className="item"><b>PDF über Gotenberg</b><span>Wenn Railway/Gotenberg erreichbar ist, wird ein echtes PDF geöffnet. Sonst HTML/Print-Fallback.</span></div><div className="item"><b>Einheitliches Branding</b><span>Logo, Kopfbereich, Status-Badge und Footer werden zentral erzeugt.</span></div></Card><Card title="Schnellaktionen"><div className="item"><b>{sections.reduce((n,s)=>n+s.rows.length,0)} Dokumente</b><span>für {customerName} verfügbar.</span></div><button className="btn secondary" onClick={()=>window.print()}>Aktuelle Übersicht drucken</button></Card></div>{sections.map(section=><Card key={section.key} title={section.title}>{section.rows.length===0&&<EmptyState icon="📄" title={`Keine ${section.title} vorhanden`}>Sobald ein passendes Dokument erzeugt wurde, erscheint es hier für PDF, HTML-Export und Kundenversand.</EmptyState>}{section.rows.map((row:any)=><div className="item" key={row.id}><div><b>{row.title||row.name||section.title}</b><div className="sub">{section.subtitle(row)}</div></div><div className="toolbarActions"><Badge>{row.status||'Entwurf'}</Badge><button className="btn secondary" onClick={()=>openItem(section,row)}>PDF öffnen</button><button className="btn secondary" onClick={()=>exportItem(section,row)}>HTML exportieren</button></div></div>)}</Card>)}</>
+}
+
 function MonthlyReportCenter({store,cid,role}:any){
  const [target,setTarget]=useState(cid)
  const rows=(store.data.monthly_reports||[]).filter((r:any)=>role==='admin'?r.customer_id===target:r.customer_id===cid)
