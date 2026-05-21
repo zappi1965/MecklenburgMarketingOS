@@ -1042,8 +1042,7 @@ Score: ${a.score||'-'}/100
 Betrieb: ${a.business_name||cname(store.data,cid)}
 
 Wichtigste Empfehlungen:
-${safeList(m.recommendations).map((r:any,i:number)=>`${i+1}. ${r}`).join('
-')}
+${safeList(m.recommendations).map((r:any,i:number)=>`${i+1}. ${r}`).join('\n')}
 
 Angebot: Google Business Optimierung durch Mecklenburg Marketing.`)
  }
