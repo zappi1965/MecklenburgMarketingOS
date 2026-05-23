@@ -829,7 +829,14 @@ export default function App(){
  const [activeAdmin,setActiveAdmin]=useState('DominiqueMM')
  const [mobileNavOpen,setMobileNavOpen]=useState(false)
  const [liveAuthChecked,setLiveAuthChecked]=useState(false)
- useEffect(()=>{if(typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('demo')){setLiveAuthChecked(true);return}(async()=>{try{const profile=await getCurrentUserProfile(); if(profile){markLiveMode();setRole(profile.role==='admin'?'admin':'customer'); if(profile.customer_id)setCid(profile.customer_id); setView('dashboard')}}finally{setLiveAuthChecked(true)}})()},[])
+ useEffect(()=>{
+  if(typeof window==='undefined'){setLiveAuthChecked(true);return}
+  const params=new URLSearchParams(window.location.search)
+  if(params.get('demo')){setLiveAuthChecked(true);return}
+  const openApp=params.get('app')==='1'||params.get('mode')==='app'
+  if(!openApp){setLiveAuthChecked(true);return}
+  ;(async()=>{try{const profile=await getCurrentUserProfile(); if(profile){markLiveMode();setRole(profile.role==='admin'?'admin':'customer'); if(profile.customer_id)setCid(profile.customer_id); setView('dashboard')}}finally{setLiveAuthChecked(true)}})()
+ },[])
  const [adminAvatars,setAdminAvatars]=useState<any>({DominiqueMM:'',JanneMM:''})
  useEffect(()=>{const p=new URLSearchParams(window.location.search);const demo=p.get('demo');const c=p.get('customer');if(demo==='admin'){markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM');setView('dashboard');return}if(c){if(demo==='customer')markDemoMode();setRole('customer');setCid(c);setView('dashboard')}},[])
  const admin=[

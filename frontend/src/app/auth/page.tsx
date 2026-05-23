@@ -43,7 +43,7 @@ export default function AuthPage() {
 
     if (profilePayload?.is_admin || (String(profile?.role || '').toLowerCase() === 'admin' && String(profile?.status || '').toLowerCase() === 'active')) {
       try { localStorage.setItem('mmos_mode','live'); localStorage.setItem('mmos_role','admin') } catch {}
-      window.location.href = '/'
+      window.location.href = '/?app=1'
       return
     }
 
@@ -59,7 +59,7 @@ export default function AuthPage() {
       return setMessage('Dein Zugang wartet noch auf Freigabe durch Mecklenburg Marketing.')
     }
 
-    window.location.href = '/'
+    window.location.href = '/?app=1'
   }
 
   async function register() {
