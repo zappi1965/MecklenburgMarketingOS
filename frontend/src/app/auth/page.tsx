@@ -38,15 +38,38 @@ export default function AuthPage() {
     setMessage('')
     const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password })
     if (error) return setMessage(error.message)
-    const { data: profile } = await supabaseAuth.from('user_profiles').select('*').eq('id', data.user?.id).maybeSingle()
-    if (profile?.role !== 'admin' && profile?.status && profile.status !== 'active') {
-      await supabaseAuth.auth.signOut()
-      return setMessage('Dein Zugang wartet noch auf Freigabe durch Mecklenburg Marketing.')
+    const userId = data.user?.id
+    const userEmail = (data.user?.email || email || '').toLowerCase().trim()
+
+    let profile:any = null
+    if (userId) {
+      const { data: byId } = await supabaseAuth.from('user_profiles').select('*').eq('id', userId).maybeSingle()
+      profile = byId
     }
+    if (!profile && userEmail) {
+      const { data: byEmail } = await supabaseAuth.from('user_profiles').select('*').ilike('email', userEmail).maybeSingle()
+      profile = byEmail
+    }
+
     if (!profile) {
       await supabaseAuth.auth.signOut()
       return setMessage('Für diesen Login ist noch kein freigegebenes Kundenprofil vorhanden.')
     }
+
+    const role = String(profile.role || '').toLowerCase()
+    const status = String(profile.status || 'active').toLowerCase()
+
+    if (role === 'admin' && status === 'active') {
+      try { localStorage.setItem('mmos_mode','live'); localStorage.setItem('mmos_role','admin') } catch {}
+      window.location.href = '/'
+      return
+    }
+
+    if (status !== 'active') {
+      await supabaseAuth.auth.signOut()
+      return setMessage('Dein Zugang wartet noch auf Freigabe durch Mecklenburg Marketing.')
+    }
+
     window.location.href = '/'
   }
 

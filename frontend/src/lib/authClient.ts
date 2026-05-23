@@ -14,12 +14,27 @@ export async function getCurrentSession() {
 export async function getCurrentUserProfile() {
   const session = await getCurrentSession()
   if (!session?.user) return null
-  const { data, error } = await supabaseAuth
+  let profile:any = null
+  const { data: byId } = await supabaseAuth
     .from('user_profiles')
     .select('*')
     .eq('id', session.user.id)
     .maybeSingle()
-  if (error || !data) return null
-  if (data.role !== 'admin' && data.status && data.status !== 'active') return null
-  return data
+  profile = byId
+
+  if (!profile && session.user.email) {
+    const { data: byEmail } = await supabaseAuth
+      .from('user_profiles')
+      .select('*')
+      .ilike('email', session.user.email.toLowerCase())
+      .maybeSingle()
+    profile = byEmail
+  }
+
+  if (!profile) return null
+  const role = String(profile.role || '').toLowerCase()
+  const status = String(profile.status || 'active').toLowerCase()
+  if (role === 'admin' && status === 'active') return profile
+  if (role !== 'admin' && status !== 'active') return null
+  return profile
 }
