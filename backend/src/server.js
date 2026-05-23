@@ -17,6 +17,7 @@ const demoToolRoutes = require('./routes/demoToolRoutes')
 const enterpriseRoutes = require('./routes/enterpriseRoutes')
 const customerPortalRoutes = require('./routes/customerPortalRoutes')
 const adminProfilesRoutes = require('./routes/adminProfilesRoutes')
+const authRoutes = require('./routes/authRoutes')
 const systemRoutes = require('./routes/systemRoutes')
 const googleRoutes = require('./routes/googleRoutes')
 const businessToolsRoutes = require('./routes/businessToolsRoutes')
@@ -69,6 +70,7 @@ const criticalRoutes = [
   ['/api/demo-tools', demoToolRoutes],
   ['/api/enterprise', enterpriseRoutes],
   ['/api/customer-portal', customerPortalRoutes],
+  ['/api/auth', authRoutes],
   ['/api/admin-profiles', adminProfilesRoutes],
   ['/api/google', googleRoutes],
   ['/api/business-tools', businessToolsRoutes]

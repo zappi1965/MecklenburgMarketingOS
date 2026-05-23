@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabaseAuth } from '@/lib/authClient'
+import { supabaseAuth, getCurrentUserProfilePayload } from '@/lib/authClient'
 import { customerPortalClient } from '@/lib/customerPortalClient'
 
 export default function AuthPage() {
@@ -38,33 +38,22 @@ export default function AuthPage() {
     setMessage('')
     const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password })
     if (error) return setMessage(error.message)
-    const userId = data.user?.id
-    const userEmail = (data.user?.email || email || '').toLowerCase().trim()
+    const profilePayload:any = await getCurrentUserProfilePayload()
+    const profile = profilePayload?.profile || null
 
-    let profile:any = null
-    if (userId) {
-      const { data: byId } = await supabaseAuth.from('user_profiles').select('*').eq('id', userId).maybeSingle()
-      profile = byId
-    }
-    if (!profile && userEmail) {
-      const { data: byEmail } = await supabaseAuth.from('user_profiles').select('*').ilike('email', userEmail).maybeSingle()
-      profile = byEmail
-    }
-
-    if (!profile) {
-      await supabaseAuth.auth.signOut()
-      return setMessage('Für diesen Login ist noch kein freigegebenes Kundenprofil vorhanden.')
-    }
-
-    const role = String(profile.role || '').toLowerCase()
-    const status = String(profile.status || 'active').toLowerCase()
-
-    if (role === 'admin' && status === 'active') {
+    if (profilePayload?.is_admin || (String(profile?.role || '').toLowerCase() === 'admin' && String(profile?.status || '').toLowerCase() === 'active')) {
       try { localStorage.setItem('mmos_mode','live'); localStorage.setItem('mmos_role','admin') } catch {}
       window.location.href = '/'
       return
     }
 
+    if (!profile) {
+      await supabaseAuth.auth.signOut()
+      const debugHint = profilePayload?.hint ? ` (${profilePayload.hint})` : ''
+      return setMessage(`Für diesen Login ist noch kein freigegebenes Kundenprofil vorhanden.${debugHint}`)
+    }
+
+    const status = String(profile.status || 'active').toLowerCase()
     if (status !== 'active') {
       await supabaseAuth.auth.signOut()
       return setMessage('Dein Zugang wartet noch auf Freigabe durch Mecklenburg Marketing.')
