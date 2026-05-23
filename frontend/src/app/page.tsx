@@ -231,9 +231,9 @@ const automationLabels=['Rechnung überfällig','Neues Ticket erstellt','SEO Rü
 
 const seed:any={
  customers:[
-  {id:ids.barber,name:'Barber Lounge Rostock',branch:'Friseur',email:'kontakt@barber.de',phone:'0381 123456',address:'Kröpeliner Str. 12',city:'Rostock',package_name:'Growth',contact_person:'Marten Schulz',is_demo:false},
-  {id:ids.roof,name:'NordDach GmbH',branch:'Dachdecker',email:'kontakt@norddach.de',phone:'0385 987654',address:'Wismarsche Str. 88',city:'Schwerin',package_name:'Premium',contact_person:'Nadine Krüger',is_demo:false},
-  {id:ids.restaurant,name:'Alexas Inselblick',branch:'Restaurant',email:'kontakt@alexas.de',phone:'03991 123456',address:'Am See 4',city:'Waren',package_name:'Starter',contact_person:'Alexa Peters',is_demo:false}
+  {id:ids.barber,name:'Barber Lounge Rostock',branch:'Friseur',email:'kontakt@barber.de',phone:'0381 123456',address:'Kröpeliner Str. 12',city:'Rostock',package_name:'Growth',contact_person:'Marten Schulz',is_demo:true,demo_marked_at:'2026-05-23T13:10:00.000Z'},
+  {id:ids.roof,name:'NordDach GmbH',branch:'Dachdecker',email:'kontakt@norddach.de',phone:'0385 987654',address:'Wismarsche Str. 88',city:'Schwerin',package_name:'Premium',contact_person:'Nadine Krüger',is_demo:true,demo_marked_at:'2026-05-23T13:10:00.000Z'},
+  {id:ids.restaurant,name:'Alexas Inselblick',branch:'Restaurant',email:'kontakt@alexas.de',phone:'03991 123456',address:'Am See 4',city:'Waren',package_name:'Starter',contact_person:'Alexa Peters',is_demo:true,demo_marked_at:'2026-05-23T13:10:00.000Z'}
  ],
  demo_customers:[
   {id:dids.restaurant,name:'DEMO Alexas Inselblick',branch:'Restaurant',package_name:'Starter',is_demo:true},
@@ -407,9 +407,65 @@ function demoCustomers(d:any){
  return Array.from(byId.values())
 }
 function allCustomers(d:any){return isDemoMode()? [...liveCustomers(d),...demoCustomers(d)] : liveCustomers(d)}
-function cname(d:any,id:string){return allCustomers(d).find((c:any)=>c.id===id)?.name||demoCustomers(d).find((c:any)=>c.id===id)?.name||'Kunde'}
-function cobj(d:any,id:string){return allCustomers(d).find((c:any)=>c.id===id)||demoCustomers(d).find((c:any)=>c.id===id)}
-function isDemoCustomer(d:any,id:string){return Boolean(cobj(d,id)?.is_demo)||String(cname(d,id)).startsWith('DEMO ')}
+function liveCustomerById(d:any,id:string){return liveCustomers(d).find((c:any)=>String(c.id)===String(id))}
+function rawCustomerById(d:any,id:string){return [...(d.customers||[]),...(d.demo_customers||[])].find((c:any)=>String(c.id)===String(id))}
+function cname(d:any,id:string){return allCustomers(d).find((c:any)=>String(c.id)===String(id))?.name||'Kein Live-Kunde ausgewählt'}
+function cobj(d:any,id:string){return allCustomers(d).find((c:any)=>String(c.id)===String(id))}
+function isDemoCustomer(d:any,id:string){const raw=rawCustomerById(d,id);return Boolean(raw?.is_demo)||String(raw?.name||'').trim().toUpperCase().startsWith('DEMO ')}
+function hasLiveCustomer(d:any,id:string){return Boolean(liveCustomerById(d,id))}
+function firstLiveCustomerId(d:any){return liveCustomers(d)[0]?.id||''}
+
+const customerScopedHintKeys=['customer_id','customerId','target_customer_id','targetCustomerId','client_customer_id','converted_customer_id','owner_customer_id','related_customer_id','selected_customer_id','customer']
+function demoCustomerIdSet(d:any){return new Set([...(d.customers||[]),...(d.demo_customers||[])].filter((c:any)=>isDemoRecord(c)).map((c:any)=>String(c.id)))}
+function valueContainsDemoId(value:any,demoIds:Set<string>){
+ if(value===undefined||value===null)return false
+ if(typeof value==='string'||typeof value==='number')return demoIds.has(String(value))
+ if(Array.isArray(value))return value.some((v:any)=>valueContainsDemoId(v,demoIds))
+ return false
+}
+function isRecordLinkedToDemoCustomer(d:any,row:any){
+ if(!row||typeof row!=='object')return false
+ if(row.is_demo===true)return true
+ if(typeof row.name==='string'&&row.name.trim().toUpperCase().startsWith('DEMO '))return true
+ if(typeof row.customer_name==='string'&&row.customer_name.trim().toUpperCase().startsWith('DEMO '))return true
+ if(typeof row.title==='string'&&row.title.trim().toUpperCase().startsWith('DEMO '))return true
+ const demoIds=demoCustomerIdSet(d)
+ for(const key of Object.keys(row)){
+  const lower=key.toLowerCase()
+  if(customerScopedHintKeys.includes(key)||lower.includes('customer')){
+   if(valueContainsDemoId(row[key],demoIds))return true
+  }
+ }
+ if(row.invoice_id){
+  const inv=(d.invoices||[]).find((i:any)=>String(i.id)===String(row.invoice_id))
+  if(inv&&isRecordLinkedToDemoCustomer(d,inv))return true
+ }
+ if(row.ticket_id){
+  const ticket=(d.tickets||[]).find((t:any)=>String(t.id)===String(row.ticket_id))
+  if(ticket&&isRecordLinkedToDemoCustomer(d,ticket))return true
+ }
+ if(row.audit_id){
+  const audit=(d.google_business_audits||[]).find((a:any)=>String(a.id)===String(row.audit_id))
+  if(audit&&isRecordLinkedToDemoCustomer(d,audit))return true
+ }
+ if(row.ref_table==='customers'&&row.ref_id&&demoIds.has(String(row.ref_id)))return true
+ return false
+}
+function filterLiveDataForLive(d:any){
+ if(isDemoMode())return d
+ const out:any={...d}
+ const alwaysKeep=new Set(['landing_page_settings','knowledge_articles','schema_migrations_mmos'])
+ Object.keys(out).forEach((key:string)=>{
+  if(!Array.isArray(out[key]))return
+  if(key==='customers'){out[key]=liveCustomers(d);return}
+  if(key==='demo_customers'){out[key]=[];return}
+  if(alwaysKeep.has(key))return
+  out[key]=out[key].filter((row:any)=>!isRecordLinkedToDemoCustomer(d,row))
+ })
+ return out
+}
+function liveOnlyMode(role?:string,view?:string){return !isDemoMode()&&!(role==='admin'&&view==='demo_environment')}
+function customerScopedView(view:string){return ['crm','finance','booking','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','package_recommendations','package_matrix','business_audit','mini_audit','offer_generator','contract_generator','output_engine','onboarding','reports','monthly_reports','approvals','packages'].includes(view)}
 function cpkg(d:any,id:string){return d.customer_subscriptions.find((s:any)=>s.customer_id===id)?.package_name||cobj(d,id)?.package_name||'Starter'}
 function pprice(p:string){return packageDefs[p]?.price||199}
 function invName(d:any,cid:string){const n=cname(d,cid).replace(/\s+/g,'_').replace(/[^\w_äöüÄÖÜß-]/g,'');return `Re_${n}_${d.invoices.filter((i:any)=>i.customer_id===cid).length+1}`}
@@ -422,6 +478,7 @@ function Toast({m}:any){return m?<div className="toast green" role="status" aria
 function Badge({children,type='purple'}:any){return <span className={`badge ${type}`}>{children}</span>}
 function Card({title,children,action}:any){return <section className="card"><div className="row between"><h2>{title}</h2>{action}</div>{children}</section>}
 function Head({title,sub,action}:any){return <div className="head"><div><h1>{title}</h1>{sub&&<div className="sub">{sub}</div>}</div>{action}</div>}
+function NoLiveCustomerPanel({setView}:any){return <><Head title="Kein Live-Kunde ausgewählt" sub="Alle bisherigen Kunden wurden als Demo markiert und sind im Live-Modus ausgeblendet." action={<LiveModeBadge/>}/><Card title="Live-Bereich ohne Demo-Daten"><p className="sub">In diesem Tool werden keine Demo-Kunden, Demo-Kommentare, Demo-Tickets, Demo-Paketanfragen, Demo-Kampagnen oder sonstige Demo-Datensätze mehr angezeigt. Lege einen neuen Live-Kunden an oder öffne vorhandene Demo-Daten ausschließlich über die interne Demo-Umgebung.</p><div className="toolbarActions"><button className="btn" onClick={()=>setView?.('crm')}>Live-Kunden anlegen</button><button className="btn secondary" onClick={()=>setView?.('demo_environment')}>Demo Umgebung öffnen</button></div></Card></>}
 function Metric({label,value,sub}:any){return <div className="metric"><div className="metricLabel">{label}</div><div className="metricValue">{value}</div>{sub&&<div className="delta">{sub}</div>}</div>}
 function Search({items,value,onChange,placeholder}:any){const [q,setQ]=useState('');const s=items.find((x:any)=>x.id===value);const list=items.filter((x:any)=>(x.name+x.branch+x.email).toLowerCase().includes(q.toLowerCase()));return <div style={{position:'relative'}}><input className="input" placeholder={placeholder} value={s&&!q?s.name:q} onChange={e=>{setQ(e.target.value);if(s)onChange('')}}/>{q&&<div className="card floating">{list.map((x:any)=><button className="nav" key={x.id} onClick={()=>{onChange(x.id);setQ('')}}>{x.name}<div className="sub">{x.branch} · {x.package_name}</div></button>)}</div>}</div>}
 
@@ -822,13 +879,22 @@ function AdminProfilesManager(){
 }
 
 export default function App(){
- const store=applyDemoSandboxStorePatch(useStore())
+ const baseStore=applyDemoSandboxStorePatch(useStore())
  const [role,setRole]=useState<Role>('guest')
  const [view,setView]=useState('dashboard')
- const [cid,setCid]=useState(ids.barber)
+ const [cid,setCid]=useState('')
  const [activeAdmin,setActiveAdmin]=useState('DominiqueMM')
  const [mobileNavOpen,setMobileNavOpen]=useState(false)
  const [liveAuthChecked,setLiveAuthChecked]=useState(false)
+ const store=liveOnlyMode(role,view)?{...baseStore,data:filterLiveDataForLive(baseStore.data)}:baseStore
+ const liveCidAvailable=Boolean(cid&&hasLiveCustomer(store.data,cid))
+ useEffect(()=>{
+  if(!liveOnlyMode(role,view))return
+  if(role==='guest')return
+  if(cid&&hasLiveCustomer(store.data,cid))return
+  const next=firstLiveCustomerId(store.data)
+  if(next!==cid)setCid(next)
+ },[role,view,cid,store.data.customers?.length])
  useEffect(()=>{
   if(typeof window==='undefined'){setLiveAuthChecked(true);return}
   const params=new URLSearchParams(window.location.search)
@@ -945,8 +1011,10 @@ export default function App(){
  }
  const nav=role==='admin'?admin:customer
  const mobileBottomKeys=(role==='admin'?['dashboard','lead_scraper','acquisition_campaigns','crm','health_center']:['dashboard','seo','reviews','reports','finance']).filter((k:string)=>visibleNavKeys.includes(k))
+ const blockCustomerScopedRender=liveOnlyMode(role,view)&&customerScopedView(view)&&!liveCidAvailable
  return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">DEMO MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div><button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Demo zurücksetzen</button><button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions"><NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
+ {blockCustomerScopedRender?<NoLiveCustomerPanel setView={setView}/>:<>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
  {view==='dashboard'&&<Dashboard store={store} cid={cid} role={role} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>}
  {view==='main_landing'&&role==='admin'&&<MainLandingPageEditor store={store}/>}
@@ -992,6 +1060,7 @@ export default function App(){
  {view==='monthly_reports'&&role==='admin'&&<MonthlyReportCenter store={store} cid={cid} role={role}/>} 
  {view==='output_engine'&&role==='admin'&&<BrandOutputEngine store={store} cid={cid}/>} 
  {view==='approvals'&&<ApprovalCenter store={store} cid={cid} role={role}/>} 
+ </>}
  <MobileAppBottomNav role={role} view={view} keys={mobileBottomKeys} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  </main></div>
 }
