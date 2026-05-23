@@ -15,6 +15,7 @@ export default function StorageUploader({
   const [drag, setDrag] = useState(false)
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState<any>(null)
+  const [message, setMessage] = useState('')
   const [files, setFiles] = useState<any[]>([])
 
   async function loadFiles() {
@@ -57,7 +58,7 @@ export default function StorageUploader({
 
       await loadFiles()
     } catch (error: any) {
-      alert(error.message || 'Upload fehlgeschlagen')
+      setMessage(error.message || 'Upload fehlgeschlagen')
     } finally {
       setBusy(false)
     }
@@ -103,6 +104,7 @@ export default function StorageUploader({
           {busy ? 'Lädt hoch...' : 'Datei auswählen'}
         </button>
 
+        {message && <div className="sub" role="status">{message}</div>}
         {preview && (
           <div className="previewBox">
             <b>{preview.name}</b>

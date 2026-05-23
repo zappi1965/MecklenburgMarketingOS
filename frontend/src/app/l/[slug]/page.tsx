@@ -25,10 +25,8 @@ export default function PublicLoyaltyPage() {
   const params = useParams<{ slug: string }>()
   const slug = String(params?.slug || '')
 
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [birthday, setBirthday] = useState('')
+  const [password, setPassword] = useState('')
   const [reviewText, setReviewText] = useState('')
   const [rating, setRating] = useState(5)
   const [result, setResult] = useState<any>(null)
@@ -105,17 +103,16 @@ export default function PublicLoyaltyPage() {
     setHint('')
 
     try {
-      let response: any = null
+      const displayName = email ? email.split('@')[0] : 'Gast'
+      const response: any = await v33FunctionalClient.publicJoinOrScan(slug, {
+        display_name: displayName,
+        email,
+        password,
+        auth_only: !showLoyalty,
+        device_id: deviceId()
+      })
 
       if (showLoyalty) {
-        response = await v33FunctionalClient.publicJoinOrScan(slug, {
-          name,
-          display_name: name,
-          email,
-          phone,
-          birthday,
-          device_id: deviceId()
-        })
         setResult(response)
       }
 
@@ -125,12 +122,13 @@ export default function PublicLoyaltyPage() {
           loyalty_program_id: response?.program?.id || status?.program?.id,
           loyalty_customer_id: response?.member?.id,
           qr_campaign_id: response?.program?.qr_campaign_id || status?.program?.qr_campaign_id,
-          reviewer_name: name,
+          reviewer_name: displayName,
           reviewer_email: email,
           rating,
           feedback_text: reviewText
         })
         setHint(review?.ok ? 'Danke für deine Bewertung.' : 'Bewertung gespeichert.')
+        if (!showLoyalty) setResult({ ...response, review_submitted: true, points_added: 0, points_balance: response?.member?.points_balance || 0 })
       }
 
       if (status?.google_review_url && rating >= 4) {
@@ -138,24 +136,22 @@ export default function PublicLoyaltyPage() {
       }
     } catch (e: any) {
       const message = e?.message || 'Speichern fehlgeschlagen'
-      if (showLoyalty) {
-        const id = deviceId() || email || name || 'guest'
-        const localKey = `mmos_public_points_${slug}_${id}`
-        const current = typeof window !== 'undefined' ? Number(window.localStorage.getItem(localKey) || 0) : 0
-        const nextPoints = current + Number(status?.program?.points_per_scan || 10)
-        if (typeof window !== 'undefined') window.localStorage.setItem(localKey, String(nextPoints))
-        setResult({
-          points_added: Number(status?.program?.points_per_scan || 10),
-          points_balance: nextPoints,
-          member: { points_balance: nextPoints, tier: nextPoints >= 100 ? 'VIP' : 'Basic' },
-          program: { name: brandName, title: brandName }
-        })
-        setHint(`${friendlyHint(message)} Demo-Fallback aktiv: Punkte wurden lokal gespeichert.`)
-      } else {
-        setError(friendlyHint(message))
-      }
+      setError(friendlyHint(message))
+      setHint('Aus Sicherheitsgründen werden Punkte und Bewertungen erst nach erfolgreicher E-Mail/Passwort-Verifizierung gespeichert.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function requestPasswordReset() {
+    setError('')
+    setHint('')
+    if (!email) { setHint('Bitte gib zuerst deine E-Mail-Adresse ein.'); return }
+    try {
+      const r = await v33FunctionalClient.publicPasswordReset(slug, { email })
+      setHint(r?.message || 'Wenn ein Bonuskonto existiert, wurde ein Reset-Vorgang vorbereitet.')
+    } catch (e: any) {
+      setHint(e?.message || 'Passwort-Reset konnte nicht vorbereitet werden.')
     }
   }
 
@@ -201,25 +197,20 @@ export default function PublicLoyaltyPage() {
 
           {!result && (
             <form onSubmit={submit} className="publicForm">
-              <label>
-                Dein Name
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Vollständiger Name, z. B. Max Mustermann" required />
-              </label>
+              <div className="publicAuthNotice">
+                Melde dich mit deiner E-Mail-Adresse und deinem Passwort an. Neue Bonuskonten werden beim ersten Login mit Passwort angelegt.
+              </div>
 
               <label>
                 E-Mail
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail-Adresse für dein Bonuskonto" required />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail-Adresse für dein Bonuskonto" autoComplete="email" required />
               </label>
 
               <label>
-                Telefonnummer optional
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefonnummer für Rückfragen oder Rewards" />
+                Passwort
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mindestens 8 Zeichen" autoComplete="current-password" minLength={8} required />
               </label>
-
-              <label>
-                Geburtstag optional
-                <input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
-              </label>
+              <div className="publicPasswordHint">Dein Passwort schützt dein Bonuskonto und verhindert, dass andere Personen Punkte oder Rewards in deinem Namen verwenden.</div><button className="publicLinkButton" type="button" onClick={requestPasswordReset}>Passwort vergessen?</button>
 
               {showReview && (
                 <>
@@ -269,7 +260,7 @@ export default function PublicLoyaltyPage() {
               )}
 
               <div className="publicActions">
-                <button type="button" onClick={() => setResult(null)}>Noch ein Scan</button>
+                <button type="button" onClick={() => setResult(null)}>Erneut anmelden / weitere Aktion</button>
                 <button type="button" onClick={copyReferral}>Freund empfehlen</button>
               </div>
             </div>
@@ -280,6 +271,12 @@ export default function PublicLoyaltyPage() {
 
           <div className="publicFineprint">
             {fineprint}
+          </div>
+          <div className="publicLegalLinks" aria-label="Rechtliche Informationen">
+            <a href="/impressum">Impressum</a>
+            <a href="/datenschutz">Datenschutz</a>
+            <a href="/cookies">Cookie-Einstellungen</a>
+            <a href="/agb">AGB</a>
           </div>
         </div>
       </section>

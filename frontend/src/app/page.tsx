@@ -12,9 +12,11 @@ import { supabaseAuth, getCurrentUserProfile } from '@/lib/authClient'
 import { DEMO_SANDBOX_KEY, markDemoMode, markLiveMode, clearDemoSandbox } from '@/lib/demoSandbox'
 import { demoToolsClient, openPdfBase64, openQrCampaign } from '@/lib/demoToolsClient'
 import { API_BASE, hasSupabase, supabase } from '@/lib/supabase'
-import { startGoogleAuth, syncGoogleProvider, systemReady, systemSchema, providerToApiKey } from '@/lib/apiReady'
+import { startGoogleAuth, syncGoogleProvider, systemReady, systemSchema, integrationStatus, providerToApiKey } from '@/lib/apiReady'
 import { apiRequest } from '@/lib/apiRequest'
 import { businessToolsClient } from '@/lib/businessToolsClient'
+import { customerPortalClient } from '@/lib/customerPortalClient'
+import { adminProfilesClient } from '@/lib/adminProfilesClient'
 import { safeLocalStorageGet, safeLocalStorageSet, safeLocalStorageText } from '@/lib/safeStorage'
 
 type Role='guest'|'admin'|'customer'
@@ -191,6 +193,7 @@ const defaultMainLandingSettings:any={
  hero_subline:'Das lokale Marketing-Betriebssystem für Unternehmen in Mecklenburg-Vorpommern: Google Business Optimierung, Bewertungen, SEO, QR-Kampagnen, Reports und Kundenportal sauber verbunden.',
  primary_cta_label:'Anmelden',
  secondary_cta_label:'Demo',
+ show_public_demo_button:true,
  package_headline:'Pakete für lokale Unternehmen',
  package_subline:'Transparente Pakete für lokale Betriebe – vom Kundenportal bis zur laufenden Google Business Optimierung mit Reports.',
  footer_note:'Mecklenburg Marketing · Google Business Optimierung · lokale SEO · Reviews · QR-Kampagnen · Kundenportal.',
@@ -320,14 +323,22 @@ const seed:any={
   {id:'ap1',customer_id:ids.barber,title:'Google Beitrag Mai freigeben',type:'Google Beitrag',status:'Offen',description:'Kurzbeitrag zur Sommeraktion prüfen und freigeben.',created_at:'2026-05-18'}
  ],
  output_documents:[],
+ customer_registrations:[],
+ customer_invites:[],
+ customer_users:[],
  landing_page_settings:[defaultMainLandingSettings]
 }
 
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
- const tables=['customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','landing_page_settings','public_landing_pages','loyalty_rewards','loyalty_reward_rules','staff_codes']
- function notify(m:string){setToast(m);setTimeout(()=>setToast(''),2500)}
+ const tables=['customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','landing_page_settings','public_landing_pages','loyalty_rewards','loyalty_reward_rules','staff_codes']
+ function notify(m:string){setToast(m);setTimeout(()=>setToast(''),3200)}
+ useEffect(()=>{
+  function onGlobalToast(e:any){notify(String(e?.detail||''))}
+  if(typeof window!=='undefined') window.addEventListener('mmos:toast',onGlobalToast as any)
+  return ()=>{ if(typeof window!=='undefined') window.removeEventListener('mmos:toast',onGlobalToast as any) }
+ },[])
  async function load(){
   if(!hasSupabase||!supabase)return
   const r:any={}
@@ -397,7 +408,10 @@ function pprice(p:string){return packageDefs[p]?.price||199}
 function invName(d:any,cid:string){const n=cname(d,cid).replace(/\s+/g,'_').replace(/[^\w_äöüÄÖÜß-]/g,'');return `Re_${n}_${d.invoices.filter((i:any)=>i.customer_id===cid).length+1}`}
 function InfoI({text}:any){return <span className="infoi" data-tooltip={text||'Weitere Informationen'} tabIndex={0}>i</span>}
 function FeatureList({pkg}:any){const def=packageDefs[pkg]||packageDefs.Starter;return <div className="featureList">{def.displayFeatures.map((t:string)=><div className="featureItem" key={t}><span>{t} <InfoI text={featureDescriptions[t]}/></span></div>)}</div>}
-function Toast({m}:any){return m?<div className="toast green">{m}</div>:null}
+function appToast(message:string){
+ if(typeof window!=='undefined') window.dispatchEvent(new CustomEvent('mmos:toast',{detail:String(message||'')}))
+}
+function Toast({m}:any){return m?<div className="toast green" role="status" aria-live="polite">{m}</div>:null}
 function Badge({children,type='purple'}:any){return <span className={`badge ${type}`}>{children}</span>}
 function Card({title,children,action}:any){return <section className="card"><div className="row between"><h2>{title}</h2>{action}</div>{children}</section>}
 function Head({title,sub,action}:any){return <div className="head"><div><h1>{title}</h1>{sub&&<div className="sub">{sub}</div>}</div>{action}</div>}
@@ -429,7 +443,7 @@ async function openPdfDocument(title:string, subtitle:string, body:string, meta:
   window.open(url,'_blank')
   setTimeout(()=>URL.revokeObjectURL(url),60000)
  }catch(e:any){
-  alert(`PDF-Erzeugung über Gotenberg nicht möglich: ${e.message || e}. Öffne HTML/Print-Fallback.`)
+  appToast(`PDF-Erzeugung über Gotenberg nicht möglich: ${e.message || e}. HTML/Print-Fallback wird geöffnet.`)
   openBrandDocument(title,subtitle,body,meta)
  }
 }
@@ -448,7 +462,7 @@ function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
  const steps=Array.isArray(lp.steps)&&lp.steps.length?lp.steps:defaultMainLandingSettings.steps
  const faq=Array.isArray(lp.faq)&&lp.faq.length?lp.faq:defaultMainLandingSettings.faq
  const metrics=Array.isArray(lp.example_metrics)&&lp.example_metrics.length?lp.example_metrics:defaultMainLandingSettings.example_metrics
- return <div className="landing proLanding"><div className="landingNav proLandingNav"><div className={lp.logo_url?'logo hasImage':'logo'}>{lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}{lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||'Mecklenburg Marketing'}</span>}</div><div className="row"><button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button><button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Demo ansehen'}</button></div></div><section className="hero proHero"><div><Badge>Lokales Marketing-Betriebssystem</Badge><h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1><p>{lp.hero_subline}</p><div className="landingCtas"><button className="btn" onClick={()=>{window.location.href='/auth'}}>Portal öffnen</button><button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>Live-Demo starten</button></div></div><div className="proMock"><div className="mockTop"><span></span><span></span><span></span></div><div className="grid4"><Metric label="Sichtbarkeit" value="+34%"/><Metric label="Reviews" value="128"/><Metric label="Leads" value="42"/><Metric label="Health" value="Grün"/></div><div className="chartLine">{Array.from({length:14},(_,i)=><span key={i} style={{height:`${22+(i*9)%70}px`}} />)}</div><div className="item"><b>Nächste Empfehlung</b><span>Google Business Fotos aktualisieren und Bewertungs-Booster starten.</span></div></div></section><section className="proSection"><h2>Ablauf in 3 Schritten</h2><div className="grid3">{steps.slice(0,3).map((s:any,i:number)=><Card key={`${s.title}-${i}`} title={`${i+1}. ${s.title}`}><p className="sub">{s.description}</p>{i===2&&<div className="miniMetrics">{metrics.map((m:any)=><Metric key={m.label} label={m.label} value={m.value}/>)}</div>}</Card>)}</div></section><section className="landingPackages proSection"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section><section className="proSection"><Card title="FAQ">{faq.map((f:any,i:number)=><div className="item" key={`${f.question}-${i}`}><b>{f.question}</b><span>{f.answer}</span></div>)}</Card></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
+ return <div className="landing proLanding"><div className="landingNav proLandingNav"><div className={lp.logo_url?'logo hasImage':'logo'}>{lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}{lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||'Mecklenburg Marketing'}</span>}</div><div className="row"><button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button>{lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Demo ansehen'}</button>}</div></div><section className="hero proHero"><div><Badge>Lokales Marketing-Betriebssystem</Badge><h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1><p>{lp.hero_subline}</p><div className="landingCtas"><button className="btn" onClick={()=>{window.location.href='/auth'}}>Portal öffnen</button>{lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Live-Demo starten'}</button>}</div></div><div className="proMock"><div className="mockTop"><span></span><span></span><span></span></div><div className="grid4"><Metric label="Sichtbarkeit" value="+34%"/><Metric label="Reviews" value="128"/><Metric label="Leads" value="42"/><Metric label="Health" value="Grün"/></div><div className="chartLine">{Array.from({length:14},(_,i)=><span key={i} style={{height:`${22+(i*9)%70}px`}} />)}</div><div className="item"><b>Nächste Empfehlung</b><span>Google Business Fotos aktualisieren und Bewertungs-Booster starten.</span></div></div></section><section className="proSection"><h2>Ablauf in 3 Schritten</h2><div className="grid3">{steps.slice(0,3).map((s:any,i:number)=><Card key={`${s.title}-${i}`} title={`${i+1}. ${s.title}`}><p className="sub">{s.description}</p>{i===2&&<div className="miniMetrics">{metrics.map((m:any)=><Metric key={m.label} label={m.label} value={m.value}/>)}</div>}</Card>)}</div></section><section className="landingPackages proSection"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section><section className="proSection"><Card title="FAQ">{faq.map((f:any,i:number)=><div className="item" key={`${f.question}-${i}`}><b>{f.question}</b><span>{f.answer}</span></div>)}</Card></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
 }
 
 function Avatar({name,src,size=34}:any){return src?<img className="avatar" style={{width:size,height:size}} src={src}/>:<div className="avatar fallback" style={{width:size,height:size}}>{String(name||'?').slice(0,1)}</div>}
@@ -469,7 +483,7 @@ function ProfileUpload({activeAdmin,setAdminAvatars,adminAvatars}:any){
   setAdminAvatars((p:any)=>({...p,[activeAdmin]:preview}))
   const fd=new FormData(); fd.append('file',file); fd.append('display_name',activeAdmin)
   setBusy(true)
-  try{const j:any=await apiRequest(`${API_BASE}/api/avatars/upload`,{method:'POST',body:fd,expectJson:false,timeoutMs:20000});setAdminAvatars((p:any)=>({...p,[activeAdmin]:j.data?.avatar_url||j.avatar_url||preview}))}catch(e:any){alert(e.message||'Avatar Upload fehlgeschlagen')}finally{setBusy(false)}
+  try{const j:any=await apiRequest(`${API_BASE}/api/avatars/upload`,{method:'POST',body:fd,expectJson:false,timeoutMs:20000});setAdminAvatars((p:any)=>({...p,[activeAdmin]:j.data?.avatar_url||j.avatar_url||preview}))}catch(e:any){appToast(e.message||'Avatar Upload fehlgeschlagen')}finally{setBusy(false)}
  }
  return <div className="profileWrap"><button className="profileBtn" onClick={()=>setOpen(!open)}><Avatar name={activeAdmin} src={current} size={38}/></button>{open&&<div className="profilePanel"><h2>{activeAdmin}</h2><Avatar name={activeAdmin} src={current} size={72}/><input className="input" type="file" accept="image/*" onChange={pick}/><div className="sub">{busy?'Speichert...':'Profilbild wird bei Backend-Verbindung dauerhaft gespeichert.'}</div></div>}</div>
 }
@@ -477,10 +491,10 @@ function ProfileUpload({activeAdmin,setAdminAvatars,adminAvatars}:any){
 function StorageUploader({store,cid,fileType='documents',refTable,refId,title='Datei hochladen',activeAdmin='DominiqueMM'}:any){
  const input=useRef<HTMLInputElement|null>(null); const [drag,setDrag]=useState(false); const [selected,setSelected]=useState<File|null>(null)
 async function upload(file:File|null=selected){
-  if(!file)return alert('Bitte Datei auswählen')
+  if(!file){store.notify?.('Bitte Datei auswählen'); return}
   const fd=new FormData(); fd.append('file',file); fd.append('customer_id',cid); fd.append('file_type',fileType); if(refTable)fd.append('ref_table',refTable); if(refId)fd.append('ref_id',refId)
   try{await apiRequest(`${API_BASE}/api/storage/upload`,{method:'POST',body:fd,expectJson:false,timeoutMs:30000}); await store.load()}catch(e:any){
-   alert(e.message)
+   store.notify?.(e.message||'Upload im Backend fehlgeschlagen. Lokaler Fallback wird angelegt.')
    await store.create('customer_files',{customer_id:cid,name:file.name,original_name:file.name,file_type:fileType,bucket:fileType,storage_path:'#',mime_type:file.type,size_bytes:file.size,version:1,ref_table:refTable,ref_id:refId,actor_name:activeAdmin,url:URL.createObjectURL(file)})
   }
   await store.create('notifications',{customer_id:cid,title:`${activeAdmin} hat Datei hochgeladen`,message:`${activeAdmin} hat ${file.name} hochgeladen.`,type:'admin_change',actor_name:activeAdmin})
@@ -552,7 +566,7 @@ function MainLandingPageEditor({store}:any){
   }catch(e:any){setMsg('Lokal gespeichert. Für Live-Speicherung SQL_V42_21_LANDINGPAGE_SCHEMA_FIX.sql ausführen.')}
  }
  function reset(){setF(defaultMainLandingSettings);setMsg('Standardtexte geladen – bitte speichern.')}
- return <><Head title="Haupt-Landingpage" sub="Texte der öffentlichen Startseite, Ablauf und FAQ bearbeiten" action={<button className="btn" onClick={save}>Landingpage speichern</button>}/><div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Fallback-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des Demo-Buttons"/></div><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button><button className="btn secondary">{f.secondary_cta_label}</button></div><div className="sub">Ablauf, Beispiel-Ergebnis und FAQ werden auf der Landingpage darunter angezeigt.</div></div></Card></div><Card title="Ablauf in 3 Schritten bearbeiten">{(f.steps||defaultMainLandingSettings.steps).slice(0,3).map((step:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={step.title||''} onChange={e=>patchStep(i,{title:e.target.value})} placeholder={`Titel Schritt ${i+1}`}/><textarea className="input textarea" value={step.description||''} onChange={e=>patchStep(i,{description:e.target.value})} placeholder={`Beschreibung Schritt ${i+1}`}/></div>)}<div className="sub">Beispiel-Ergebnisse werden im dritten Schritt angezeigt.</div><div className="grid3">{(f.example_metrics||defaultMainLandingSettings.example_metrics).map((m:any,i:number)=><Card key={i} title={`Beispielwert ${i+1}`}><input className="input" value={m.label||''} onChange={e=>patchMetric(i,{label:e.target.value})} placeholder="Kennzahl, z. B. neue Bewertungen"/><input className="input" value={m.value||''} onChange={e=>patchMetric(i,{value:e.target.value})} placeholder="Wert, z. B. +34"/></Card>)}</div></Card><Card title="FAQ bearbeiten">{(f.faq||defaultMainLandingSettings.faq).map((qa:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={qa.question||''} onChange={e=>patchFaq(i,{question:e.target.value})} placeholder="Frage"/><textarea className="input textarea" value={qa.answer||''} onChange={e=>patchFaq(i,{answer:e.target.value})} placeholder="Antwort"/><button className="btn secondary" onClick={()=>setF({...f,faq:(f.faq||[]).filter((_:any,idx:number)=>idx!==i)})}>FAQ entfernen</button></div>)}<button className="btn secondary" onClick={()=>setF({...f,faq:[...(f.faq||[]),{question:'Neue Frage',answer:'Antwort ergänzen.'}]})}>FAQ hinzufügen</button></Card><Card title="Paketauflistung bearbeiten"><input className="input" value={f.package_headline||''} onChange={e=>setF({...f,package_headline:e.target.value})} placeholder="Überschrift über der Paketauflistung"/><textarea className="input textarea" value={f.package_subline||''} onChange={e=>setF({...f,package_subline:e.target.value})} placeholder="Kurzbeschreibung oberhalb der Pakete"/><div className="grid3">{Object.keys(packageDefs).map(pkg=>{const p=(f.packages||{})[pkg]||{};return <Card key={pkg} title={pkg}><input className="input" value={p.headline||pkg} onChange={e=>setPackage(pkg,{headline:e.target.value})} placeholder={`Anzeigename für ${pkg}`}/><textarea className="input textarea" value={p.description||''} onChange={e=>setPackage(pkg,{description:e.target.value})} placeholder={`Beschreibung für ${pkg} auf der Landingpage`}/><div className="sub">Preis und Featureliste kommen weiterhin aus der zentralen Paketlogik.</div></Card>})}</div><div className="toolbarActions"><button className="btn" onClick={save}>Änderungen speichern</button><button className="btn secondary" onClick={reset}>Standardtexte laden</button><button className="btn secondary" onClick={()=>{setF(mainLandingSettings(store.data));window.open('/', '_blank')}}>Öffentliche Seite öffnen</button></div></Card></>
+ return <><Head title="Haupt-Landingpage" sub="Texte der öffentlichen Startseite, Ablauf und FAQ bearbeiten" action={<button className="btn" onClick={save}>Landingpage speichern</button>}/><div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Fallback-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des Demo-Buttons"/></div><label className="checkline"><input type="checkbox" checked={f.show_public_demo_button!==false} onChange={e=>setF({...f,show_public_demo_button:e.target.checked})}/> Öffentlichen Demo-Button auf der Landingpage anzeigen</label><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button>{f.show_public_demo_button!==false&&<button className="btn secondary">{f.secondary_cta_label}</button>}</div><div className="sub">Ablauf, Beispiel-Ergebnis und FAQ werden auf der Landingpage darunter angezeigt.</div></div></Card></div><Card title="Ablauf in 3 Schritten bearbeiten">{(f.steps||defaultMainLandingSettings.steps).slice(0,3).map((step:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={step.title||''} onChange={e=>patchStep(i,{title:e.target.value})} placeholder={`Titel Schritt ${i+1}`}/><textarea className="input textarea" value={step.description||''} onChange={e=>patchStep(i,{description:e.target.value})} placeholder={`Beschreibung Schritt ${i+1}`}/></div>)}<div className="sub">Beispiel-Ergebnisse werden im dritten Schritt angezeigt.</div><div className="grid3">{(f.example_metrics||defaultMainLandingSettings.example_metrics).map((m:any,i:number)=><Card key={i} title={`Beispielwert ${i+1}`}><input className="input" value={m.label||''} onChange={e=>patchMetric(i,{label:e.target.value})} placeholder="Kennzahl, z. B. neue Bewertungen"/><input className="input" value={m.value||''} onChange={e=>patchMetric(i,{value:e.target.value})} placeholder="Wert, z. B. +34"/></Card>)}</div></Card><Card title="FAQ bearbeiten">{(f.faq||defaultMainLandingSettings.faq).map((qa:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={qa.question||''} onChange={e=>patchFaq(i,{question:e.target.value})} placeholder="Frage"/><textarea className="input textarea" value={qa.answer||''} onChange={e=>patchFaq(i,{answer:e.target.value})} placeholder="Antwort"/><button className="btn secondary" onClick={()=>setF({...f,faq:(f.faq||[]).filter((_:any,idx:number)=>idx!==i)})}>FAQ entfernen</button></div>)}<button className="btn secondary" onClick={()=>setF({...f,faq:[...(f.faq||[]),{question:'Neue Frage',answer:'Antwort ergänzen.'}]})}>FAQ hinzufügen</button></Card><Card title="Paketauflistung bearbeiten"><input className="input" value={f.package_headline||''} onChange={e=>setF({...f,package_headline:e.target.value})} placeholder="Überschrift über der Paketauflistung"/><textarea className="input textarea" value={f.package_subline||''} onChange={e=>setF({...f,package_subline:e.target.value})} placeholder="Kurzbeschreibung oberhalb der Pakete"/><div className="grid3">{Object.keys(packageDefs).map(pkg=>{const p=(f.packages||{})[pkg]||{};return <Card key={pkg} title={pkg}><input className="input" value={p.headline||pkg} onChange={e=>setPackage(pkg,{headline:e.target.value})} placeholder={`Anzeigename für ${pkg}`}/><textarea className="input textarea" value={p.description||''} onChange={e=>setPackage(pkg,{description:e.target.value})} placeholder={`Beschreibung für ${pkg} auf der Landingpage`}/><div className="sub">Preis und Featureliste kommen weiterhin aus der zentralen Paketlogik.</div></Card>})}</div><div className="toolbarActions"><button className="btn" onClick={save}>Änderungen speichern</button><button className="btn secondary" onClick={reset}>Standardtexte laden</button><button className="btn secondary" onClick={()=>{setF(mainLandingSettings(store.data));window.open('/', '_blank')}}>Öffentliche Seite öffnen</button></div></Card></>
 }
 
 function LandingTextEditor({store,q}:any){
@@ -658,18 +672,18 @@ async function createDemoQr(customer_name='Demo NordDach GmbH'){
 async function runEnterprisePreset(preset:string){
   try{
     const result = await enterpriseClient.runPreset(preset,{source:'admin-ui'})
-    alert(`Enterprise Aktion gestartet: ${preset}`)
+    appToast(`Enterprise Aktion gestartet: ${preset}`)
     return result
   }catch(e:any){
-    alert(e.message||'Enterprise Fehler')
+    appToast(e.message||'Enterprise Fehler')
   }
 }
 async function planEnterpriseBackup(){
   try{
     const result = await enterpriseClient.planBackup({label:'Manueller Restore Point', backup_type:'database'})
-    alert('Backup Restore Point geplant')
+    appToast('Backup Restore Point geplant')
     return result
-  }catch(e:any){ alert(e.message||'Backup Fehler') }
+  }catch(e:any){ appToast(e.message||'Backup Fehler') }
 }
 
 
@@ -706,6 +720,100 @@ async function v20GenerateInsights(customer_id:string){
   return v20GrowthClient.generateInsights({customer_id})
 }
 
+
+function BrandOutputEngine({store,cid}:any){
+ const [target,setTarget]=useState(cid||'')
+ const customer=cname(store.data,target||cid)
+ const docs=[
+  {key:'mini',title:'Mini-Audit',subtitle:`Kurz-Audit für ${customer}`,body:`<div class="section"><h2>Google Business Optimierung</h2><p>Score, Chancen und nächste Maßnahmen für lokale Sichtbarkeit.</p></div>`,status:'Entwurf'},
+  {key:'offer',title:'Angebot',subtitle:`Angebot für ${customer}`,body:`<div class="section"><h2>Leistungsumfang</h2><p>Google Business Optimierung, lokale SEO, Bewertungsmanagement und Kundenportal.</p></div>`,status:'Vorlage'},
+  {key:'contract',title:'Vertrag',subtitle:`Vertragsentwurf für ${customer}`,body:`<div class="section"><h2>Dienstleistungsvertrag</h2><p>Paketleistungen, Laufzeit, Datenschutz-/AVV-Hinweis und Kündigung.</p></div>`,status:'Entwurf'},
+  {key:'dunning',title:'Mahnung',subtitle:`Zahlungserinnerung für ${customer}`,body:`<div class="section"><h2>Offener Betrag</h2><p>Bitte prüfen und Zahlungseingang abgleichen.</p></div>`,status:'Vorlage'},
+  {key:'report',title:'Monatsreport',subtitle:`Monatsreport für ${customer}`,body:`<div class="section"><h2>Zusammenfassung</h2><p>SEO, Reviews, QR-Kampagnen, Leads und Potenziale des Monats.</p></div>`,status:'Entwurf'}
+ ]
+ return <><Head title="Output Engine" sub="Gebrandete Dokumente als echtes PDF über Gotenberg oder HTML-Fallback erzeugen" action={<LiveModeBadge/>}/><CentralCustomerSelector store={store} cid={target||cid} setCid={setTarget} title="Kunde für Dokumente auswählen"/><div className="grid2">{docs.map(d=><Card key={d.key} title={d.title}><p className="sub">{d.subtitle}</p><div className="toolbarActions"><button className="btn" onClick={()=>openPdfDocument(d.title,d.subtitle,d.body,{status:d.status})}>PDF öffnen</button><button className="btn secondary" onClick={()=>downloadHtmlDocument(`${d.title}-${customer}.html`,d.title,d.subtitle,d.body,{status:d.status})}>HTML exportieren</button></div></Card>)}</div></>
+}
+
+function AdminProfilesManager(){
+ const [profiles,setProfiles]=useState<any[]>([])
+ const [setupToken,setSetupToken]=useState('')
+ const [msg,setMsg]=useState('')
+ const [busy,setBusy]=useState(false)
+ const [form,setForm]=useState<any>({username:'',display_name:'',email:'',password:'',status:'active'})
+ const [edit,setEdit]=useState<any>(null)
+ async function load(){
+  setBusy(true); setMsg('')
+  try{const r=await adminProfilesClient.list(setupToken);setProfiles(r.profiles||[]);setMsg(r.auth_via==='setup_token'?'Adminprofile per Setup-Key geladen.':'Adminprofile geladen.')}catch(e:any){setMsg(e.message||'Adminprofile konnten nicht geladen werden.')}finally{setBusy(false)}
+ }
+ useEffect(()=>{load()},[])
+ async function create(){
+  setMsg('')
+  if(!form.username||!form.email||!form.password){setMsg('Bitte Benutzername, E-Mail und Passwort ausfüllen.');return}
+  if(String(form.password).length<10||!/[^A-Za-z0-9]/.test(String(form.password))){setMsg('Passwort muss mindestens 10 Zeichen und ein Sonderzeichen enthalten.');return}
+  setBusy(true)
+  try{
+   const r=await adminProfilesClient.create({...form,setup_token:setupToken})
+   setProfiles([r.profile,...profiles.filter(p=>p.id!==r.profile.id)])
+   setForm({username:'',display_name:'',email:'',password:'',status:'active'})
+   setMsg('Live-Adminprofil wurde in Supabase Auth angelegt und für den Login freigeschaltet.')
+  }catch(e:any){setMsg(e.message||'Adminprofil konnte nicht erstellt werden.')}finally{setBusy(false)}
+ }
+ async function saveEdit(){
+  if(!edit?.id)return
+  setBusy(true); setMsg('')
+  try{
+   const r=await adminProfilesClient.update(edit.id,{...edit,setup_token:setupToken})
+   setProfiles(profiles.map(p=>p.id===edit.id?r.profile:p))
+   setEdit(null)
+   setMsg('Adminprofil aktualisiert.')
+  }catch(e:any){setMsg(e.message||'Adminprofil konnte nicht aktualisiert werden.')}finally{setBusy(false)}
+ }
+ async function setStatus(p:any,status:string){
+  setBusy(true); setMsg('')
+  try{
+   const r=await adminProfilesClient.setStatus(p.id,status,setupToken)
+   setProfiles(profiles.map(x=>x.id===p.id?r.profile:x))
+   setMsg(status==='blocked'?'Adminprofil wurde gesperrt.':'Adminprofil wurde aktiviert.')
+  }catch(e:any){setMsg(e.message||'Status konnte nicht geändert werden.')}finally{setBusy(false)}
+ }
+ return <>
+  <Head title="Admin Profile" sub="Echte Live-Adminzugänge für den Supabase-Login anlegen und verwalten." action={<button className="btn" onClick={load}>{busy?'Lädt...':'Neu laden'}</button>}/>
+  <Card title="Sicherheit & Autorisierung">
+   <ToolTipHint title="Live-Login, keine lokalen Demo-Profile">Diese Profile werden über das Backend in Supabase Auth erstellt. Passwörter werden nicht im Frontend gespeichert, sondern nur zum Erstellen oder Aktualisieren des Auth-Users übergeben. V42.23 verhindert das Sperren des letzten aktiven Admins und protokolliert Änderungen im Activity Log.</ToolTipHint>
+   <input className="input" value={setupToken} onChange={e=>setSetupToken(e.target.value)} placeholder="Optionaler Setup-Key aus Railway ENV ADMIN_PROFILE_SETUP_TOKEN" type="password"/>
+   <div className="sub">Wenn du bereits als Live-Admin angemeldet bist, reicht deine Session. Für den ersten Admin oder Demo-Adminmodus kannst du den Setup-Key verwenden.</div>
+  </Card>
+  <Card title="Neues Adminprofil anlegen">
+   <div className="grid2">
+    <input className="input" value={form.username} onChange={e=>setForm({...form,username:e.target.value})} placeholder="Benutzername, z. B. DominiqueMM"/>
+    <input className="input" value={form.display_name} onChange={e=>setForm({...form,display_name:e.target.value})} placeholder="Anzeigename, z. B. Dominique"/>
+    <input className="input" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="E-Mail für Live-Login" type="email"/>
+    <input className="input" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} placeholder="Startpasswort mind. 10 Zeichen + Sonderzeichen" type="password"/>
+    <select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">active</option><option value="pending">pending</option><option value="blocked">blocked</option></select>
+   </div>
+   <div className="toolbarActions"><button className="btn" onClick={create} disabled={busy}>{busy?'Speichert...':'Live-Admin erstellen'}</button></div>
+  </Card>
+  <Card title="Vorhandene Live-Adminprofile"><ToolTipHint title="Sicherheitsregel">Der letzte aktive Admin kann nicht gesperrt werden. Nutze Status pending für vorbereitete Zugänge und blocked nur für gesperrte Accounts.</ToolTipHint>
+   {profiles.length===0&&<EmptyState icon="🔐" title="Noch keine Adminprofile geladen">Lade die Profile mit einer aktiven Admin-Session oder mit dem Setup-Key. Der erste Admin kann über den Setup-Key erstellt werden.</EmptyState>}
+   {profiles.map((p:any)=><div className="item" key={p.id}>
+    <div><b>{p.username||p.display_name||p.email}</b><div className="sub">{p.email} · {p.role} · {p.status}</div><div className="sub">ID: {p.id}</div></div>
+    <div className="toolbarActions"><Badge type={p.status==='active'?'green':p.status==='blocked'?'red':'yellow'}>{p.status}</Badge><button className="btn secondary" onClick={()=>setEdit({...p,password:''})}>Bearbeiten</button><button className="btn secondary" onClick={()=>setStatus(p,p.status==='blocked'?'active':'blocked')}>{p.status==='blocked'?'Aktivieren':'Sperren'}</button></div>
+   </div>)}
+  </Card>
+  {edit&&<Card title="Adminprofil bearbeiten" action={<button className="btn secondary" onClick={()=>setEdit(null)}>Schließen</button>}>
+   <div className="grid2">
+    <input className="input" value={edit.username||''} onChange={e=>setEdit({...edit,username:e.target.value})} placeholder="Benutzername"/>
+    <input className="input" value={edit.display_name||''} onChange={e=>setEdit({...edit,display_name:e.target.value})} placeholder="Anzeigename"/>
+    <input className="input" value={edit.email||''} onChange={e=>setEdit({...edit,email:e.target.value})} placeholder="E-Mail" type="email"/>
+    <input className="input" value={edit.password||''} onChange={e=>setEdit({...edit,password:e.target.value})} placeholder="Neues Passwort optional" type="password"/>
+    <select className="input" value={edit.status||'active'} onChange={e=>setEdit({...edit,status:e.target.value})}><option value="active">active</option><option value="pending">pending</option><option value="blocked">blocked</option></select>
+   </div>
+   <div className="toolbarActions"><button className="btn" onClick={saveEdit}>Speichern</button></div>
+  </Card>}
+  {msg&&<Card title="Status"><p className="sub">{msg}</p></Card>}
+ </>
+}
+
 export default function App(){
  const store=applyDemoSandboxStorePatch(useStore())
  const [role,setRole]=useState<Role>('guest')
@@ -714,11 +822,11 @@ export default function App(){
  const [activeAdmin,setActiveAdmin]=useState('DominiqueMM')
  const [mobileNavOpen,setMobileNavOpen]=useState(false)
  const [liveAuthChecked,setLiveAuthChecked]=useState(false)
- useEffect(()=>{(async()=>{try{const profile=await getCurrentUserProfile(); if(profile){markLiveMode();setRole(profile.role==='admin'?'admin':'customer'); if(profile.customer_id)setCid(profile.customer_id); setView('dashboard')}}finally{setLiveAuthChecked(true)}})()},[])
+ useEffect(()=>{if(typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('demo')){setLiveAuthChecked(true);return}(async()=>{try{const profile=await getCurrentUserProfile(); if(profile){markLiveMode();setRole(profile.role==='admin'?'admin':'customer'); if(profile.customer_id)setCid(profile.customer_id); setView('dashboard')}}finally{setLiveAuthChecked(true)}})()},[])
  const [adminAvatars,setAdminAvatars]=useState<any>({DominiqueMM:'',JanneMM:''})
- useEffect(()=>{const p=new URLSearchParams(window.location.search);const c=p.get('customer');if(c){setRole('customer');setCid(c);setView('dashboard')}},[])
+ useEffect(()=>{const p=new URLSearchParams(window.location.search);const demo=p.get('demo');const c=p.get('customer');if(demo==='admin'){markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM');setView('dashboard');return}if(c){if(demo==='customer')markDemoMode();setRole('customer');setCid(c);setView('dashboard')}},[])
  const admin=[
-   'dashboard','main_landing','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr','demo_customers',
+   'dashboard','admin_profiles','main_landing','demo_environment','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr',
    'public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty',
    'reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','heatmap','kpi',
    'customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events',
@@ -769,7 +877,7 @@ export default function App(){
  const disabledRoutes=new Set(accessRows.filter((x:any)=>x.enabled===false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean))
  const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route))
  const labels:any={
-   dashboard:'Dashboard',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Demo Kunden',integrations:'Integrationen',packages:'Pakete & Billing',
+   dashboard:'Dashboard',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Demo Kunden',demo_environment:'Demo Umgebung',integrations:'Integrationen',packages:'Pakete & Billing',
    public_landing:'Öffentliche /l/[slug] Seite',
    loyalty:'Loyalty Programm',
    loyalty_rewards:'Rewards',
@@ -796,7 +904,8 @@ export default function App(){
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
-   {label:'Übersicht',hint:'Start, Landingpage, Revenue & Demo',tools:['dashboard','main_landing','revenue_forecasting','revenue_share','demo_customers']},
+   {label:'Übersicht',hint:'Start, Landingpage, Revenue & interne Demo',tools:['dashboard','main_landing','demo_environment','revenue_forecasting','revenue_share']},
+   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins und Zugriff',tools:['admin_profiles','health_center']},
    {label:'CRM & Betrieb',hint:'Kunden, Onboarding, Termine, Tickets',tools:['crm','onboarding','finance','tickets','booking','pipeline','media','timeline_events','health_scores']},
    {label:'QR & Loyalty',hint:'QR-Code, Endkundenseite, Punkte, Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
    {label:'Reviews',hint:'Feedback, KI-Auswertung, Vorlagen',tools:['reviews']},
@@ -823,9 +932,11 @@ export default function App(){
  const nav=role==='admin'?admin:customer
  const mobileBottomKeys=(role==='admin'?['dashboard','lead_scraper','acquisition_campaigns','crm','health_center']:['dashboard','seo','reviews','reports','finance']).filter((k:string)=>visibleNavKeys.includes(k))
  return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div><div className="demoModeBadge">DEMO MODE</div>{role==='admin'&&view!=='demo_customers'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div><button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Demo zurücksetzen</button><button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions"><NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/>
+ <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
  {view==='dashboard'&&<Dashboard store={store} cid={cid} role={role} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>}
  {view==='main_landing'&&role==='admin'&&<MainLandingPageEditor store={store}/>}
+ {view==='admin_profiles'&&role==='admin'&&<AdminProfilesManager/>}
  {view==='crm'&&role==='admin'&&<CRM store={store} cid={cid} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>}
  {view==='finance'&&<Finance store={store} cid={cid} role={role} activeAdmin={activeAdmin}/>}
  {view==='tickets'&&<Tickets store={store} cid={cid} role={role} activeAdmin={activeAdmin}/>}
@@ -836,7 +947,7 @@ export default function App(){
  
  {view==='media'&&<MediaCenter store={store} cid={cid} setCid={setCid} role={role} activeAdmin={activeAdmin}/>}
  {view==='qr'&&<QRCodes store={store} cid={cid} setCid={role==='admin'?setCid:undefined} role={role}/>}
- {view==='demo_customers'&&role==='admin'&&<DemoCustomers store={store}/>}
+ {view==='demo_environment'&&role==='admin'&&<DemoEnvironment store={store} setView={setView}/>}
  {/* V30.1: Demo tool modules visible in Admin and Customer UI */}
  {['public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','smart_automation','marketing_automation','ai_assistant','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events'].includes(view)&&<V40ErrorBoundary moduleName={view}><V30ToolModule view={view} store={store} cid={cid} role={role} setCid={setCid}/></V40ErrorBoundary>}
  {view==='integrations'&&<Integrations store={store} cid={cid} role={role}/>}
@@ -869,6 +980,27 @@ export default function App(){
  {view==='approvals'&&<ApprovalCenter store={store} cid={cid} role={role}/>} 
  <MobileAppBottomNav role={role} view={view} keys={mobileBottomKeys} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  </main></div>
+}
+
+
+function MobileContextStrip({store,cid,role,view,labels,setView,openMenu}:any){
+ const customer=cobj(store.data,cid)
+ const pkg=cpkg(store.data,cid)
+ const isDemo=typeof window!=='undefined'&&((localStorage.getItem('mmos_mode')==='demo')||new URLSearchParams(window.location.search).has('demo'))
+ const quicks=role==='admin'
+  ?[{key:'dashboard',label:'Cockpit'},{key:'crm',label:'CRM'},{key:'lead_scraper',label:'Leads'},{key:'acquisition_campaigns',label:'Akquise'},{key:'health_center',label:'Health'}]
+  :[{key:'dashboard',label:'Start'},{key:'seo',label:'SEO'},{key:'reviews',label:'Reviews'},{key:'reports',label:'Reports'},{key:'finance',label:'Rechnungen'}]
+ return <div className="mobileContextStrip" aria-label="Mobiler Arbeitskontext">
+  <div className="mobileContextCard">
+   <span>{role==='admin'?'Aktiver Arbeitskontext':'Dein Kundenportal'}</span>
+   <strong>{role==='admin'?`${customer?.name||'Global'} · ${labels[view]||view}`:`${customer?.name||'Kunde'} · ${pkg}`}</strong>
+   <small>{isDemo?'Demo-/Fallback-Daten':'Live-Daten'} · Tippe unten auf „Mehr“ für alle Tools.</small>
+  </div>
+  <div className="mobileQuickRail">
+   {quicks.map((q:any)=><button key={q.key} type="button" className={view===q.key?'active':''} onClick={()=>setView(q.key)}>{q.label}</button>)}
+   <button type="button" onClick={openMenu}>Alle Tools</button>
+  </div>
+ </div>
 }
 
 function MobileAppBottomNav({role,view,keys,labels,setView,openMenu}:any){
@@ -1207,12 +1339,14 @@ function HealthCenterV42({store}:any){
  const [ready,setReady]=useState<any>(null)
  const [schema,setSchema]=useState<any>(null)
  const [bt,setBt]=useState<any>(null)
+ const [integrations,setIntegrations]=useState<any>(null)
  const [msg,setMsg]=useState('')
  async function run(){
   setMsg('Prüfe System...')
   try{setReady(await systemReady())}catch(e:any){setReady({ok:false,error:e.message})}
   try{setSchema(await systemSchema())}catch(e:any){setSchema({ok:false,error:e.message})}
   try{setBt(await businessToolsClient.health())}catch(e:any){setBt({ok:false,error:e.message})}
+  try{setIntegrations(await integrationStatus())}catch(e:any){setIntegrations({ok:false,error:e.message})}
   setMsg('Prüfung abgeschlossen')
  }
  useEffect(()=>{run()},[])
@@ -1222,7 +1356,11 @@ function HealthCenterV42({store}:any){
   {version:'V42.17',file:'SQL_V42_17_BUSINESS_TOOLS.sql',tables:['knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores']},
   {version:'V42.18',file:'SQL_V42_18_AKQUISE_KAMPAGNEN_CENTER.sql',tables:['acquisition_campaigns']},
   {version:'V42.19',file:'SQL_V42_19_STABILITY_DATA_INTEGRITY.sql',tables:['activity_logs','api_usage_cache','data_integrity_checks']},
-  {version:'V42.20',file:'SQL_V42_20_PROFESSIONAL_CX_OUTPUT.sql',tables:['onboarding_checklists','monthly_reports','approval_requests','output_documents']}
+  {version:'V42.20',file:'SQL_V42_20_PROFESSIONAL_CX_OUTPUT.sql',tables:['onboarding_checklists','monthly_reports','approval_requests','output_documents']},
+  {version:'V42.21.3',file:'SQL_V42_21_3_CUSTOMER_LOGIN_APPROVAL.sql',tables:['customer_registrations','customer_invites','customer_users','user_profiles']},
+  {version:'V42.21.4',file:'SQL_V42_21_4_LIVE_ADMIN_PROFILES.sql',tables:['user_profiles']},
+  {version:'V42.21.5',file:'SQL_V42_21_5_INTERNAL_DEMO_ACCESS.sql',tables:['landing_page_settings']},
+  {version:'V42.23',file:'SQL_V42_23_STABILITY_PRODUCTION_READINESS.sql',tables:['activity_logs','api_usage_cache','data_integrity_checks','customer_invites','user_profiles']}
  ]
  const missing=Array.isArray(schema?.missing)?schema.missing:[]
  const migrationRows=migrations.map(m=>({...m,missing:m.tables.filter(t=>missing.includes(t)),local:m.tables.every(t=>Array.isArray(store.data[t]))}))
@@ -1234,7 +1372,9 @@ function HealthCenterV42({store}:any){
  <Card title="Migrationen & SQL-Status">{migrationRows.map((m:any)=><div className="item" key={m.version}><div><b>{m.version} · {m.file}</b><div className="sub">Tabellen: {m.tables.join(', ')}</div>{m.missing.length>0&&<div className="sub">Fehlend laut Backend: {m.missing.join(', ')}</div>}</div><Badge type={m.missing.length?'yellow':'green'}>{m.missing.length?'prüfen':'OK'}</Badge></div>)}</Card>
  <Card title="Live/Lokal Datenzählung">{localTables.map(t=><div className="item" key={t}><b>{t}</b><span>{safeList(store.data[t]).length} Einträge</span><Badge type={Array.isArray(store.data[t])?'green':'yellow'}>{Array.isArray(store.data[t])?'verfügbar':'nicht geladen'}</Badge></div>)}</Card>
  <Card title="Aktivitätslog">{activity.length===0&&<div className="sub">Noch keine kritischen Aktionen protokolliert.</div>}{activity.map((a:any)=><div className="item" key={a.id}><div><b>{a.title||a.type}</b><div className="sub">{a.ref_table||a.type} · {new Date(a.created_at).toLocaleString('de-DE')}</div></div><Badge type={a.severity==='warning'?'yellow':'green'}>{a.type||'log'}</Badge></div>)}</Card>
- <Card title="Schema Rohdaten"><pre className="codeBox">{JSON.stringify(schema,null,2)}</pre></Card></>
+ 
+<Card title="Integrationen & ENV-Status">{integrations?['google_oauth','google_places','gotenberg','mail'].map((k:string)=>{const row=integrations[k]||{};return <div className="item" key={k}><div><b>{k}</b><div className="sub">{row.purpose||'Integration'}</div>{Array.isArray(row.missing_env)&&row.missing_env.length>0&&<div className="sub">Fehlt: {row.missing_env.join(', ')}</div>}</div><Badge type={row.connected?'green':'yellow'}>{row.connected?'bereit':'prüfen'}</Badge></div>}):<div className="sub">Noch nicht geprüft.</div>}</Card>
+<Card title="Schema Rohdaten"><pre className="codeBox">{JSON.stringify(schema,null,2)}</pre></Card></>
 }
 
 function V42BackendStatus(){
@@ -1669,7 +1809,67 @@ function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
 }
 
 
-function CRM({store,cid,activeAdmin,adminAvatars}:any){return <><Head title="CRM Kundenakte" sub={cname(store.data,cid)} action={<LiveModeBadge/>}/><CustomerInfo store={store} cid={cid}/><PackageControl store={store} cid={cid} activeAdmin={activeAdmin}/><QuickCRM store={store} cid={cid}/><div className="grid2"><CRMInvoices store={store} cid={cid}/><CRMNotes store={store} cid={cid} activeAdmin={activeAdmin}/></div><div className="grid2"><Card title="Verträge"><FileList store={store} cid={cid} type="contracts"/></Card><Card title="Media"><FileList store={store} cid={cid}/></Card></div></>}
+function CRM({store,cid,activeAdmin,adminAvatars}:any){return <><Head title="CRM Kundenakte" sub={cname(store.data,cid)} action={<LiveModeBadge/>}/><CustomerAccessPanel store={store} cid={cid} activeAdmin={activeAdmin}/><CustomerInfo store={store} cid={cid}/><PackageControl store={store} cid={cid} activeAdmin={activeAdmin}/><QuickCRM store={store} cid={cid}/><div className="grid2"><CRMInvoices store={store} cid={cid}/><CRMNotes store={store} cid={cid} activeAdmin={activeAdmin}/></div><div className="grid2"><Card title="Verträge"><FileList store={store} cid={cid} type="contracts"/></Card><Card title="Media"><FileList store={store} cid={cid}/></Card></div></>}
+
+
+function CustomerAccessPanel({store,cid,activeAdmin}:any){
+ const customer=cobj(store.data,cid)||{}
+ const [email,setEmail]=useState(customer.email||'')
+ const [contact,setContact]=useState(customer.contact_person||'')
+ const [pkg,setPkg]=useState(cpkg(store.data,cid)||customer.package_name||'Starter')
+ const [inviteUrl,setInviteUrl]=useState('')
+ const [msg,setMsg]=useState('')
+ const registrations=(store.data.customer_registrations||[]).filter((r:any)=>r.customer_id===cid)
+ const invites=(store.data.customer_invites||[]).filter((i:any)=>i.customer_id===cid).sort((a:any,b:any)=>String(b.created_at).localeCompare(String(a.created_at)))
+ const users=(store.data.customer_users||[]).filter((u:any)=>u.customer_id===cid)
+ useEffect(()=>{setEmail(customer.email||'');setContact(customer.contact_person||'');setPkg(cpkg(store.data,cid)||customer.package_name||'Starter');setInviteUrl('');setMsg('')},[cid])
+ async function createInvite(){
+  setMsg('')
+  if(!email){setMsg('Bitte E-Mail-Adresse für den Login hinterlegen.');return}
+  try{
+   const r=await customerPortalClient.createInvite({customer_id:cid,email,contact_person:contact,package_name:pkg,created_by:activeAdmin,origin:window.location.origin})
+   setInviteUrl(r.invite_url)
+   await store.load?.()
+   setMsg('Einladungslink erzeugt. Du kannst ihn kopieren oder per E-Mail senden.')
+  }catch(e:any){
+   const token=uid()
+   const localUrl=`${window.location.origin}/auth?invite=${token}`
+   const invite={id:uid(),customer_id:cid,email,contact_person:contact,package_name:pkg,status:'open_local',token,invite_url:localUrl,created_by:activeAdmin,expires_at:new Date(Date.now()+14*86400000).toISOString(),metadata:{local_only:true}}
+   await store.create('customer_invites',invite)
+   setInviteUrl(localUrl)
+   setMsg(`Backend/Supabase konnte die Einladung nicht speichern: ${e.message}. Link nur als lokaler Entwurf erzeugt.`)
+  }
+ }
+ async function copyLink(url:string){await navigator.clipboard?.writeText(url);setMsg('Einladungslink kopiert.')}
+ function mailto(url:string){
+  const subject=encodeURIComponent('Dein Zugang zum Mecklenburg Marketing Kundenportal')
+  const body=encodeURIComponent(`Hallo ${contact||''},\n\nhier ist dein persönlicher Einladungslink zum Kundenportal von Mecklenburg Marketing:\n${url}\n\nBitte öffne den Link und setze dein Passwort.\n\nViele Grüße\nMecklenburg Marketing`)
+  window.location.href=`mailto:${email}?subject=${subject}&body=${body}`
+ }
+ async function approve(reg:any){
+  try{
+   await customerPortalClient.approve(reg.id,{reviewed_by:activeAdmin})
+   await store.update('customer_registrations',reg.id,{status:'approved',reviewed_by:activeAdmin,reviewed_at:new Date().toISOString()})
+   await store.update('customers',cid,{status:'active',package_name:reg.requested_package||pkg,requested_package:reg.requested_package||pkg})
+   setMsg('Kunde freigeschaltet. Der Login ist aktiv, sobald Supabase Auth bestätigt ist.')
+  }catch(e:any){
+   await store.update('customer_registrations',reg.id,{status:'approved_local',reviewed_by:activeAdmin,reviewed_at:new Date().toISOString()})
+   await store.update('customers',cid,{status:'active',package_name:reg.requested_package||pkg,requested_package:reg.requested_package||pkg})
+   setMsg(`Freischaltung lokal markiert. Backend-Meldung: ${e.message}`)
+  }
+ }
+ async function blockUser(u:any){await store.update('customer_users',u.id,{status:u.status==='blocked'?'active':'blocked'});setMsg(u.status==='blocked'?'Zugang wieder aktiviert.':'Zugang gesperrt.')}
+ async function revokeInvite(i:any){
+  try{await customerPortalClient.revokeInvite(i.id,{revoked_by:activeAdmin}); await store.load?.(); setMsg('Einladung widerrufen.')}
+  catch(e:any){await store.update('customer_invites',i.id,{status:'revoked_local',revoked_by:activeAdmin,revoked_at:new Date().toISOString()}); setMsg(`Einladung lokal widerrufen. Backend: ${e.message}`)}
+ }
+ async function resendInvite(i:any){
+  try{const r=await customerPortalClient.resendInvite(i.id,{created_by:activeAdmin,origin:window.location.origin}); await store.load?.(); setInviteUrl(r.invite_url||i.invite_url); setMsg('Einladung wurde erneuert. Neuer Link ist aktiv.')}
+  catch(e:any){setMsg(`Erneutes Senden nicht möglich: ${e.message}`)}
+ }
+ return <Card title="Login & Zugänge" action={<Badge type={customer.status==='active'?'green':customer.status==='pending'?'yellow':'purple'}>{customer.status||'active'}</Badge>}>
+  <div className="grid2"><div><b>Kundenlogin einladen</b><p className="sub">CRM-Kunde und Login-Nutzer bleiben getrennt: Diese Einladung verbindet eine E-Mail mit dieser Kundenakte.</p><input className="input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="E-Mail für Kundenlogin"/><input className="input" value={contact} onChange={e=>setContact(e.target.value)} placeholder="Ansprechpartner"/><select className="input" value={pkg} onChange={e=>setPkg(e.target.value)}><option>Starter</option><option>Growth</option><option>Premium</option></select><div className="toolbarActions"><button className="btn" onClick={createInvite}>Einladungslink erzeugen</button>{inviteUrl&&<button className="btn secondary" onClick={()=>copyLink(inviteUrl)}>Link kopieren</button>}{inviteUrl&&<button className="btn secondary" onClick={()=>mailto(inviteUrl)}>Per E-Mail öffnen</button>}</div>{inviteUrl&&<input className="input" readOnly value={inviteUrl}/>}</div><div><b>Aktive / angefragte Zugänge</b>{users.length===0&&registrations.length===0&&invites.length===0&&<EmptyState icon="🔐" title="Noch kein Portalzugang">Erzeuge eine Einladung oder warte auf eine Kundenregistrierung. Selbstregistrierungen erscheinen hier zur Freischaltung.</EmptyState>}{users.map((u:any)=><div className="item" key={u.id||u.auth_user_id}><div><b>{u.display_name||u.email}</b><div className="sub">{u.email} · {u.role||'owner'} · {u.status||'active'}</div></div><button className="btn secondary" onClick={()=>blockUser(u)}>{u.status==='blocked'?'Entsperren':'Sperren'}</button></div>)}{registrations.map((r:any)=><div className="item" key={r.id}><div><b>{r.company_name}</b><div className="sub">Registrierung · {r.email} · {r.requested_package} · {r.status}</div></div><div className="toolbarActions">{String(r.status).startsWith('pending')&&<button className="btn" onClick={()=>approve(r)}>Freischalten</button>}<Badge type={String(r.status).includes('approved')?'green':'yellow'}>{r.status}</Badge></div></div>)}{invites.map((i:any)=><div className="item" key={i.id}><div><b>{i.email}</b><div className="sub">Einladung · {i.package_name} · {i.status} · gültig bis {i.expires_at?new Date(i.expires_at).toLocaleDateString('de-DE'):'-'}</div></div><div className="toolbarActions"><button className="btn secondary" onClick={()=>copyLink(i.invite_url)}>Kopieren</button>{String(i.status).startsWith('open')&&<button className="btn secondary" onClick={()=>resendInvite(i)}>Erneut senden</button>}{String(i.status).startsWith('open')&&<button className="btn secondary" onClick={()=>revokeInvite(i)}>Widerrufen</button>}<Badge type={i.status==='accepted'?'green':i.status==='open'?'purple':String(i.status).includes('revoked')?'red':'yellow'}>{i.status}</Badge></div></div>)}</div></div>{msg&&<div className="sub">{msg}</div>}</Card>
+}
 
 function CustomerInfo({store,cid}:any){
  const c=cobj(store.data,cid)
@@ -1779,7 +1979,8 @@ function MediaCenter({store,cid,setCid,role,activeAdmin}:any){
  const target=role==='admin'?selectedCid:cid
  return <><Head title="Media Center" sub="Dateien landen je nach Typ im passenden CRM-Bereich."/><div className="grid2"><Card title="Ziel auswählen">{role==='admin'&&<Search items={allCustomers(store.data)} value={target} onChange={(id:string)=>{setSelectedCid(id);setCid?.(id)}} placeholder="Kunde für Upload suchen"/>}<select className="input" value={type} onChange={e=>setType(e.target.value as FileType)}><option value="invoices">Rechnung</option><option value="contracts">Vertrag</option><option value="media">Bilder / Medien</option><option value="documents">Dokument</option><option value="reports">Report</option></select></Card><StorageUploader store={store} cid={target} fileType={type} title="Datei hochladen" activeAdmin={activeAdmin}/></div><Card title={`Gespeicherte Dateien für ${cname(store.data,target)}`}><FileList store={store} cid={target}/></Card></>
 }
-function DemoCustomers({store}:any){function open(c:any){window.open(`${window.location.origin}${window.location.pathname}?customer=${c.id}`,'_blank')}return <><Head title="Demo Kunden" sub="Öffnet direkt die Kundenumgebung."/><Card title="Demo Kunden">{store.data.demo_customers.map((c:any)=><div className="item" key={c.id}><div><b>{c.name}</b><div className="sub">{c.package_name}</div></div><button className="btn" onClick={()=>open(c)}>Kundenumgebung öffnen</button></div>)}</Card></>}
+function DemoEnvironment({store,setView}:any){function openAdmin(){window.open(`${window.location.origin}${window.location.pathname}?demo=admin`,'_blank','noopener,noreferrer')}function openCustomer(c:any){window.open(`${window.location.origin}${window.location.pathname}?demo=customer&customer=${c.id}`,'_blank','noopener,noreferrer')}return <><Head title="Demo Umgebung" sub="Interner Demo-Zugang für Admins. Damit kann der öffentliche Demo-Button auf der Landingpage ausgeblendet werden." action={<button className="btn" onClick={openAdmin}>Admin-Demo öffnen</button>}/><div className="grid2"><Card title="Admin-Demo"><p className="sub">Öffnet die vollständige Admin-Demo in einem neuen Tab mit Demo-/Fallback-Daten. Nur im Adminbereich sichtbar.</p><div className="toolbarActions"><button className="btn" onClick={openAdmin}>Admin-Demo öffnen</button><button className="btn secondary" onClick={()=>{clearDemoSandbox();location.reload()}}>Demo zurücksetzen</button></div></Card><Card title="Öffentlicher Demo-Button"><p className="sub">Den Demo-Button auf der Landingpage blendest du unter „Haupt-Landingpage“ mit der Checkbox „Öffentlichen Demo-Button anzeigen“ ein oder aus.</p><button className="btn secondary" onClick={()=>setView('main_landing')}>Reiter Haupt-Landingpage öffnen</button></Card></div><Card title="Demo-Kundenumgebungen">{(store.data.demo_customers||[]).map((c:any)=><div className="item" key={c.id}><div><b>{c.name}</b><div className="sub">{c.package_name} · öffnet Kundenportal-Demo im neuen Tab</div></div><button className="btn" onClick={()=>openCustomer(c)}>Kunden-Demo öffnen</button></div>)}</Card></>}
+function DemoCustomers({store}:any){return <DemoEnvironment store={store} setView={()=>{}}/>}
 function Integrations({store,cid,role,setCid}:any){
  const [target,setTarget]=useState(cid)
  useEffect(()=>setTarget(cid),[cid])
@@ -1832,7 +2033,7 @@ function CustomerRoles({store,cid}:any){return <CustomerToolPage title="Rechte &
 function CustomerKPI({store,cid,role,setCid}:any){return <><Head title="KPI Analytics" sub={`${cname(store.data,cid)} · Leads, Conversion, Tickets und Umsatz`}/>{role==='admin'&&<CentralCustomerSelector store={store} cid={cid} setCid={setCid} title="KPI Analytics · Kunde"/>}<Card title="KPI Analytics"><div className="grid4"><Metric label="Leads" value={(store.data.prospect_leads||[]).filter((l:any)=>l.customer_id===cid).length||37}/><Metric label="Conversion" value="12%"/><Metric label="Tickets offen" value={(store.data.tickets||[]).filter((t:any)=>t.customer_id===cid&&t.status!=='Geschlossen').length}/><Metric label="Umsatz" value={eur((store.data.invoices||[]).filter((i:any)=>i.customer_id===cid&&i.status==='Bezahlt').reduce((s:number,i:any)=>s+Number(i.amount||0),0))}/></div><div className="chartLine">{Array.from({length:16},(_,i)=><span key={i} style={{height:`${20+(i*11)%70}px`}} />)}</div></Card></>}
 function CustomerHeatmap({store,cid,role,setCid}:any){return <><Head title="SEO Heatmap" sub={`${cname(store.data,cid)} · lokale Sichtbarkeit`}/>{role==='admin'&&<CentralCustomerSelector store={store} cid={cid} setCid={setCid} title="SEO Heatmap · Kunde"/>}<Card title="SEO Heatmap"><div className="mapMock"><b>Lokale SEO Heatmap</b><span>Live-Karte wird nach Google Business/Maps API Sync befüllt.</span></div><div className="sub">Die Heatmap ist mit dem SEO Dashboard und den gespeicherten Integrationen verknüpft.</div></Card></>}
 function CustomerSuccess(){return <CustomerToolPage title="Client Success Score"><div className="successCircle">84</div><div className="sub">Score aus Tickets, SEO, Rechnungen, Aktivität und Review-Funnel.</div></CustomerToolPage>}
-function CustomerAdvancedReports(){return <CustomerToolPage title="Advanced Reports"><div className="item"><b>Monatsreport</b><button className="btn secondary" onClick={()=>alert('Bitte Reports im Kundenbereich öffnen.')}>PDF vorbereiten</button></div><div className="item"><b>SEO Report</b><button className="btn secondary">Report ansehen</button></div></CustomerToolPage>}
+function CustomerAdvancedReports(){return <CustomerToolPage title="Advanced Reports"><div className="item"><b>Monatsreport</b><button className="btn secondary" onClick={()=>appToast('Bitte Reports im Kundenbereich öffnen.')}>PDF vorbereiten</button></div><div className="item"><b>SEO Report</b><button className="btn secondary">Report ansehen</button></div></CustomerToolPage>}
 
 function GuidedOnboardingCenter({store,cid,role,setCid,setView}:any){
  const [target,setTarget]=useState(cid)
@@ -1864,34 +2065,6 @@ function reportBody(store:any,cid:string,report:any={}){
  const competitors=(store.data.competitor_benchmarks||[]).filter((c:any)=>c.customer_id===cid)
  return `<div class="metric"><div><b>${seo.organic_traffic||seo.clicks||1450}</b><br/>Klicks/Traffic</div><div><b>${reviews.length}</b><br/>Bewertungen</div><div><b>${campaigns.length}</b><br/>QR-Kampagnen</div><div><b>${invoices.filter((i:any)=>i.status!=='Bezahlt').length}</b><br/>offene Rechnungen</div></div><div class="section"><h2>Executive Summary</h2><p>${report.summary||'Die Online-Präsenz wurde geprüft. Fokus bleibt auf Google Business Optimierung, Reviews, lokalen SEO-Signalen und klaren nächsten Aufgaben.'}</p></div><div class="section"><h2>Empfehlungen für den nächsten Monat</h2><ol><li>Google Business Fotos und Leistungen aktualisieren.</li><li>Bewertungs-Booster aktiv nutzen.</li><li>Wettbewerberentwicklung prüfen und lokale Keywords nachschärfen.</li></ol></div><div class="section"><h2>Wettbewerber</h2><p>${competitors.length?competitors.map((c:any)=>`${c.name}: ${c.rating} Sterne / ${c.reviews} Reviews`).join('<br/>'):'Noch keine Wettbewerber hinterlegt.'}</p></div>`
 }
-
-function BrandOutputEngine({store,cid}:any){
- const d=store.data||{}
- const [target,setTarget]=useState(cid)
- useEffect(()=>{setTarget(cid)},[cid])
- const customerName=cname(d,target)
- const customerFilter=(x:any)=>!target||x.customer_id===target
- const mini=(d.mini_audits||[]).filter(customerFilter)
- const offers=(d.generated_offers||[]).filter(customerFilter)
- const contracts=(d.generated_contracts||[]).filter(customerFilter)
- const dunning=(d.dunning_cases||[]).filter(customerFilter)
- const reports=(d.monthly_reports||[]).filter(customerFilter)
- function miniBody(m:any){return `<div class="section"><h2>Google Business Mini-Audit</h2><p><b>Score:</b> ${m.score||m.audit_score||'–'} / 100</p><p>${m.summary||m.description||'Kurzbewertung zur lokalen Sichtbarkeit und Google-Business-Optimierung.'}</p></div><div class="section"><h2>Wichtigste Empfehlungen</h2><ol>${safeList(m.recommendations).map((r:any)=>`<li>${r}</li>`).join('')||'<li>Google Business Profil vervollständigen</li><li>Bewertungen aktiv aufbauen</li><li>Fotos und Leistungen regelmäßig aktualisieren</li>'}</ol></div>`}
- function offerBody(o:any){return `<div class="section"><h2>Angebot</h2><p><b>Paket:</b> ${o.package_name||o.package||'Growth'}</p><p><b>Monatlich:</b> ${eur(o.monthly_price||o.price||0)}</p><p><b>Einrichtung:</b> ${eur(o.setup_fee||0)}</p></div><div class="section"><h2>Leistungsumfang</h2><ul>${safeList(o.services||o.items).map((r:any)=>`<li>${typeof r==='string'?r:(r.title||r.name||'Leistung')}</li>`).join('')||'<li>Google Business Optimierung</li><li>lokale SEO-Grundlage</li><li>Bewertungs- und QR-Kampagnen</li>'}</ul></div>`}
- function contractBody(c:any){return `<div class="section"><h2>Vertragsentwurf</h2><p><b>Paket:</b> ${c.package_name||c.package||'Growth'}</p><p><b>Laufzeit:</b> ${c.term||c.duration||'monatlich kündbar nach Vereinbarung'}</p><p>${c.scope||c.description||'Leistungsumfang gemäß gebuchtem Paket inklusive Google Business Optimierung und laufender Betreuung.'}</p></div><div class="section"><h2>Hinweis</h2><p>Dieser Entwurf ersetzt keine finale rechtliche Prüfung.</p></div>`}
- function dunningBody(m:any){return `<div class="section"><h2>Mahnung</h2><p><b>Status:</b> ${m.status||'Offen'}</p><p><b>Betrag:</b> ${eur(m.amount||m.open_amount||0)}</p><p>${m.message||'Bitte begleichen Sie die offene Rechnung innerhalb der angegebenen Frist.'}</p></div>`}
- const sections=[
-  {key:'mini',title:'Mini-Audits',rows:mini,subtitle:(r:any)=>`${cname(d,r.customer_id)} · Score ${r.score||r.audit_score||'–'}`,body:miniBody},
-  {key:'offer',title:'Angebote',rows:offers,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Entwurf'} · ${eur(r.monthly_price||r.price||0)}`,body:offerBody},
-  {key:'contract',title:'Verträge',rows:contracts,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Entwurf'}`,body:contractBody},
-  {key:'dunning',title:'Mahnungen',rows:dunning,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Offen'}`,body:dunningBody},
-  {key:'report',title:'Monatsreports',rows:reports,subtitle:(r:any)=>`${cname(d,r.customer_id)} · ${r.status||'Entwurf'}`,body:(r:any)=>reportBody(store,r.customer_id,r)}
- ]
- function openItem(section:any,row:any){openPdfDocument(row.title||row.name||section.title,section.subtitle(row),section.body(row),{status:row.status||'Entwurf'})}
- function exportItem(section:any,row:any){downloadHtmlDocument(`${row.title||row.name||section.title}.html`,row.title||row.name||section.title,section.subtitle(row),section.body(row),{status:row.status||'Entwurf'})}
- return <><Head title="Output Engine" sub={`Gebrandete PDFs und HTML-Dokumente für ${customerName}: Mini-Audits, Angebote, Verträge, Mahnungen und Reports.`} action={<LiveModeBadge/>}/><CentralCustomerSelector store={store} cid={target} setCid={setTarget} title="Output Engine · Kunde" sub="Dokumente werden nach Kunde gefiltert und im Mecklenburg-Marketing-Design ausgegeben."/><div className="grid2"><Card title="Dokumentenquellen"><div className="item"><b>PDF über Gotenberg</b><span>Wenn Railway/Gotenberg erreichbar ist, wird ein echtes PDF geöffnet. Sonst HTML/Print-Fallback.</span></div><div className="item"><b>Einheitliches Branding</b><span>Logo, Kopfbereich, Status-Badge und Footer werden zentral erzeugt.</span></div></Card><Card title="Schnellaktionen"><div className="item"><b>{sections.reduce((n,s)=>n+s.rows.length,0)} Dokumente</b><span>für {customerName} verfügbar.</span></div><button className="btn secondary" onClick={()=>window.print()}>Aktuelle Übersicht drucken</button></Card></div>{sections.map(section=><Card key={section.key} title={section.title}>{section.rows.length===0&&<EmptyState icon="📄" title={`Keine ${section.title} vorhanden`}>Sobald ein passendes Dokument erzeugt wurde, erscheint es hier für PDF, HTML-Export und Kundenversand.</EmptyState>}{section.rows.map((row:any)=><div className="item" key={row.id}><div><b>{row.title||row.name||section.title}</b><div className="sub">{section.subtitle(row)}</div></div><div className="toolbarActions"><Badge>{row.status||'Entwurf'}</Badge><button className="btn secondary" onClick={()=>openItem(section,row)}>PDF öffnen</button><button className="btn secondary" onClick={()=>exportItem(section,row)}>HTML exportieren</button></div></div>)}</Card>)}</>
-}
-
 function MonthlyReportCenter({store,cid,role}:any){
  const [target,setTarget]=useState(cid)
  const rows=(store.data.monthly_reports||[]).filter((r:any)=>role==='admin'?r.customer_id===target:r.customer_id===cid)

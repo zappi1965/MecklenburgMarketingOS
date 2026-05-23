@@ -7,6 +7,44 @@ const safeToken = (prefix = 'tok') => `${prefix}_${crypto.randomBytes(12).toStri
 const clean = (v) => v === undefined || v === null ? null : String(v).trim() || null
 const num = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback
 
+const PUBLIC_PASSWORD_MIN_LENGTH = 8
+const publicAuthAttempts = new Map()
+function publicAuthKey(slug, email, ip) { return `${slug}:${String(email || '').toLowerCase()}:${ip || ''}` }
+function checkPublicAuthRateLimit(slug, email, ip) {
+  const key = publicAuthKey(slug, email, ip)
+  const now = Date.now()
+  const windowMs = Number(process.env.PUBLIC_AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000)
+  const max = Number(process.env.PUBLIC_AUTH_RATE_LIMIT_MAX || 8)
+  const entry = publicAuthAttempts.get(key) || { count: 0, reset_at: now + windowMs }
+  if (entry.reset_at < now) { entry.count = 0; entry.reset_at = now + windowMs }
+  entry.count += 1
+  publicAuthAttempts.set(key, entry)
+  return { ok: entry.count <= max, count: entry.count, reset_at: entry.reset_at, max }
+}
+function resetPublicAuthRateLimit(slug, email, ip) { publicAuthAttempts.delete(publicAuthKey(slug, email, ip)) }
+function publicPasswordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.scryptSync(String(password || ''), salt, 64).toString('hex')
+  return `scrypt:${salt}:${hash}`
+}
+function publicPasswordVerify(password, stored) {
+  const parts = String(stored || '').split(':')
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false
+  const expected = publicPasswordHash(password, parts[1])
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(stored))
+  } catch (_) {
+    return false
+  }
+}
+function getPublicPasswordHash(member) {
+  return member?.password_hash || member?.metadata?.public_auth?.password_hash || member?.metadata?.password_hash || null
+}
+function withPublicPassword(member, password, now = new Date().toISOString()) {
+  const metadata = { ...(member?.metadata || {}) }
+  metadata.public_auth = { ...(metadata.public_auth || {}), password_hash: publicPasswordHash(password), password_set_at: now, auth_method: 'email_password' }
+  return metadata
+}
+
 function slugify(input, fallback = 'kunde') {
   const s = String(input || fallback)
     .toLowerCase()
@@ -669,11 +707,18 @@ function v33FunctionalRoutes(supabase) {
       const slug = String(req.params.slug || '').trim()
       const body = req.body || {}
       const email = clean(body.email)?.toLowerCase() || null
-      const phone = clean(body.phone)
-      const displayName = clean(body.display_name || body.displayName || body.name) || 'QR Lead'
+      const password = clean(body.password)
+      const authOnly = body.auth_only === true || body.authOnly === true
+      const displayName = clean(body.display_name || body.displayName || body.name) || (email ? email.split('@')[0] : 'QR Lead')
       const deviceId = clean(body.device_id)
       const now = new Date().toISOString()
       const warnings = []
+
+      if (!email || !password || String(password).length < PUBLIC_PASSWORD_MIN_LENGTH) {
+        return res.status(400).json({ ok: false, error: 'E-Mail und Passwort mit mindestens 8 Zeichen sind erforderlich.' })
+      }
+      const rate = checkPublicAuthRateLimit(slug, email, req.ip || req.get('x-forwarded-for'))
+      if (!rate.ok) return res.status(429).json({ ok:false, error:'Zu viele Login-Versuche. Bitte versuche es später erneut.', retry_after_ms: Math.max(0, rate.reset_at - Date.now()) })
 
       let program = null
       const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
@@ -685,31 +730,37 @@ function v33FunctionalRoutes(supabase) {
 
       const customerId = program.customer_id
       const settings = await v37GetOrCreateLoyaltySettings(customerId)
-      let points = num(program.points_per_scan, 10)
+      let points = authOnly ? 0 : num(program.points_per_scan, 10)
       let member = null
       // v37_loyalty_limits_applied
 
-      let q = supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).limit(1)
-      if (body.member_token) q = q.eq('member_token', body.member_token)
-      else if (email) q = q.eq('email', email)
-      else if (phone) q = q.eq('phone', phone)
-      else if (deviceId) q = q.eq('device_id', deviceId)
+      let q = supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).limit(1)
       const existing = await q.maybeSingle()
       if (!existing.error) member = existing.data || null
 
       if (member) {
-        const sinceDay = new Date(Date.now() - 24*60*60*1000).toISOString()
-        const sinceWeek = new Date(Date.now() - 7*24*60*60*1000).toISOString()
-        const dayTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceDay)
-        const weekTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceWeek)
-        if (Number(settings.daily_scan_limit || 0) > 0 && (dayTx.data || []).length >= Number(settings.daily_scan_limit)) {
-          return res.status(429).json({ ok: false, error: 'Tageslimit erreicht', limit: settings.daily_scan_limit })
+        const storedPasswordHash = getPublicPasswordHash(member)
+        if (storedPasswordHash && !publicPasswordVerify(password, storedPasswordHash)) {
+          return res.status(401).json({ ok: false, error: 'E-Mail oder Passwort ist falsch.' })
         }
-        if (Number(settings.weekly_scan_limit || 0) > 0 && (weekTx.data || []).length >= Number(settings.weekly_scan_limit)) {
-          return res.status(429).json({ ok: false, error: 'Wochenlimit erreicht', limit: settings.weekly_scan_limit })
+        if (!storedPasswordHash) {
+          member.metadata = withPublicPassword(member, password, now)
+          await supabase.from('loyalty_customers').update({ metadata: member.metadata }).eq('id', member.id)
         }
-        const currentTierMultiplier = Number(member.metadata?.v37_level_multiplier || 1)
-        points = Math.round(points * currentTierMultiplier)
+        if (!authOnly) {
+          const sinceDay = new Date(Date.now() - 24*60*60*1000).toISOString()
+          const sinceWeek = new Date(Date.now() - 7*24*60*60*1000).toISOString()
+          const dayTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceDay)
+          const weekTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceWeek)
+          if (Number(settings.daily_scan_limit || 0) > 0 && (dayTx.data || []).length >= Number(settings.daily_scan_limit)) {
+            return res.status(429).json({ ok: false, error: 'Tageslimit erreicht', limit: settings.daily_scan_limit })
+          }
+          if (Number(settings.weekly_scan_limit || 0) > 0 && (weekTx.data || []).length >= Number(settings.weekly_scan_limit)) {
+            return res.status(429).json({ ok: false, error: 'Wochenlimit erreicht', limit: settings.weekly_scan_limit })
+          }
+          const currentTierMultiplier = Number(member.metadata?.v37_level_multiplier || 1)
+          points = Math.round(points * currentTierMultiplier)
+        }
       }
 
       if (!member) {
@@ -717,30 +768,47 @@ function v33FunctionalRoutes(supabase) {
           customer_id: customerId,
           loyalty_program_id: program.id,
           email,
-          phone,
+          phone: null,
           display_name: displayName,
           member_token: body.member_token || safeToken('loy'),
           device_id: deviceId,
           points_balance: points,
           total_points: points,
-          total_scans: 1,
+          total_scans: authOnly ? 0 : 1,
           last_seen_at: now,
           last_activity_at: now,
-          metadata: { source: 'public_qr', slug }
+          metadata: { source: 'public_qr', slug, public_auth: { password_hash: publicPasswordHash(password), password_set_at: now, auth_method: 'email_password' } }
         }).select('*').single()
 
         if (created.error) throw created.error
         member = created.data
       } else {
-        const updated = await supabase.from('loyalty_customers').update({
+        const patch = authOnly ? {
+          last_seen_at: now,
+          last_activity_at: now
+        } : {
           points_balance: num(member.points_balance, 0) + points,
           total_points: num(member.total_points, 0) + points,
           total_scans: num(member.total_scans, 0) + 1,
           last_seen_at: now,
           last_activity_at: now
-        }).eq('id', member.id).select('*').single()
+        }
+        const updated = await supabase.from('loyalty_customers').update(patch).eq('id', member.id).select('*').single()
 
         if (!updated.error) member = updated.data || member
+      }
+
+      resetPublicAuthRateLimit(slug, email, req.ip || req.get('x-forwarded-for'))
+      if (authOnly) {
+        return res.json({
+          ok: true,
+          authenticated: true,
+          program,
+          member,
+          points_added: 0,
+          points_balance: num(member.points_balance, 0),
+          warnings
+        })
       }
 
       try {
@@ -752,7 +820,7 @@ function v33FunctionalRoutes(supabase) {
           action: 'qr_scan',
           points,
           description: `QR Scan über /l/${slug}`,
-          metadata: { public: true, slug, email, phone, display_name: displayName }
+          metadata: { public: true, slug, email, display_name: displayName, auth_method: 'email_password' }
         })
       } catch (_) {}
 
@@ -780,7 +848,7 @@ function v33FunctionalRoutes(supabase) {
         slug,
         name: displayName,
         email,
-        phone,
+        phone: null,
         source: 'qr_loyalty',
         status: 'new',
         points_added: points,
@@ -822,7 +890,7 @@ function v33FunctionalRoutes(supabase) {
         })
       } catch (_) {}
 
-      await audit('v34_qr_loyalty_lead_created', { customer_id: customerId, slug, email, phone })
+      await audit('v34_qr_loyalty_lead_created', { customer_id: customerId, slug, email, auth_method: 'email_password' })
       const v35Snapshot = await engine.recalculateCustomer(customerId) // v35_after_qr_lead_recalculate
 
       res.json({
@@ -837,6 +905,27 @@ function v33FunctionalRoutes(supabase) {
         engine_snapshot: v35Snapshot,
         loyalty_level: levelResult
       })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/loyalty/:slug/password-reset-request', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const email = clean(req.body?.email)?.toLowerCase()
+      if (!email) return res.status(400).json({ ok:false, error:'E-Mail fehlt.' })
+      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = found.error ? null : found.data
+      if (!program) return res.status(404).json({ ok:false, error:`Kein Loyalty-Programm für /l/${slug} gefunden.` })
+      const member = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
+      const resetToken = safeToken('reset')
+      if (!member.error && member.data) {
+        await supabase.from('loyalty_customers').update({
+          metadata: { ...(member.data.metadata || {}), public_auth_reset: { token: resetToken, requested_at: new Date().toISOString(), used: false } },
+          updated_at: new Date().toISOString()
+        }).eq('id', member.data.id)
+      }
+      try { await supabase.from('activity_logs').insert({ type:'public_loyalty_password_reset_requested', title:'Slug Passwort-Reset angefragt', message:`Passwort-Reset für ${email} über /l/${slug}`, customer_id: program.customer_id, severity:'info', metadata:{ slug }, created_at:new Date().toISOString() }) } catch (_) {}
+      res.json({ ok:true, message:'Wenn ein Bonuskonto existiert, wurde ein Reset-Vorgang vorbereitet.', reset_prepared: Boolean(member.data) })
     } catch (e) { next(e) }
   })
 

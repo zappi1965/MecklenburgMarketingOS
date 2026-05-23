@@ -16,7 +16,7 @@ export function validateRequired(payload: Record<string, any>, fields: string[])
 export function requireOrAlert(payload: Record<string, any>, fields: string[]) {
   const result = validateRequired(payload, fields)
   if (!result.valid) {
-    alert(`Bitte ausfüllen: ${Object.keys(result.errors).join(', ')}`)
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mmos:toast', { detail: `Bitte ausfüllen: ${Object.keys(result.errors).join(', ')}` }))
     return false
   }
   return true

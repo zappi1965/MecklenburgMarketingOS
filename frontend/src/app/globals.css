@@ -2807,3 +2807,228 @@ button,.btn,.nav,input,select,textarea{touch-action:manipulation}
   .appMainShell{padding-left:10px!important;padding-right:10px!important;padding-bottom:calc(92px + env(safe-area-inset-bottom))!important}
   .mobileAppTitle strong{max-width:36vw}.mobileAppBottomNav{left:8px;right:8px;border-radius:22px}.mobileAppBottomNav button small{font-size:9.5px}.card,.metric{border-radius:20px!important}
 }
+
+/* V42.21.2 legal pages + public legal footer */
+.siteLegalFooter{border-top:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.72);backdrop-filter:blur(14px);padding:18px 22px;color:var(--muted);font-size:12px;text-align:center;position:relative;z-index:5}.siteLegalFooter.compact{border:1px solid rgba(148,163,184,.18);border-radius:16px;margin-top:14px;background:rgba(15,23,42,.62)}.siteLegalLinks{display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;margin-bottom:6px}.siteLegalLinks a,.publicLegalLinks a{color:#dbeafe;text-decoration:none;border:1px solid rgba(148,163,184,.22);border-radius:999px;padding:7px 10px;background:rgba(15,23,42,.55);font-weight:800}.siteLegalLinks a:hover,.publicLegalLinks a:hover{border-color:rgba(168,85,247,.45);color:#fff}.legalPage{min-height:100vh;padding:34px 16px;background:radial-gradient(circle at 10% 0%,rgba(124,58,237,.22),transparent 32%),#070b12}.legalCard{max-width:920px;margin:0 auto;border:1px solid rgba(148,163,184,.18);border-radius:24px;background:linear-gradient(180deg,#121b2a,#0d1420);box-shadow:var(--shadow);padding:30px}.legalCard h1{font-size:clamp(30px,5vw,52px);margin:10px 0 18px}.legalCard h2{font-size:18px;margin-top:24px}.legalCard p{color:#cbd5e1;line-height:1.7}.legalCard a{color:#93c5fd}.legalBack{display:inline-flex;margin-bottom:12px;text-decoration:none;font-weight:900}.legalNotice,.legalSaved{border:1px solid rgba(245,158,11,.28);border-radius:14px;background:rgba(245,158,11,.10);padding:12px;color:#fde68a!important}.legalToggle{display:flex;gap:10px;align-items:center;margin:16px 0 18px;color:#e5e7eb;font-weight:850}.legalToggle input{width:18px;height:18px}.publicLegalLinks{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}.publicAuthNotice{border:1px solid rgba(56,189,248,.22);background:rgba(56,189,248,.10);border-radius:14px;padding:10px 12px;color:#bfdbfe;font-size:12px;line-height:1.5;margin:10px 0}.publicPasswordHint{font-size:11px;color:var(--muted);margin-top:-4px;margin-bottom:8px}@media(max-width:700px){.siteLegalFooter{padding-bottom:calc(90px + env(safe-area-inset-bottom))}.legalCard{padding:20px;border-radius:18px}.siteLegalLinks a,.publicLegalLinks a{width:auto;padding:8px 11px}.publicLegalLinks{justify-content:flex-start}}
+
+/* === V42.22 MOBILE UX POLISH === */
+.mobileContextStrip{display:none}
+
+@media (max-width:860px){
+  :root{
+    --mobile-topbar-height:66px;
+    --mobile-bottomnav-height:72px;
+  }
+
+  .appMainShell{
+    padding-top:calc(76px + env(safe-area-inset-top))!important;
+  }
+
+  .mobileContextStrip{
+    display:grid;
+    gap:10px;
+    margin:0 0 12px;
+  }
+
+  .mobileContextCard{
+    border:1px solid rgba(148,163,184,.18);
+    border-radius:22px;
+    padding:14px 15px;
+    background:
+      radial-gradient(circle at 0% 0%,rgba(124,58,237,.24),transparent 44%),
+      linear-gradient(180deg,rgba(18,27,42,.96),rgba(11,17,27,.92));
+    box-shadow:0 18px 48px rgba(0,0,0,.24);
+  }
+  .mobileContextCard span,
+  .mobileContextCard small{display:block;color:var(--muted);font-size:11px;line-height:1.45}
+  .mobileContextCard strong{display:block;color:#fff;font-size:15px;margin:3px 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .mobileQuickRail{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:0 2px 5px;
+    scroll-snap-type:x proximity;
+  }
+  .mobileQuickRail::-webkit-scrollbar{display:none}
+  .mobileQuickRail button{
+    flex:0 0 auto;
+    min-height:40px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.18);
+    background:rgba(15,23,42,.78);
+    color:#dbeafe;
+    padding:0 14px;
+    font-weight:900;
+    scroll-snap-align:start;
+  }
+  .mobileQuickRail button.active{
+    color:#fff;
+    border-color:rgba(168,85,247,.40);
+    background:linear-gradient(135deg,rgba(124,58,237,.92),rgba(91,33,182,.72));
+    box-shadow:0 12px 28px rgba(124,58,237,.22);
+  }
+
+  .head{
+    display:block!important;
+    border:1px solid rgba(148,163,184,.14);
+    border-radius:22px;
+    padding:15px;
+    background:rgba(15,23,42,.46);
+    box-shadow:0 14px 42px rgba(0,0,0,.20);
+  }
+  .head > div:first-child{min-width:0}
+  .head > div:first-child h1{font-size:clamp(24px,7vw,34px)!important;line-height:1.02;margin-bottom:6px}
+  .head > *:not(:first-child){margin-top:12px;width:100%}
+  .head .btn,
+  .head button{width:100%;min-height:46px}
+
+  .grid4{
+    display:flex!important;
+    gap:10px!important;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:0 2px 8px;
+    scroll-snap-type:x mandatory;
+  }
+  .grid4::-webkit-scrollbar{display:none}
+  .grid4 > .metric,
+  .grid4 > .card,
+  .grid4 > .package{
+    flex:0 0 min(76vw,190px);
+    scroll-snap-align:start;
+  }
+  .grid4 .metricValue{font-size:clamp(24px,8vw,36px)!important}
+
+  .grid2,.grid3{gap:10px!important;margin-bottom:10px!important}
+
+  .card + .card,
+  .metric + .metric{margin-top:10px}
+
+  .item{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:10px!important;
+  }
+  .item > div,
+  .item > span,
+  .item > b{min-width:0;text-align:left!important}
+  .item b{overflow-wrap:anywhere}
+  .item .sub{margin-top:3px}
+  .item img,.item svg{max-width:100%}
+
+  .toolbarActions,
+  .row.toolbarActions{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px!important;
+    width:100%;
+  }
+  .toolbarActions > *,
+  .toolbarActions .btn,
+  .toolbarActions button{width:100%;min-width:0;margin-left:0!important}
+  .toolbarActions > *:only-child{grid-column:1 / -1}
+
+  .row:not(.between):not(.toolbarActions){
+    align-items:stretch;
+  }
+  .row:not(.between):not(.toolbarActions) > .input,
+  .row:not(.between):not(.toolbarActions) > .btn,
+  .row:not(.between):not(.toolbarActions) > button,
+  .row:not(.between):not(.toolbarActions) > select{
+    flex:1 1 100%;
+  }
+
+  .input,select,textarea,.btn,button{
+    min-height:48px;
+  }
+  textarea.input,.textarea{min-height:132px!important}
+
+  .notifPanel,.profilePanel{
+    position:fixed!important;
+    left:12px!important;
+    right:12px!important;
+    top:auto!important;
+    bottom:calc(96px + env(safe-area-inset-bottom))!important;
+    width:auto!important;
+    max-height:62dvh;
+    overflow:auto;
+    border-radius:24px!important;
+  }
+
+  .floating,
+  .globalResults{
+    position:fixed!important;
+    left:12px!important;
+    right:12px!important;
+    top:calc(76px + env(safe-area-inset-top))!important;
+    width:auto!important;
+    max-height:58dvh!important;
+    overflow:auto;
+    border-radius:22px!important;
+    z-index:120!important;
+  }
+
+  .scrollBox,.fileScroll{
+    max-height:52dvh;
+    border-radius:18px;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .chart,.chartLine,.mapMock{
+    min-height:190px;
+    height:auto!important;
+  }
+  .mapMock{padding:18px;min-height:220px}
+
+  .phonePreview{
+    height:min(620px,72dvh)!important;
+    max-width:100%!important;
+  }
+
+  .mobileAppBottomNav{
+    min-height:72px;
+    padding:9px 8px calc(9px + env(safe-area-inset-bottom))!important;
+  }
+  .mobileAppBottomNav button{min-height:54px}
+
+  .siteLegalFooter{padding-bottom:calc(104px + env(safe-area-inset-bottom))!important}
+}
+
+@media (max-width:620px){
+  .toolbarActions,
+  .row.toolbarActions{
+    grid-template-columns:1fr!important;
+  }
+  .grid4 > .metric,
+  .grid4 > .card,
+  .grid4 > .package{
+    flex-basis:min(82vw,210px);
+  }
+  .card,.metric,.package{padding:15px!important}
+  .mobileQuickRail button{padding:0 13px;font-size:12px}
+  .mobileContextCard{padding:13px}
+}
+
+@media (max-width:430px){
+  .appMainShell{padding-left:9px!important;padding-right:9px!important}
+  .mobileContextCard{border-radius:20px}
+  .mobileContextCard strong{font-size:14px}
+  .mobileQuickRail{gap:7px}
+  .head{padding:13px;border-radius:20px}
+  .grid4 > .metric,
+  .grid4 > .card,
+  .grid4 > .package{flex-basis:84vw}
+}
+
+/* V42.23 Production Readiness polish */
+.publicLinkButton{background:transparent;border:0;color:var(--loyalty-primary,#1d4ed8);text-decoration:underline;font-weight:700;padding:8px 0;margin-top:-6px;cursor:pointer;text-align:left}
+@media(max-width:720px){
+  .toast{left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none;text-align:center}
+  .profilePanel,.notifPanel,.floating,.globalResults{max-height:calc(100vh - 140px - env(safe-area-inset-bottom));overflow:auto}
+  input,select,textarea{font-size:16px}
+  .toolbarActions{position:relative}
+  .card form .toolbarActions:last-child,.card .mobileStickyActions{position:sticky;bottom:calc(74px + env(safe-area-inset-bottom));z-index:10;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border:1px solid rgba(15,23,42,.08);border-radius:18px;padding:10px}
+}

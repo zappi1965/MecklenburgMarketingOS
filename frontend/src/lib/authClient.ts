@@ -19,6 +19,7 @@ export async function getCurrentUserProfile() {
     .select('*')
     .eq('id', session.user.id)
     .maybeSingle()
-  if (error) return null
+  if (error || !data) return null
+  if (data.role !== 'admin' && data.status && data.status !== 'active') return null
   return data
 }

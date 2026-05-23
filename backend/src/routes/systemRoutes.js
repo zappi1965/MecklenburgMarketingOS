@@ -31,7 +31,12 @@ const OPTIONAL_TABLES = [
   'onboarding_checklists',
   'monthly_reports',
   'approval_requests',
-  'output_documents'
+  'output_documents',
+  'customer_registrations',
+  'customer_invites',
+  'customer_users',
+  'user_profiles',
+  'schema_migrations_mmos'
 ]
 
 async function checkTable(supabaseAdmin, table) {
@@ -117,8 +122,25 @@ function systemRoutes(supabaseAdmin) {
         { version: 'V42.18', file: 'SQL_V42_18_AKQUISE_KAMPAGNEN_CENTER.sql', tables: ['acquisition_campaigns'] },
         { version: 'V42.19', file: 'SQL_V42_19_STABILITY_DATA_INTEGRITY.sql', tables: ['activity_logs','api_usage_cache','data_integrity_checks'] },
         { version: 'V42.20', file: 'SQL_V42_20_PROFESSIONAL_CX_OUTPUT.sql', tables: ['onboarding_checklists','monthly_reports','approval_requests','output_documents'] },
-        { version: 'V42.21', file: 'SQL_V42_21_PRODUCT_FIXES_CONSOLIDATED.sql', tables: ['landing_page_settings','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','api_usage_cache','data_integrity_checks','onboarding_checklists','approval_requests','output_documents','loyalty_rewards','loyalty_reward_rules','staff_codes','public_landing_pages'] }
+        { version: 'V42.21', file: 'SQL_V42_21_PRODUCT_FIXES_CONSOLIDATED.sql', tables: ['landing_page_settings','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','api_usage_cache','data_integrity_checks','onboarding_checklists','approval_requests','output_documents','loyalty_rewards','loyalty_reward_rules','staff_codes','public_landing_pages','customer_registrations','customer_invites','customer_users'] },
+        { version: 'V42.21.3', file: 'SQL_V42_21_3_CUSTOMER_LOGIN_APPROVAL.sql', tables: ['customer_registrations','customer_invites','customer_users','user_profiles'] },
+        { version: 'V42.21.4', file: 'SQL_V42_21_4_LIVE_ADMIN_PROFILES.sql', tables: ['user_profiles'] },
+        { version: 'V42.21.5', file: 'SQL_V42_21_5_INTERNAL_DEMO_ACCESS.sql', tables: ['landing_page_settings'] },
+        { version: 'V42.23', file: 'SQL_V42_23_STABILITY_PRODUCTION_READINESS.sql', tables: ['activity_logs','api_usage_cache','data_integrity_checks','customer_invites','user_profiles'] }
       ]
+    })
+  })
+
+
+  router.get('/integration-status', (_, res) => {
+    const googleOauthMissing = missingEnv(['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI'])
+    const googlePlacesMissing = missingEnv(['GOOGLE_PLACES_API_KEY'])
+    res.json({
+      ok: true,
+      google_oauth: { connected: googleOauthMissing.length === 0, missing_env: googleOauthMissing, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
+      google_places: { connected: googlePlacesMissing.length === 0, missing_env: googlePlacesMissing, purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
+      gotenberg: { connected: Boolean(process.env.GOTENBERG_URL), missing_env: process.env.GOTENBERG_URL ? [] : ['GOTENBERG_URL'], purpose: 'serverseitige PDF-Erzeugung' },
+      mail: { connected: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST), missing_env: (process.env.RESEND_API_KEY || process.env.SMTP_HOST) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
     })
   })
 

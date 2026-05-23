@@ -13,6 +13,10 @@ export async function systemSchema() {
   return apiRequest(`${API_BASE}/api/system/schema`)
 }
 
+export async function integrationStatus() {
+  return apiRequest(`${API_BASE}/api/system/integration-status`)
+}
+
 export async function googleHealth() {
   return apiRequest(`${API_BASE}/api/google/health`)
 }

@@ -151,6 +151,9 @@ export const v33FunctionalClient = {
   publicReview: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/review`, { method: 'POST', body: JSON.stringify(payload) }),
 
+  publicPasswordReset: (slug: string, payload: any) =>
+    request(`/public/loyalty/${slug}/password-reset-request`, { method: 'POST', body: JSON.stringify(payload) }),
+
   leads: (customerId: string) => request(`/leads/${customerId}`),
 
   provisionCustomer: (customerId: string, payload: any = {}) =>
