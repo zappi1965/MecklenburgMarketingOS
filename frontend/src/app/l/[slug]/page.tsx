@@ -34,6 +34,8 @@ export default function PublicLoyaltyPage() {
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
   const [loading, setLoading] = useState(false)
+  const [redeeming, setRedeeming] = useState<string | null>(null)
+  const [staffCodes, setStaffCodes] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!slug) return
@@ -86,6 +88,10 @@ export default function PublicLoyaltyPage() {
   const rewardPoints = (r: any) => Number(r.points_required ?? r.required_points ?? r.points ?? 0)
   const unlockedRewards = rewards.filter((r: any) => rewardPoints(r) <= points)
   const nextReward = rewards.find((r: any) => rewardPoints(r) > points)
+  const redemptions = Array.isArray(result?.redemptions) ? result.redemptions : []
+  const rewardAllowsMultiple = (r: any) => r?.allow_multiple_redemptions === true || r?.allow_multiple === true || r?.repeatable === true || String(r?.redemption_frequency || '').toLowerCase() === 'multiple'
+  const rewardStaffRequired = (r: any) => r?.staff_code_required !== false && r?.require_staff_code !== false
+  const alreadyRedeemed = (r: any) => redemptions.some((x: any) => String(x.reward_id || x.rewardId || '') === String(r.id || r.local_id))
 
   function friendlyHint(message: string) {
     const m = String(message || '')
@@ -140,6 +146,40 @@ export default function PublicLoyaltyPage() {
       setHint('Aus Sicherheitsgründen werden Punkte und Bewertungen erst nach erfolgreicher E-Mail/Passwort-Verifizierung gespeichert.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function redeemReward(reward: any) {
+    const rewardId = String(reward?.id || reward?.local_id || '')
+    if (!rewardId) return
+    setError('')
+    setHint('')
+    if (rewardStaffRequired(reward) && !staffCodes[rewardId]) {
+      setHint('Bitte lass den Mitarbeitercode oder die Mitarbeiter-PIN eintragen, um die Prämie einzulösen.')
+      return
+    }
+    setRedeeming(rewardId)
+    try {
+      const response: any = await v33FunctionalClient.publicRedeemReward(slug, rewardId, {
+        email,
+        password,
+        staff_code: staffCodes[rewardId]
+      })
+      setResult((current: any) => ({
+        ...(current || {}),
+        member: response.member,
+        points_balance: response.points_balance,
+        redemptions: response.redemptions || [...(current?.redemptions || []), response.redemption],
+        last_redemption: response.redemption
+      }))
+      setStatus((current: any) => current ? ({ ...current, rewards: current.rewards }) : current)
+      setHint(`${reward.title || reward.name || 'Prämie'} wurde eingelöst. ${response.points_spent || 0} Punkte wurden abgezogen.`)
+      setStaffCodes((current) => ({ ...current, [rewardId]: '' }))
+    } catch (e: any) {
+      const message = e?.message || 'Prämie konnte nicht eingelöst werden.'
+      setError(message)
+    } finally {
+      setRedeeming(null)
     }
   }
 
@@ -240,12 +280,35 @@ export default function PublicLoyaltyPage() {
               {unlockedRewards.length > 0 && (
                 <div className="publicRewards">
                   <b>Jetzt verfügbar</b>
-                  {unlockedRewards.map((r: any) => (
-                    <div key={r.id} className="publicRewardItem">
-                      <span>{r.title || r.name || 'Reward'}</span>
-                      <em>{rewardPoints(r)} Punkte</em>
-                    </div>
-                  ))}
+                  {unlockedRewards.map((r: any) => {
+                    const rewardId = String(r.id || r.local_id || '')
+                    const onceRedeemed = alreadyRedeemed(r) && !rewardAllowsMultiple(r)
+                    return (
+                      <div key={rewardId || r.title} className="publicRewardItem publicRewardRedeemItem">
+                        <div className="publicRewardText">
+                          <span>{r.title || r.name || 'Reward'}</span>
+                          <em>{rewardPoints(r)} Punkte · {rewardAllowsMultiple(r) ? 'mehrfach einlösbar' : 'einmalig einlösbar'}</em>
+                        </div>
+                        {onceRedeemed ? (
+                          <strong className="publicRedeemedBadge">Bereits eingelöst</strong>
+                        ) : (
+                          <div className="publicRedeemBox">
+                            {rewardStaffRequired(r) && (
+                              <input
+                                value={staffCodes[rewardId] || ''}
+                                onChange={(e) => setStaffCodes((current) => ({ ...current, [rewardId]: e.target.value }))}
+                                placeholder="Mitarbeitercode / PIN"
+                                autoComplete="off"
+                              />
+                            )}
+                            <button type="button" onClick={() => redeemReward(r)} disabled={redeeming === rewardId}>
+                              {redeeming === rewardId ? 'Löse ein...' : 'Prämie einlösen'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 

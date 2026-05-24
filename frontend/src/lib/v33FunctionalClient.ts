@@ -154,6 +154,9 @@ export const v33FunctionalClient = {
   publicPasswordReset: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/password-reset-request`, { method: 'POST', body: JSON.stringify(payload) }),
 
+  publicRedeemReward: (slug: string, rewardId: string, payload: any) =>
+    request(`/public/loyalty/${slug}/rewards/${rewardId}/redeem`, { method: 'POST', body: JSON.stringify(payload) }),
+
   leads: (customerId: string) => request(`/leads/${customerId}`),
 
   provisionCustomer: (customerId: string, payload: any = {}) =>

@@ -132,6 +132,112 @@ function v33FunctionalRoutes(supabase) {
     return null
   }
 
+
+  async function getQrCampaignForPublicProgram(program, slug) {
+    try {
+      if (program?.qr_campaign_id) {
+        const q = await supabase.from('qr_campaigns').select('*').eq('id', program.qr_campaign_id).maybeSingle()
+        if (!q.error && q.data) return q.data
+      }
+      if (slug) {
+        const q = await supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle()
+        if (!q.error && q.data) return q.data
+      }
+    } catch (_) {}
+    return null
+  }
+
+  function firstConfiguredNumber(sources, keys, fallback = 0) {
+    for (const source of sources || []) {
+      if (!source) continue
+      for (const key of keys) {
+        const value = key.split('.').reduce((acc, part) => acc && acc[part] !== undefined ? acc[part] : undefined, source)
+        if (value !== undefined && value !== null && value !== '') return num(value, fallback)
+      }
+    }
+    return fallback
+  }
+
+  function qrScanLimitSettings(qrCampaign, program) {
+    const sources = [qrCampaign, qrCampaign?.metadata, program, program?.metadata]
+    const maxScansPerMember = firstConfiguredNumber(sources, [
+      'max_scans_per_member',
+      'max_scans_per_user',
+      'scan_limit_per_member',
+      'scan_limit_per_user',
+      'max_redemptions_per_member',
+      'metadata.max_scans_per_member'
+    ], 0)
+    const cooldownMinutes = firstConfiguredNumber(sources, [
+      'scan_cooldown_minutes',
+      'cooldown_minutes',
+      'qr_cooldown_minutes',
+      'minutes_between_scans',
+      'metadata.scan_cooldown_minutes'
+    ], 0)
+    return {
+      max_scans_per_member: Math.max(0, Math.floor(maxScansPerMember)),
+      scan_cooldown_minutes: Math.max(0, Math.floor(cooldownMinutes))
+    }
+  }
+
+  async function checkQrScanRedemptionLimits({ customerId, program, qrCampaign, member, slug }) {
+    const settings = qrScanLimitSettings(qrCampaign, program)
+    if (!member?.id) return { ok: true, settings, previous_scans: 0 }
+    if (!settings.max_scans_per_member && !settings.scan_cooldown_minutes) return { ok: true, settings, previous_scans: 0 }
+
+    try {
+      let q = supabase.from('loyalty_transactions')
+        .select('id,created_at,qr_campaign_id,metadata')
+        .eq('loyalty_customer_id', member.id)
+        .eq('action', 'qr_scan')
+        .order('created_at', { ascending: false })
+        .limit(Math.max(settings.max_scans_per_member || 10, 10) + 5)
+
+      if (program?.qr_campaign_id) q = q.eq('qr_campaign_id', program.qr_campaign_id)
+      else if (customerId) q = q.eq('customer_id', customerId)
+
+      const existing = await q
+      if (existing.error) return { ok: true, settings, previous_scans: 0, warning: existing.error.message }
+      const rows = existing.data || []
+      const filtered = program?.qr_campaign_id
+        ? rows
+        : rows.filter((x) => !slug || x?.metadata?.slug === slug)
+
+      if (settings.max_scans_per_member > 0 && filtered.length >= settings.max_scans_per_member) {
+        return {
+          ok: false,
+          code: 'QR_SCAN_LIMIT_REACHED',
+          status: 429,
+          error: `Dieser QR-Code kann pro Bonuskonto maximal ${settings.max_scans_per_member}x eingelöst werden.`,
+          settings,
+          previous_scans: filtered.length
+        }
+      }
+
+      if (settings.scan_cooldown_minutes > 0 && filtered[0]?.created_at) {
+        const lastAt = new Date(filtered[0].created_at).getTime()
+        const nextAt = lastAt + settings.scan_cooldown_minutes * 60 * 1000
+        const remainingMs = nextAt - Date.now()
+        if (remainingMs > 0) {
+          return {
+            ok: false,
+            code: 'QR_SCAN_COOLDOWN_ACTIVE',
+            status: 429,
+            error: `Dieser QR-Code kann erst in ${Math.ceil(remainingMs / 60000)} Minuten erneut eingelöst werden.`,
+            retry_after_ms: remainingMs,
+            next_available_at: new Date(nextAt).toISOString(),
+            settings,
+            previous_scans: filtered.length
+          }
+        }
+      }
+      return { ok: true, settings, previous_scans: filtered.length }
+    } catch (e) {
+      return { ok: true, settings, previous_scans: 0, warning: e.message }
+    }
+  }
+
   async function v39CheckRewardLimits(customerId, rewardId, memberName = null) {
     const warnings = []
     const rewardQuery = await supabase.from('v33_functional_records')
@@ -186,6 +292,133 @@ function v33FunctionalRoutes(supabase) {
     return { ok: true, warnings, reward }
   }
 
+
+
+  function rewardRequiredPoints(reward) {
+    const r = reward || {}
+    return num(r.points_required ?? r.required_points ?? r.requiredPoints ?? r.points ?? r.required_points_value ?? 0, 0)
+  }
+
+  function rewardAllowsMultiple(reward) {
+    const r = reward || {}
+    if (r.allow_multiple_redemptions === true || r.allow_multiple === true || r.repeatable === true || r.multiple_redemptions === true) return true
+    if (String(r.redemption_frequency || '').toLowerCase() === 'multiple') return true
+    if (String(r.redemption_limit_mode || '').toLowerCase() === 'multiple') return true
+    return false
+  }
+
+  function rewardMaxPerMember(reward) {
+    const r = reward || {}
+    const configured = r.max_redemptions_per_member ?? r.max_per_member ?? r.max_per_customer ?? r.member_limit
+    if (configured === '' || configured === null || configured === undefined) return rewardAllowsMultiple(r) ? 0 : 1
+    return num(configured, rewardAllowsMultiple(r) ? 0 : 1)
+  }
+
+  function rewardNeedsStaffCode(reward) {
+    const r = reward || {}
+    // Public redemption is staff-protected by default. It may be disabled explicitly per reward.
+    if (r.staff_code_required === false || r.require_staff_code === false) return false
+    if (r.staff_confirmation_required === false && r.redemption_mode === 'manual') return false
+    return true
+  }
+
+  function normalizeReward(raw, source = 'unknown') {
+    if (!raw) return null
+    const payload = raw.payload && typeof raw.payload === 'object' ? raw.payload : {}
+    const reward = { ...raw, ...payload }
+    const id = reward.local_id || reward.reward_id || reward.id
+    return {
+      ...reward,
+      id,
+      source,
+      title: reward.title || reward.name || reward.label || 'Reward',
+      points_required: rewardRequiredPoints(reward),
+      required_points: rewardRequiredPoints(reward),
+      allow_multiple_redemptions: rewardAllowsMultiple(reward),
+      max_redemptions_per_member: rewardMaxPerMember(reward),
+      staff_code_required: rewardNeedsStaffCode(reward)
+    }
+  }
+
+  async function findPublicReward(customerId, rewardId, campaignId = null) {
+    const matches = []
+    try {
+      const byId = await supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('id', rewardId).maybeSingle()
+      if (!byId.error && byId.data) matches.push(normalizeReward(byId.data, 'loyalty_rewards'))
+    } catch (_) {}
+    try {
+      const records = await supabase.from('v33_functional_records')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('resource', 'loyalty_rewards')
+        .limit(200)
+      if (!records.error) {
+        for (const rec of (records.data || [])) {
+          const nr = normalizeReward(rec, 'v33_functional_records')
+          if (String(nr?.id || '') === String(rewardId) || String(rec.local_id || '') === String(rewardId) || String(rec.payload?.id || '') === String(rewardId)) matches.push(nr)
+        }
+      }
+    } catch (_) {}
+    const reward = matches.find(r => r && r.active !== false && (!r.qr_campaign_id || !campaignId || String(r.qr_campaign_id) === String(campaignId))) || matches.find(r => r && r.active !== false)
+    return reward || null
+  }
+
+  async function getPublicRewardRedemptions(customerId, loyaltyCustomerId, rewardId = null) {
+    const all = []
+    try {
+      let q = supabase.from('loyalty_reward_redemptions').select('*').eq('customer_id', customerId).eq('loyalty_customer_id', loyaltyCustomerId).order('created_at', { ascending: false }).limit(250)
+      if (rewardId) q = q.eq('reward_id', rewardId)
+      const table = await q
+      if (!table.error && Array.isArray(table.data)) all.push(...table.data.map(x => ({ ...x, source: 'loyalty_reward_redemptions' })))
+    } catch (_) {}
+    try {
+      let q = supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'reward_redemptions').limit(500)
+      const recs = await q
+      if (!recs.error) {
+        all.push(...(recs.data || [])
+          .filter(r => String(r.payload?.loyalty_customer_id || r.payload?.member_id || '') === String(loyaltyCustomerId))
+          .filter(r => !rewardId || String(r.payload?.reward_id || '') === String(rewardId))
+          .map(r => ({ id: r.id, ...(r.payload || {}), source: 'v33_functional_records', created_at: r.created_at })))
+      }
+    } catch (_) {}
+    return all
+  }
+
+  async function validatePublicStaffCode(customerId, code, campaignId = null) {
+    const wanted = clean(code)
+    if (!wanted) return { ok: false, error: 'Mitarbeitercode fehlt.' }
+    const candidates = []
+    try {
+      const table = await supabase.from('staff_codes').select('*').eq('customer_id', customerId).limit(250)
+      if (!table.error) candidates.push(...(table.data || []).map(x => ({ ...x, payload: x, source: 'staff_codes' })))
+    } catch (_) {}
+    try {
+      const records = await supabase.from('v33_functional_records').select('*').eq('resource', 'staff_codes').eq('customer_id', customerId).limit(250)
+      if (!records.error) candidates.push(...(records.data || []))
+    } catch (_) {}
+    const match = candidates.find(row => {
+      const p = row.payload || row
+      const values = [p.code, p.pin, p.staff_pin, p.staff_code, p.confirmation_code].filter(v => v !== undefined && v !== null).map(String)
+      const scoped = !p.qr_campaign_id || !campaignId || String(p.qr_campaign_id) === String(campaignId)
+      return p.active !== false && scoped && values.includes(String(wanted))
+    })
+    if (!match) return { ok: false, error: 'Mitarbeitercode ungültig.' }
+    const p = match.payload || match
+    try {
+      if (match.source === 'staff_codes') await supabase.from('staff_codes').update({ uses: num(p.uses, 0) + 1, last_used_at: new Date().toISOString() }).eq('id', match.id)
+      else await supabase.from('v33_functional_records').update({ payload: { ...p, uses: num(p.uses, 0) + 1, last_used_at: new Date().toISOString() }, updated_at: new Date().toISOString() }).eq('id', match.id)
+    } catch (_) {}
+    return { ok: true, staff_code: { id: match.id, label: p.label || p.name || 'Mitarbeitercode' } }
+  }
+
+  async function savePublicRewardRedemption(payload) {
+    try {
+      const { data, error } = await supabase.from('loyalty_reward_redemptions').insert(payload).select('*').single()
+      if (!error && data) return { data, source: 'loyalty_reward_redemptions' }
+    } catch (_) {}
+    const rec = await createRecord('reward_redemptions', payload)
+    return { data: { id: rec.id, ...(rec.payload || {}) }, source: 'v33_functional_records' }
+  }
 
   async function audit(action, metadata = {}) {
     try {
@@ -395,6 +628,8 @@ function v33FunctionalRoutes(supabase) {
     const slug = await uniqueSlug(slugBase)
     const targetUrl = `/l/${slug}`
     const pointsPerScan = num(payload.points_per_scan, 10)
+    const maxScansPerMember = Math.max(0, Math.floor(num(payload.max_scans_per_member ?? payload.maxScansPerMember ?? payload.scan_limit_per_member, 0)))
+    const scanCooldownMinutes = Math.max(0, Math.floor(num(payload.scan_cooldown_minutes ?? payload.scanCooldownMinutes ?? payload.cooldown_minutes, 0)))
 
     const { data: qrCampaign, error: qrError } = await supabase.from('qr_campaigns').insert({
       customer_id: customerId,
@@ -406,7 +641,9 @@ function v33FunctionalRoutes(supabase) {
       conversions: 0,
       active: true,
       status: 'Aktiv',
-      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan }
+      max_scans_per_member: maxScansPerMember,
+      scan_cooldown_minutes: scanCooldownMinutes,
+      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes }
     }).select('*').single()
 
     if (qrError) throw qrError
@@ -424,7 +661,7 @@ function v33FunctionalRoutes(supabase) {
         active: true,
         status: 'active',
         require_staff_code: true,
-        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan }
+        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes }
       }).select('*').single()
 
       if (programError) throw programError
@@ -683,7 +920,7 @@ function v33FunctionalRoutes(supabase) {
       const mergedRewards = [...tableRewards, ...recordRewards]
         .filter(r => r && r.active !== false)
         .filter(r => !r.qr_campaign_id || !campaignId || String(r.qr_campaign_id) === String(campaignId))
-        .map(r => ({ ...r, points_required: Number(r.points_required ?? r.required_points ?? r.points ?? 0), required_points: Number(r.required_points ?? r.points_required ?? r.points ?? 0) }))
+        .map(r => normalizeReward(r, r.payload ? 'v33_functional_records' : 'loyalty_rewards'))
         .sort((a, b) => Number(a.points_required || 0) - Number(b.points_required || 0))
         .slice(0, 12)
       res.json({
@@ -695,6 +932,7 @@ function v33FunctionalRoutes(supabase) {
         settings,
         rewards: mergedRewards,
         active_actions: activeActions,
+        scan_limits: qrScanLimitSettings(qrData, program),
         mode: qrData?.metadata?.purpose || qrData?.mode || program?.metadata?.purpose || 'loyalty',
         google_review_url: qrData?.google_review_url || qrData?.metadata?.google_review_url || null,
         active: program.active !== false && qrData?.active !== false
@@ -730,6 +968,7 @@ function v33FunctionalRoutes(supabase) {
 
       const customerId = program.customer_id
       const settings = await v37GetOrCreateLoyaltySettings(customerId)
+      const qrCampaign = await getQrCampaignForPublicProgram(program, slug)
       let points = authOnly ? 0 : num(program.points_per_scan, 10)
       let member = null
       // v37_loyalty_limits_applied
@@ -758,6 +997,11 @@ function v33FunctionalRoutes(supabase) {
           if (Number(settings.weekly_scan_limit || 0) > 0 && (weekTx.data || []).length >= Number(settings.weekly_scan_limit)) {
             return res.status(429).json({ ok: false, error: 'Wochenlimit erreicht', limit: settings.weekly_scan_limit })
           }
+          const qrLimit = await checkQrScanRedemptionLimits({ customerId, program, qrCampaign, member, slug })
+          if (!qrLimit.ok) {
+            return res.status(qrLimit.status || 429).json({ ok: false, error: qrLimit.error, code: qrLimit.code, retry_after_ms: qrLimit.retry_after_ms, next_available_at: qrLimit.next_available_at, scan_limits: qrLimit.settings, previous_scans: qrLimit.previous_scans })
+          }
+          if (qrLimit.warning) warnings.push({ code: 'QR_LIMIT_CHECK_WARNING', message: qrLimit.warning })
           const currentTierMultiplier = Number(member.metadata?.v37_level_multiplier || 1)
           points = Math.round(points * currentTierMultiplier)
         }
@@ -800,6 +1044,7 @@ function v33FunctionalRoutes(supabase) {
 
       resetPublicAuthRateLimit(slug, email, req.ip || req.get('x-forwarded-for'))
       if (authOnly) {
+        const redemptions = await getPublicRewardRedemptions(customerId, member.id).catch(() => [])
         return res.json({
           ok: true,
           authenticated: true,
@@ -807,7 +1052,9 @@ function v33FunctionalRoutes(supabase) {
           member,
           points_added: 0,
           points_balance: num(member.points_balance, 0),
-          warnings
+          redemptions,
+          warnings,
+          scan_limits: qrScanLimitSettings(qrCampaign, program)
         })
       }
 
@@ -820,7 +1067,7 @@ function v33FunctionalRoutes(supabase) {
           action: 'qr_scan',
           points,
           description: `QR Scan über /l/${slug}`,
-          metadata: { public: true, slug, email, display_name: displayName, auth_method: 'email_password' }
+          metadata: { public: true, slug, email, display_name: displayName, auth_method: 'email_password', scan_limits: qrScanLimitSettings(qrCampaign, program) }
         })
       } catch (_) {}
 
@@ -902,9 +1149,126 @@ function v33FunctionalRoutes(supabase) {
         lead: publicLead.data,
         pipeline_lead: pipelineLead,
         warnings,
+        scan_limits: qrScanLimitSettings(qrCampaign, program),
         engine_snapshot: v35Snapshot,
-        loyalty_level: levelResult
+        loyalty_level: levelResult,
+        redemptions: await getPublicRewardRedemptions(customerId, member.id).catch(() => [])
       })
+    } catch (e) { next(e) }
+  })
+
+
+  router.post('/public/loyalty/:slug/rewards/:reward_id/redeem', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const rewardId = String(req.params.reward_id || '').trim()
+      const body = req.body || {}
+      const email = clean(body.email)?.toLowerCase() || null
+      const password = clean(body.password)
+      const staffCode = clean(body.staff_code || body.staffCode || body.pin || body.staff_pin)
+      const now = new Date().toISOString()
+
+      if (!email || !password) return res.status(400).json({ ok: false, error: 'E-Mail und Passwort sind erforderlich.' })
+      const rate = checkPublicAuthRateLimit(`${slug}:redeem`, email, req.ip || req.get('x-forwarded-for'))
+      if (!rate.ok) return res.status(429).json({ ok:false, error:'Zu viele Einlöse-Versuche. Bitte versuche es später erneut.', retry_after_ms: Math.max(0, rate.reset_at - Date.now()) })
+
+      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = found.error ? null : found.data
+      if (!program) return res.status(404).json({ ok: false, error: `Kein Loyalty-Programm für /l/${slug} gefunden.` })
+      const customerId = program.customer_id
+      const campaignId = program.qr_campaign_id || null
+
+      const memberQuery = await supabase.from('loyalty_customers')
+        .select('*')
+        .eq('loyalty_program_id', program.id)
+        .eq('email', email)
+        .maybeSingle()
+      const member = memberQuery.error ? null : memberQuery.data
+      if (!member) return res.status(401).json({ ok: false, error: 'Bonus-Konto nicht gefunden. Bitte zuerst anmelden und Punkte sammeln.' })
+      const storedPasswordHash = getPublicPasswordHash(member)
+      if (storedPasswordHash && !publicPasswordVerify(password, storedPasswordHash)) return res.status(401).json({ ok: false, error: 'E-Mail oder Passwort ist falsch.' })
+      if (!storedPasswordHash) return res.status(401).json({ ok:false, error:'Bitte melde dich zuerst erneut an, um dein Bonuskonto mit Passwort zu schützen.' })
+
+      const reward = await findPublicReward(customerId, rewardId, campaignId)
+      if (!reward) return res.status(404).json({ ok: false, error: 'Reward nicht gefunden oder nicht aktiv.' })
+
+      const requiredPoints = rewardRequiredPoints(reward)
+      const balance = num(member.points_balance, 0)
+      if (balance < requiredPoints) return res.status(400).json({ ok: false, error: `Für diese Prämie fehlen noch ${Math.max(0, requiredPoints - balance)} Punkte.`, required_points: requiredPoints, points_balance: balance })
+
+      if (rewardNeedsStaffCode(reward)) {
+        const staff = await validatePublicStaffCode(customerId, staffCode, campaignId)
+        if (!staff.ok) return res.status(400).json({ ok: false, error: staff.error || 'Mitarbeitercode ungültig.' })
+      }
+
+      const existingRedemptions = await getPublicRewardRedemptions(customerId, member.id, reward.id)
+      const allowMultiple = rewardAllowsMultiple(reward)
+      const maxPerMember = rewardMaxPerMember(reward)
+      if (!allowMultiple && existingRedemptions.length > 0) {
+        return res.status(409).json({ ok: false, error: 'Diese Prämie wurde bereits eingelöst und ist nur einmal pro Bonuskonto verfügbar.', already_redeemed: true })
+      }
+      if (allowMultiple && maxPerMember > 0 && existingRedemptions.length >= maxPerMember) {
+        return res.status(409).json({ ok: false, error: `Diese Prämie kann maximal ${maxPerMember}x pro Bonuskonto eingelöst werden.`, already_redeemed: true })
+      }
+
+      const nextBalance = Math.max(0, balance - requiredPoints)
+      const updateMember = await supabase.from('loyalty_customers').update({
+        points_balance: nextBalance,
+        last_activity_at: now,
+        last_seen_at: now,
+        metadata: {
+          ...(member.metadata || {}),
+          last_reward_redemption: { reward_id: reward.id, title: reward.title, redeemed_at: now, points_spent: requiredPoints }
+        }
+      }).eq('id', member.id).select('*').single()
+      if (updateMember.error) throw updateMember.error
+
+      const redemptionPayload = {
+        customer_id: customerId,
+        loyalty_program_id: program.id,
+        loyalty_customer_id: member.id,
+        qr_campaign_id: campaignId,
+        reward_id: reward.id,
+        reward_title: reward.title,
+        points_spent: requiredPoints,
+        staff_code_used: Boolean(staffCode),
+        status: 'redeemed',
+        redeemed_at: now,
+        allow_multiple_redemptions: allowMultiple,
+        metadata: { slug, email, reward, auth_method: 'email_password' },
+        created_at: now,
+        updated_at: now
+      }
+      const redemption = await savePublicRewardRedemption(redemptionPayload)
+
+      try {
+        await supabase.from('loyalty_transactions').insert({
+          customer_id: customerId,
+          loyalty_program_id: program.id,
+          loyalty_customer_id: member.id,
+          qr_campaign_id: campaignId,
+          action: 'reward_redemption',
+          points: -requiredPoints,
+          description: `Reward eingelöst: ${reward.title}`,
+          metadata: { public: true, slug, reward_id: reward.id, staff_code_used: Boolean(staffCode) }
+        })
+      } catch (_) {}
+
+      try {
+        await supabase.from('activity_logs').insert({
+          type: 'public_reward_redeemed',
+          title: 'Prämie eingelöst',
+          message: `${email} hat ${reward.title} eingelöst.`,
+          customer_id: customerId,
+          severity: 'success',
+          metadata: { slug, reward_id: reward.id, loyalty_customer_id: member.id, points_spent: requiredPoints, staff_code_used: Boolean(staffCode) },
+          created_at: now
+        })
+      } catch (_) {}
+
+      resetPublicAuthRateLimit(`${slug}:redeem`, email, req.ip || req.get('x-forwarded-for'))
+      const redemptions = await getPublicRewardRedemptions(customerId, member.id)
+      return res.json({ ok: true, reward, redemption: redemption.data, member: updateMember.data, points_balance: nextBalance, points_spent: requiredPoints, redemptions })
     } catch (e) { next(e) }
   })
 
