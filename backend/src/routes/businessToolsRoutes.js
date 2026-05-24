@@ -10,7 +10,8 @@ function jsonKey(value = {}) {
   return JSON.stringify(Object.keys(value).sort().reduce((acc, key) => { acc[key] = value[key]; return acc }, {}))
 }
 function rateKey(req) {
-  return req.headers['x-forwarded-for'] || req.ip || 'local'
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+  return forwarded || req.ip || 'local'
 }
 function checkRate(req) {
   const key = rateKey(req)
@@ -32,6 +33,33 @@ function safeFilename(value = 'document') {
 function validateInput(input = {}, fields = []) {
   const missing = fields.filter((field) => !String(input[field] || '').trim())
   return { ok: missing.length === 0, missing }
+}
+
+
+function classifyGooglePlacesError(payload = {}, httpStatus = 502) {
+  const status = payload.status || String(httpStatus)
+  const message = String(payload.error_message || `Google Places Fehler: ${status}`)
+  const err = new Error(message)
+  err.status = status === 'OVER_QUERY_LIMIT' ? 429 : 502
+  err.google_status = status
+  err.provider = 'google_places'
+  if (/referer|referrer/i.test(message)) {
+    err.code = 'GOOGLE_PLACES_KEY_RESTRICTION_INVALID'
+    err.hint = 'Der Railway-Backend-Key darf keine Website-/HTTP-Referrer-Restriktion haben. Nutze für GOOGLE_PLACES_API_KEY einen serverseitigen Google Maps API-Key mit API-Restriktion auf Places API und – falls Railway eine stabile Egress-IP hat – IP-Restriktion. Sonst zunächst ohne Application restriction testen.'
+  } else if (status === 'REQUEST_DENIED') {
+    err.code = 'GOOGLE_PLACES_REQUEST_DENIED'
+    err.hint = 'Prüfe, ob im Google Cloud Projekt Billing aktiv ist und die Places API für diesen Key erlaubt ist. Der verwendete Legacy-Endpunkt benötigt die Places API für /maps/api/place/textsearch/json.'
+  } else if (status === 'OVER_QUERY_LIMIT') {
+    err.code = 'GOOGLE_PLACES_OVER_QUERY_LIMIT'
+    err.hint = 'Google Places Quota oder Tagesbudget erreicht. Prüfe Google Cloud Quotas/Billing.'
+  } else if (status === 'INVALID_REQUEST') {
+    err.code = 'GOOGLE_PLACES_INVALID_REQUEST'
+    err.hint = 'Prüfe Suchbegriff, Ort und Query-Parameter.'
+  } else {
+    err.code = 'GOOGLE_PLACES_API_ERROR'
+    err.hint = 'Prüfe GOOGLE_PLACES_API_KEY, API-Restriktionen, Billing und Google Cloud Fehlerdetails.'
+  }
+  return err
 }
 
 function scoreFromBusiness(input = {}) {
@@ -64,10 +92,7 @@ async function googlePlacesTextSearch(query, apiKey, options = {}) {
   }
   const payload = await res.json().catch(() => ({}))
   if (!res.ok || ['REQUEST_DENIED', 'OVER_QUERY_LIMIT', 'INVALID_REQUEST'].includes(payload.status)) {
-    const err = new Error(payload.error_message || `Google Places Fehler: ${payload.status || res.status}`)
-    err.status = payload.status === 'OVER_QUERY_LIMIT' ? 429 : 502
-    err.google_status = payload.status
-    throw err
+    throw classifyGooglePlacesError(payload, res.status)
   }
   const results = payload.results || []
   placesCache.set(cacheKey, { created_at: Date.now(), results })

@@ -23,6 +23,14 @@ const { securityHeaders, generalRateLimit } = require('./middleware/securityHard
 
 const app = express()
 
+// Railway/Vercel run the backend behind a reverse proxy.
+// express-rate-limit requires Express to trust exactly the proxy hop count,
+// otherwise X-Forwarded-For triggers ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+const trustProxyHopsRaw = process.env.TRUST_PROXY_HOPS || process.env.RAILWAY_TRUST_PROXY_HOPS || '1'
+const trustProxyHops = Math.max(0, Number(trustProxyHopsRaw) || 1)
+app.set('trust proxy', trustProxyHops)
+
+
 // V42.16 STABILITY HARDENING
 // One CORS block only. Credentials stay disabled because the current app does
 // not use cookie auth between Vercel and Railway.
@@ -117,7 +125,10 @@ app.use((err, req, res, next) => {
     code: err.code || 'INTERNAL_ERROR',
     error: err.message || 'Interner Serverfehler',
     details: process.env.NODE_ENV === 'production' ? undefined : String(err.stack || ''),
-    hint: err.hint || 'Prüfe Railway Logs, Supabase Migrationen, API Provider Mapping und Backend-ENV.'
+    hint: err.hint || 'Prüfe Railway Logs, Supabase Migrationen, API Provider Mapping und Backend-ENV.',
+    provider: err.provider,
+    google_status: err.google_status,
+    missing_env: err.missing_env
   })
 })
 

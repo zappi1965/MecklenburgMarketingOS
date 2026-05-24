@@ -8,6 +8,7 @@ const securityHeaders = helmet({
 })
 
 const apiRateLimit = rateLimit({
+  // trust proxy is configured centrally in server.js for Railway/Vercel.
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.RATE_LIMIT_MAX || 500),
   standardHeaders: true,
@@ -19,6 +20,7 @@ const apiRateLimit = rateLimit({
 })
 
 const authRateLimit = rateLimit({
+  // trust proxy is configured centrally in server.js for Railway/Vercel.
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.AUTH_RATE_LIMIT_MAX || 50),
   standardHeaders: true,

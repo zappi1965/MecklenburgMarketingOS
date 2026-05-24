@@ -76,16 +76,8 @@ function productionRoutes(supabase) {
   router.post('/sync/:provider/:customer_id', async (req, res, next) => {
     try {
       const { provider, customer_id } = req.params
-      let result
-      if (provider === 'google-business') result = await apiSync.syncGoogleBusiness(customer_id)
-      else if (provider === 'search-console') result = await apiSync.syncSearchConsole(customer_id)
-      else if (provider === 'analytics') result = await apiSync.syncAnalytics(customer_id)
-      else {
-        const err = new Error('Unbekannter Provider')
-        err.status = 400
-        throw err
-      }
-      res.json({ ok: true, data: result })
+      const result = await apiSync.sync(provider, customer_id, req.body || {})
+      res.json({ ok: true, provider: apiSync.normalizeProvider(provider), data: result })
     } catch (e) { next(e) }
   })
 

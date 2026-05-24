@@ -66,11 +66,9 @@ async function apiSyncJobs() {
   const { data } = await safeQuery('apiSyncJobs.select', supabase.from('api_sync_jobs').select('*').eq('status', 'pending').limit(25))
   for (const job of data || []) {
     try {
-      let result = null
-      if (job.provider === 'google_business' && apiSync.syncGoogleBusiness) result = await apiSync.syncGoogleBusiness(job.customer_id)
-      if (job.provider === 'search_console' && apiSync.syncSearchConsole) result = await apiSync.syncSearchConsole(job.customer_id, job.payload?.site_url)
-      if (job.provider === 'analytics' && apiSync.syncAnalytics) result = await apiSync.syncAnalytics(job.customer_id, job.payload?.property_id)
-      await safeQuery('apiSyncJobs.completed', supabase.from('api_sync_jobs').update({ status: 'completed', processed_at: new Date().toISOString(), last_error: null, payload: { ...(job.payload || {}), result } }).eq('id', job.id))
+      const normalizedProvider = apiSync.normalizeProvider ? apiSync.normalizeProvider(job.provider) : job.provider
+      const result = await apiSync.sync(job.provider, job.customer_id, job.payload || {})
+      await safeQuery('apiSyncJobs.completed', supabase.from('api_sync_jobs').update({ status: 'completed', processed_at: new Date().toISOString(), last_error: null, provider: normalizedProvider, payload: { ...(job.payload || {}), result } }).eq('id', job.id))
     } catch (error) {
       await safeQuery('apiSyncJobs.failed', supabase.from('api_sync_jobs').update({ status: 'failed', last_error: error.message || String(error) }).eq('id', job.id))
     }

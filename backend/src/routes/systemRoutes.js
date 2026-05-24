@@ -45,6 +45,69 @@ const OPTIONAL_TABLES = [
 
 
 
+
+function maskSecret(value = '') {
+  const v = String(value || '')
+  if (!v) return null
+  if (v.length <= 10) return `${v.slice(0, 2)}***`
+  return `${v.slice(0, 6)}…${v.slice(-4)}`
+}
+
+function parseSupabaseUrl(value = '') {
+  try {
+    const url = new URL(value)
+    return {
+      valid_url: true,
+      protocol: url.protocol,
+      host: url.host,
+      looks_like_supabase_project: /^https:\/\/[^/.]+\.supabase\.co\/?$/.test(value.trim())
+    }
+  } catch (_) {
+    return { valid_url: false, protocol: null, host: null, looks_like_supabase_project: false }
+  }
+}
+
+function envDiagnostics() {
+  const supabaseUrl = process.env.SUPABASE_URL || ''
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  const placesKey = process.env.GOOGLE_PLACES_API_KEY || ''
+  const googleOauthMissing = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI'].filter((key) => !process.env[key])
+  const supabaseInfo = parseSupabaseUrl(supabaseUrl)
+  const recommendations = []
+  if (!supabaseUrl || !serviceRole) recommendations.push('Railway Backend: SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY setzen.')
+  if (supabaseUrl && !supabaseInfo.looks_like_supabase_project) recommendations.push('SUPABASE_URL sollte exakt wie https://<project-ref>.supabase.co aussehen, ohne /rest/v1 oder anon/public Pfad.')
+  if (serviceRole && !serviceRole.startsWith('eyJ')) recommendations.push('SUPABASE_SERVICE_ROLE_KEY sieht nicht wie ein Supabase JWT aus. Prüfe, ob versehentlich anon key/secret falsch kopiert wurde.')
+  if (!placesKey) recommendations.push('GOOGLE_PLACES_API_KEY fehlt: Lead-Suche und Google-Business-Audit laufen dann nicht live.')
+  if (placesKey && !/^AIza/.test(placesKey)) recommendations.push('GOOGLE_PLACES_API_KEY sieht ungewöhnlich aus. Google Maps API Keys beginnen häufig mit AIza.')
+  if (googleOauthMissing.length) recommendations.push(`Google OAuth fehlt für GBP/Search Console/Analytics Sync: ${googleOauthMissing.join(', ')}.`)
+  return {
+    supabase: {
+      url_present: Boolean(supabaseUrl),
+      url_masked: supabaseUrl ? supabaseUrl.replace(/^https:\/\/([^/.]+).*$/, 'https://$1.supabase.co') : null,
+      ...supabaseInfo,
+      service_role_present: Boolean(serviceRole),
+      service_role_masked: maskSecret(serviceRole)
+    },
+    google_places: {
+      present: Boolean(placesKey),
+      masked: maskSecret(placesKey),
+      expected_application_restriction: 'Serverseitig: IP addresses oder zunächst keine Application restriction; keine Website/HTTP referrer restriction.',
+      expected_api_restriction: 'Places API für /maps/api/place/textsearch/json'
+    },
+    google_oauth: {
+      configured: googleOauthMissing.length === 0,
+      missing_env: googleOauthMissing,
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI || null
+    },
+    railway: {
+      trust_proxy_hops: Number(process.env.TRUST_PROXY_HOPS || process.env.RAILWAY_TRUST_PROXY_HOPS || 1),
+      enable_demo_mode: process.env.ENABLE_DEMO_MODE === 'true',
+      node_env: process.env.NODE_ENV || null
+    },
+    recommendations
+  }
+}
+
 async function listCustomerScopedTables(supabaseAdmin) {
   if (!supabaseAdmin) return []
   try {
@@ -80,6 +143,11 @@ function systemRoutes(supabaseAdmin) {
       google_places: Boolean(process.env.GOOGLE_PLACES_API_KEY),
       missing_env: missing
     })
+  })
+
+
+  router.get('/env-check', (_, res) => {
+    res.json({ ok: true, time: new Date().toISOString(), diagnostics: envDiagnostics() })
   })
 
   router.get('/ready', async (_, res) => {
@@ -142,7 +210,9 @@ function systemRoutes(supabaseAdmin) {
         { version: 'V42.21.4', file: 'SQL_V42_21_4_LIVE_ADMIN_PROFILES.sql', tables: ['user_profiles'] },
         { version: 'V42.21.5', file: 'SQL_V42_21_5_INTERNAL_DEMO_ACCESS.sql', tables: ['landing_page_settings'] },
         { version: 'V42.23', file: 'SQL_V42_23_STABILITY_PRODUCTION_READINESS.sql', tables: ['activity_logs','api_usage_cache','data_integrity_checks','customer_invites','user_profiles'] },
-        { version: 'V42.24', file: 'SQL_V42_24_SECURITY_PRIVACY_CENTER.sql', tables: ['loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests'] }
+        { version: 'V42.24', file: 'SQL_V42_24_SECURITY_PRIVACY_CENTER.sql', tables: ['loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests'] },
+        { version: 'V42.24.4', file: 'SQL_V42_24_4_TYPE_SAFE_LIVE_DEMO_SPLIT.sql', tables: ['is_demo columns on customer-scoped tables'] },
+        { version: 'V42.24.7', file: 'SQL_V42_24_7_BACKEND_ENV_PROVIDER_HOTFIX.sql', tables: ['schema_migrations_mmos'] }
       ]
     })
   })

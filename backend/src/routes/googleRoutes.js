@@ -2,27 +2,9 @@ const express = require('express')
 const GoogleApiService = require('../services/googleApiService')
 const ApiSyncService = require('../services/apiSyncService')
 
-const PROVIDER_ALIASES = {
-  'google-business': 'google-business',
-  'google business': 'google-business',
-  'google business profile': 'google-business',
-  'business profile': 'google-business',
-  'gbp': 'google-business',
-  'search-console': 'search-console',
-  'search console': 'search-console',
-  'google search console': 'search-console',
-  'gsc': 'search-console',
-  'analytics': 'analytics',
-  'google analytics': 'analytics',
-  'google analytics 4': 'analytics',
-  'ga4': 'analytics',
-  'meta': 'meta',
-  'meta business suite': 'meta'
-}
-
 function normalizeProvider(provider = '') {
-  const key = decodeURIComponent(String(provider || '')).trim().toLowerCase()
-  return PROVIDER_ALIASES[key] || key.replace(/_/g, '-')
+  const normalized = ApiSyncService.normalizeProvider(provider)
+  return normalized === 'google_business' ? 'google-business' : normalized === 'search_console' ? 'search-console' : normalized
 }
 
 async function recordSyncStatus(supabase, customerId, provider, status, error, extra = {}) {
@@ -103,19 +85,7 @@ function googleRoutes(supabase) {
     const { customer_id } = req.params
     const { site_url, property_id } = req.body || {}
     try {
-      let result
-      if (provider === 'google-business') result = await sync.syncGoogleBusiness(customer_id)
-      else if (provider === 'search-console') result = await sync.syncSearchConsole(customer_id, site_url)
-      else if (provider === 'analytics') result = await sync.syncAnalytics(customer_id, property_id)
-      else if (provider === 'meta') {
-        result = { ok: true, provider: 'meta', mode: 'placeholder_not_connected', message: 'Meta Business Suite ist vorbereitet, aber die echte Meta API ist noch nicht angebunden.' }
-      } else {
-        const err = new Error(`Unbekannter Google/API Provider: ${req.params.provider}`)
-        err.status = 400
-        err.code = 'UNKNOWN_PROVIDER'
-        err.hint = 'Nutze google-business, search-console, analytics oder meta.'
-        throw err
-      }
+      const result = await sync.sync(provider, customer_id, { site_url, property_id })
 
       await recordSyncStatus(supabase, customer_id, provider, 'synced', null, result)
       res.json({ ok: true, provider, data: result })
