@@ -146,9 +146,9 @@ export default function AuthPage() {
 
         {(mode === 'register' || isInvite) && (
           <>
-            <input className="input" placeholder="Firma" value={companyName} onChange={e=>setCompanyName(e.target.value)} readOnly={isInvite} />
-            <input className="input" placeholder="Ansprechpartner" value={contactPerson} onChange={e=>setContactPerson(e.target.value)} />
-            {!isInvite && <input className="input" placeholder="Telefon optional" value={phone} onChange={e=>setPhone(e.target.value)} />}
+            <input className="input" placeholder="Offizieller Firmen- oder Kundenname" title="So wird der Kunde später im Portal und in Dokumenten angezeigt." value={companyName} onChange={e=>setCompanyName(e.target.value)} readOnly={isInvite} />
+            <input className="input" placeholder="Name der Kontaktperson" title="Hauptansprechpartner beim Kunden." value={contactPerson} onChange={e=>setContactPerson(e.target.value)} />
+            {!isInvite && <input className="input" placeholder="Telefonnummer optional" title="Telefonnummer für Rückfragen oder Freigabeprozesse." value={phone} onChange={e=>setPhone(e.target.value)} />}
             {!isInvite && (
               <select className="input" value={requestedPackage} onChange={e=>setRequestedPackage(e.target.value)}>
                 <option>Starter</option>
@@ -159,10 +159,10 @@ export default function AuthPage() {
           </>
         )}
 
-        <input className="input" placeholder="E-Mail" value={email} onChange={e=>setEmail(e.target.value)} readOnly={isInvite && Boolean(inviteInfo?.invite?.email)} />
+        <input className="input" placeholder="E-Mail-Adresse für Login oder Kontakt" title="Diese Adresse wird für Login, Freigaben und Benachrichtigungen genutzt." value={email} onChange={e=>setEmail(e.target.value)} readOnly={isInvite && Boolean(inviteInfo?.invite?.email)} />
 
         {mode !== 'reset' && (
-          <input className="input" placeholder={isInvite ? 'Passwort für den Kundenlogin setzen' : 'Passwort'} type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+          <input className="input" placeholder={isInvite ? 'Passwort für den Kundenlogin setzen' : 'Passwort eingeben'} title="Mindestens 10 Zeichen und idealerweise ein Sonderzeichen verwenden." type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         )}
 
         {mode === 'login' && <button className="btn" onClick={login}>Einloggen</button>}

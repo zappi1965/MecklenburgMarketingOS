@@ -16,7 +16,7 @@ export default function LegalPage() {
         <h2>4. Empfänger / Dienstleister</h2>
         <p>Je nach eingesetzter Konfiguration können Dienstleister wie Vercel, Railway, Supabase, Gotenberg, Google APIs und E-Mail-Dienstleister eingebunden sein. Diese Anbieter sind vor Livebetrieb in der Datenschutzerklärung konkret mit Rolle, Standort und AV-Vertrag zu benennen.</p>
         <h2>5. Cookies und lokale Speicherung</h2>
-        <p>Technisch notwendige Speicherungen können für Login, Sicherheit, Demo-/Portalmodus und QR-/Loyalty-Funktionen eingesetzt werden. Nicht notwendige Analyse- oder Marketing-Cookies dürfen nur nach Einwilligung verwendet werden.</p>
+        <p>Technisch notwendige Speicherungen können für Login, Sicherheit, Portalmodus und QR-/Loyalty-Funktionen eingesetzt werden. Nicht notwendige Analyse- oder Marketing-Cookies dürfen nur nach Einwilligung verwendet werden.</p>
         <h2>6. Speicherdauer</h2>
         <p>Daten werden nur solange gespeichert, wie es für die jeweiligen Zwecke notwendig ist oder gesetzliche Aufbewahrungsfristen bestehen.</p>
         <h2>7. Rechte betroffener Personen</h2>

@@ -11,9 +11,7 @@ const aiAutomationCoreRoutes = require('./routes/aiAutomationCoreRoutes')
 const advancedLoyaltyRoutes = require('./routes/advancedLoyaltyRoutes')
 const revenueDynamicBillingRoutes = require('./routes/revenueDynamicBillingRoutes')
 const reviewIntelligenceRoutes = require('./routes/reviewIntelligenceRoutes')
-const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')
 const v33FunctionalRoutes = require('./routes/v33FunctionalRoutes')
-const demoToolRoutes = require('./routes/demoToolRoutes')
 const enterpriseRoutes = require('./routes/enterpriseRoutes')
 const customerPortalRoutes = require('./routes/customerPortalRoutes')
 const adminProfilesRoutes = require('./routes/adminProfilesRoutes')
@@ -44,6 +42,7 @@ app.use(generalRateLimit)
 app.use(express.json({ limit: '50mb' }))
 
 const supabaseConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+const demoModeEnabled = process.env.ENABLE_DEMO_MODE === 'true'
 const supabaseAdmin = supabaseConfigured
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null
@@ -65,9 +64,7 @@ const criticalRoutes = [
   ['/api/advanced-loyalty', advancedLoyaltyRoutes],
   ['/api/revenue-dynamic-billing', revenueDynamicBillingRoutes],
   ['/api/review-intelligence', reviewIntelligenceRoutes],
-  ['/api/demo-environment', demoEnvironmentRoutes],
   ['/api/v33-functional', v33FunctionalRoutes],
-  ['/api/demo-tools', demoToolRoutes],
   ['/api/enterprise', enterpriseRoutes],
   ['/api/customer-portal', customerPortalRoutes],
   ['/api/auth', authRoutes],
@@ -79,6 +76,16 @@ const criticalRoutes = [
 for (const [routePath, routeFactory] of criticalRoutes) {
   app.use(routePath, routeFactory(supabaseAdmin))
   console.log(`[V42.16] Loaded critical route ${routePath}`)
+}
+
+if (demoModeEnabled) {
+  const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')
+  const demoToolRoutes = require('./routes/demoToolRoutes')
+  app.use('/api/demo-environment', demoEnvironmentRoutes(supabaseAdmin))
+  app.use('/api/demo-tools', demoToolRoutes(supabaseAdmin))
+  console.log('[V42.24] Demo/Test routes enabled by ENABLE_DEMO_MODE=true')
+} else {
+  console.log('[V42.24] Demo/Test routes disabled for live system')
 }
 
 const optionalRoutes = [

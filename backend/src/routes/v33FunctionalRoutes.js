@@ -175,9 +175,22 @@ function v33FunctionalRoutes(supabase) {
       'minutes_between_scans',
       'metadata.scan_cooldown_minutes'
     ], 0)
+    const dailyPointLimit = firstConfiguredNumber(sources, [
+      'daily_point_limit_per_member',
+      'daily_points_limit_per_member',
+      'points_daily_limit',
+      'metadata.daily_point_limit_per_member'
+    ], 0)
+    const suspicionThreshold = firstConfiguredNumber(sources, [
+      'suspicion_score_threshold',
+      'abuse_score_threshold',
+      'metadata.suspicion_score_threshold'
+    ], 70)
     return {
       max_scans_per_member: Math.max(0, Math.floor(maxScansPerMember)),
-      scan_cooldown_minutes: Math.max(0, Math.floor(cooldownMinutes))
+      scan_cooldown_minutes: Math.max(0, Math.floor(cooldownMinutes)),
+      daily_point_limit_per_member: Math.max(0, Math.floor(dailyPointLimit)),
+      suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(suspicionThreshold || 70)))
     }
   }
 
@@ -236,6 +249,86 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) {
       return { ok: true, settings, previous_scans: 0, warning: e.message }
     }
+  }
+
+
+  async function getLoyaltySecuritySettings(customerId) {
+    const defaults = { daily_point_limit_per_member: 0, suspicion_score_threshold: 70, auto_block_threshold: 95 }
+    try {
+      const row = await supabase.from('loyalty_security_settings').select('*').eq('customer_id', customerId).maybeSingle()
+      if (!row.error && row.data) return { ...defaults, ...row.data }
+    } catch (_) {}
+    return defaults
+  }
+
+  async function checkDailyPointLimit({ customerId, member, pointsToAdd, program, qrCampaign }) {
+    const qrSettings = qrScanLimitSettings(qrCampaign, program)
+    const security = await getLoyaltySecuritySettings(customerId)
+    const limit = Math.max(0, Math.floor(num(qrSettings.daily_point_limit_per_member || security.daily_point_limit_per_member, 0)))
+    if (!limit || !member?.id || !pointsToAdd) return { ok: true, limit, points_today: 0 }
+    const today = new Date(); today.setHours(0,0,0,0)
+    const q = await supabase.from('loyalty_transactions')
+      .select('points')
+      .eq('customer_id', customerId)
+      .eq('loyalty_customer_id', member.id)
+      .eq('action', 'qr_scan')
+      .gte('created_at', today.toISOString())
+      .limit(1000)
+    if (q.error) return { ok: true, limit, points_today: 0, warning: q.error.message }
+    const pointsToday = (q.data || []).reduce((s, t) => s + Math.max(0, num(t.points, 0)), 0)
+    if (pointsToday + Math.max(0, num(pointsToAdd, 0)) > limit) {
+      return { ok: false, code: 'DAILY_POINT_LIMIT_REACHED', status: 429, limit, points_today: pointsToday, error: `Punkte-Tageslimit erreicht. Heute sind maximal ${limit} Punkte pro Bonuskonto möglich.` }
+    }
+    return { ok: true, limit, points_today: pointsToday }
+  }
+
+  async function updateMemberSuspicionScore({ customerId, member, program, qrCampaign }) {
+    if (!member?.id) return null
+    try {
+      const now = Date.now()
+      const today = new Date(); today.setHours(0,0,0,0)
+      const since15 = new Date(now - 15 * 60 * 1000).toISOString()
+      const sinceDay = today.toISOString()
+      const tx = await supabase.from('loyalty_transactions')
+        .select('id,action,points,created_at,metadata')
+        .eq('customer_id', customerId)
+        .eq('loyalty_customer_id', member.id)
+        .gte('created_at', sinceDay)
+        .limit(500)
+      const rows = tx.error ? [] : (tx.data || [])
+      const scansToday = rows.filter(r => r.action === 'qr_scan').length
+      const scans15 = rows.filter(r => r.action === 'qr_scan' && String(r.created_at) >= since15).length
+      const pointsToday = rows.reduce((s, r) => s + Math.max(0, num(r.points, 0)), 0)
+      const rewardRows = rows.filter(r => String(r.action || '').includes('reward')).length
+      const deviceIds = new Set(rows.map(r => r.metadata?.device_id || r.metadata?.deviceId).filter(Boolean))
+      const score = Math.min(100, Math.round(scans15 * 16 + scansToday * 5 + pointsToday / 3 + rewardRows * 18 + Math.max(0, deviceIds.size - 2) * 14))
+      const settings = { ...qrScanLimitSettings(qrCampaign, program), ...(await getLoyaltySecuritySettings(customerId)) }
+      const status = score >= num(settings.auto_block_threshold, 95) ? 'blocked_suggested' : score >= num(settings.suspicion_score_threshold, 70) ? 'suspicious' : score >= 45 ? 'watch' : 'ok'
+      const payload = {
+        customer_id: customerId,
+        loyalty_customer_id: member.id,
+        email: member.email || null,
+        score,
+        status,
+        scans_today: scansToday,
+        scans_last_15m: scans15,
+        points_today: pointsToday,
+        reward_redemptions_today: rewardRows,
+        device_count_today: deviceIds.size,
+        reasons: [scans15 >= 3 ? 'viele Scans in 15 Minuten' : null, pointsToday >= num(settings.daily_point_limit_per_member, 0) && num(settings.daily_point_limit_per_member,0)>0 ? 'Punkte-Tageslimit erreicht/nahe erreicht' : null, deviceIds.size > 2 ? 'mehrere Geräte' : null].filter(Boolean),
+        last_checked_at: new Date().toISOString(),
+        metadata: { qr_campaign_id: program?.qr_campaign_id || qrCampaign?.id || null }
+      }
+      try {
+        const existing = await supabase.from('loyalty_member_security_scores').select('id').eq('loyalty_customer_id', member.id).maybeSingle()
+        if (!existing.error && existing.data?.id) await supabase.from('loyalty_member_security_scores').update(payload).eq('id', existing.data.id)
+        else await supabase.from('loyalty_member_security_scores').insert(payload)
+      } catch (_) {}
+      if (status === 'suspicious' || status === 'blocked_suggested') {
+        try { await supabase.from('security_events').insert({ customer_id: customerId, actor_type: 'end_customer', actor_id: member.id, event_type: 'loyalty_suspicion_score', severity: status === 'blocked_suggested' ? 'critical' : 'warning', title: 'Auffälliger Loyalty-Endkunde', description: `${member.email || member.display_name || member.id} erreicht Score ${score}/100.`, metadata: payload }) } catch (_) {}
+      }
+      return payload
+    } catch (_) { return null }
   }
 
   async function v39CheckRewardLimits(customerId, rewardId, memberName = null) {
@@ -630,6 +723,8 @@ function v33FunctionalRoutes(supabase) {
     const pointsPerScan = num(payload.points_per_scan, 10)
     const maxScansPerMember = Math.max(0, Math.floor(num(payload.max_scans_per_member ?? payload.maxScansPerMember ?? payload.scan_limit_per_member, 0)))
     const scanCooldownMinutes = Math.max(0, Math.floor(num(payload.scan_cooldown_minutes ?? payload.scanCooldownMinutes ?? payload.cooldown_minutes, 0)))
+    const dailyPointLimitPerMember = Math.max(0, Math.floor(num(payload.daily_point_limit_per_member ?? payload.dailyPointLimitPerMember ?? payload.points_daily_limit, 0)))
+    const suspicionScoreThreshold = Math.max(0, Math.min(100, Math.floor(num(payload.suspicion_score_threshold ?? payload.suspicionScoreThreshold ?? payload.abuse_score_threshold, 70))))
 
     const { data: qrCampaign, error: qrError } = await supabase.from('qr_campaigns').insert({
       customer_id: customerId,
@@ -643,7 +738,9 @@ function v33FunctionalRoutes(supabase) {
       status: 'Aktiv',
       max_scans_per_member: maxScansPerMember,
       scan_cooldown_minutes: scanCooldownMinutes,
-      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes }
+      daily_point_limit_per_member: dailyPointLimitPerMember,
+      suspicion_score_threshold: suspicionScoreThreshold,
+      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
     }).select('*').single()
 
     if (qrError) throw qrError
@@ -661,7 +758,7 @@ function v33FunctionalRoutes(supabase) {
         active: true,
         status: 'active',
         require_staff_code: true,
-        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes }
+        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
       }).select('*').single()
 
       if (programError) throw programError
@@ -1004,10 +1101,15 @@ function v33FunctionalRoutes(supabase) {
           if (qrLimit.warning) warnings.push({ code: 'QR_LIMIT_CHECK_WARNING', message: qrLimit.warning })
           const currentTierMultiplier = Number(member.metadata?.v37_level_multiplier || 1)
           points = Math.round(points * currentTierMultiplier)
+          const pointLimit = await checkDailyPointLimit({ customerId, member, pointsToAdd: points, program, qrCampaign })
+          if (!pointLimit.ok) return res.status(pointLimit.status || 429).json({ ok:false, error: pointLimit.error, code: pointLimit.code, limit: pointLimit.limit, points_today: pointLimit.points_today })
+          if (pointLimit.warning) warnings.push({ code:'POINT_LIMIT_WARNING', message: pointLimit.warning })
         }
       }
 
       if (!member) {
+        const pointLimitNew = await checkDailyPointLimit({ customerId, member: { id: '__new__' }, pointsToAdd: points, program, qrCampaign })
+        if (!authOnly && pointLimitNew.limit > 0 && points > pointLimitNew.limit) return res.status(429).json({ ok:false, error: pointLimitNew.error || `Punkte-Tageslimit erreicht. Heute sind maximal ${pointLimitNew.limit} Punkte pro Bonuskonto möglich.`, code:'DAILY_POINT_LIMIT_REACHED', limit: pointLimitNew.limit, points_today: 0 })
         const created = await supabase.from('loyalty_customers').insert({
           customer_id: customerId,
           loyalty_program_id: program.id,
@@ -1070,6 +1172,9 @@ function v33FunctionalRoutes(supabase) {
           metadata: { public: true, slug, email, display_name: displayName, auth_method: 'email_password', scan_limits: qrScanLimitSettings(qrCampaign, program) }
         })
       } catch (_) {}
+
+      const suspicion = await updateMemberSuspicionScore({ customerId, member, program, qrCampaign })
+      if (suspicion) warnings.push({ code:'SUSPICION_SCORE', message:`Verdachts-Score ${suspicion.score}/100`, status:suspicion.status })
 
       try {
         if (program.qr_campaign_id) {
@@ -1350,7 +1455,7 @@ function v33FunctionalRoutes(supabase) {
         comment: req.body?.feedback_text || req.body?.text || req.body?.comment || null,
         reviewer_name: req.body?.reviewer_name || req.body?.name || 'Gast',
         reviewer_email: req.body?.reviewer_email || req.body?.email || null,
-        source: 'v35_demo_engine',
+        source: 'v35_business_engine',
         status: rating <= 3 ? 'needs_followup' : 'new',
         sentiment: sentimentFromRating(rating),
         metadata: { v35_engine: true }
@@ -1459,7 +1564,7 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
-  router.post('/v36/:customer_id/reset-demo-data', async (req, res, next) => {
+  async function resetCustomerTestData(req, res, next) {
     try {
       const cid = req.params.customer_id
       try { await supabase.from('v33_public_leads').delete().eq('customer_id', cid) } catch (_) {}
@@ -1468,10 +1573,12 @@ function v33FunctionalRoutes(supabase) {
       try { await supabase.from('v33_functional_records').delete().eq('customer_id', cid) } catch (_) {}
       const provisioned = await provisionCustomer(cid, { title: 'V36 Reset QR/Loyalty' })
       const snapshot = await engine.recalculateCustomer(cid)
-      try { await supabase.from('v35_engine_runs').insert({ customer_id: cid, engine_key: 'v36_reset_demo_data', status: 'completed', input: {}, output: { provisioned, snapshot } }) } catch (_) {}
+      try { await supabase.from('v35_engine_runs').insert({ customer_id: cid, engine_key: 'v36_reset_test_data', status: 'completed', input: {}, output: { provisioned, snapshot } }) } catch (_) {}
       res.json({ ok: true, provisioned, snapshot })
     } catch (e) { next(e) }
-  })
+  }
+
+  router.post('/v36/:customer_id/reset-test-data', resetCustomerTestData)
 
 
   async function v37GetOrCreateLoyaltySettings(customerId) {
@@ -1789,7 +1896,7 @@ function v33FunctionalRoutes(supabase) {
       if (!found.error && found.data?.[0]) program = found.data[0]
       if (!program) program = (await provisionCustomer(cid, { title:'V38 Testscan QR' })).loyalty_program
       const points = Number(program.points_per_scan || 10)
-      const email = req.body?.email || `testscan-${Date.now()}@demo.local`
+      const email = req.body?.email || `testscan-${Date.now()}@example.invalid`
       const name = req.body?.name || 'V38 Testlead'
       const now = new Date().toISOString()
       const member = await supabase.from('loyalty_customers').insert({ customer_id:cid, loyalty_program_id:program.id, email, display_name:name, member_token:safeToken('v38'), points_balance:points, total_points:points, total_scans:1, last_seen_at:now, last_activity_at:now, metadata:{v38_simulated:true} }).select('*').single()
@@ -1801,7 +1908,7 @@ function v33FunctionalRoutes(supabase) {
       }
       const lead = await supabase.from('v33_public_leads').insert({ customer_id:cid, loyalty_program_id:program.id, loyalty_customer_id:member.data.id, qr_campaign_id:program.qr_campaign_id || null, slug:program.slug, name, email, source:'v38_testscan', status:'new', points_added:points, points_balance:points, metadata:{v38_simulated:true} }).select('*').single()
       try { await supabase.from('pipeline_leads').insert({ customer_id:cid, title:`V38 Testscan Lead – ${name}`, source:'v38_testscan', stage:'new', value:0, probability:20, metadata:{lead:lead.data} }) } catch(_) {}
-      try { await supabase.from('customer_timeline_events').insert({ customer_id:cid, event_type:'v38_testscan', title:'Testscan simuliert', description:`${name} wurde als Demo-Lead erzeugt.`, source_module:'v38', severity:'success', metadata:{lead:lead.data} }) } catch(_) {}
+      try { await supabase.from('customer_timeline_events').insert({ customer_id:cid, event_type:'v38_testscan', title:'Testscan simuliert', description:`${name} wurde als Testscan-Lead erzeugt.`, source_module:'v38', severity:'success', metadata:{lead:lead.data} }) } catch(_) {}
       const snapshot = await engine.recalculateCustomer(cid)
       res.json({ ok:true, simulated:true, member:member.data, lead:lead.data, snapshot })
     } catch(e) { next(e) }
@@ -1829,7 +1936,7 @@ function v33FunctionalRoutes(supabase) {
     try {
       const cid=req.params.customer_id
       const rating=Number(req.body?.rating||5)
-      const text=req.body?.text||req.body?.comment||'Demo Review'
+      const text=req.body?.text||req.body?.comment||'Review ohne Text'
       const name=req.body?.name||'Review Gast'
       const email=req.body?.email||null
       const result=await engine.applyReview(cid,{rating,reviewer_name:name,reviewer_email:email,feedback_text:text,comment:text})
@@ -2354,8 +2461,46 @@ function v33FunctionalRoutes(supabase) {
   })
 
 
+
+  router.get('/v42/:customer_id/security-center', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const [settings, members, scores, events, dsar] = await Promise.all([
+        getLoyaltySecuritySettings(customerId),
+        supabase.from('loyalty_customers').select('*').eq('customer_id', customerId).limit(500),
+        supabase.from('loyalty_member_security_scores').select('*').eq('customer_id', customerId).order('score', { ascending: false }).limit(100),
+        supabase.from('security_events').select('*').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(100),
+        supabase.from('dsar_requests').select('*').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(50)
+      ])
+      res.json({ ok:true, settings, members: members.data || [], scores: scores.data || [], events: events.data || [], dsar_requests: dsar.data || [] })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/v42/:customer_id/security-settings', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const body = req.body || {}
+      const payload = {
+        customer_id: customerId,
+        daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, 0))),
+        suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, 70)))),
+        auto_block_threshold: Math.max(0, Math.min(100, Math.floor(num(body.auto_block_threshold, 95)))),
+        active: body.active !== false,
+        updated_at: new Date().toISOString()
+      }
+      let existing = null
+      try { existing = await supabase.from('loyalty_security_settings').select('id').eq('customer_id', customerId).maybeSingle() } catch (_) {}
+      let saved = null
+      if (existing && !existing.error && existing.data?.id) saved = await supabase.from('loyalty_security_settings').update(payload).eq('id', existing.data.id).select('*').single()
+      else saved = await supabase.from('loyalty_security_settings').insert(payload).select('*').single()
+      if (saved.error) throw saved.error
+      await audit('security_settings_updated', { customer_id: customerId })
+      res.json({ ok:true, settings: saved.data })
+    } catch (e) { next(e) }
+  })
+
   router.get('/v42/health', async (req, res) => {
-    res.json({ ok: true, service: 'v42-demo-functional-fix', timestamp: new Date().toISOString() })
+    res.json({ ok: true, service: 'v42-functional-live' , timestamp: new Date().toISOString() })
   })
 
   router.post('/v42/:customer_id/loyalty-program', async (req, res, next) => {
@@ -2369,6 +2514,8 @@ function v33FunctionalRoutes(supabase) {
         title: body.title || body.name || provisioned.loyalty_program?.title || 'Loyalty Programm',
         name: body.name || body.title || provisioned.loyalty_program?.name || 'Loyalty Programm',
         points_per_scan: points,
+        daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, provisioned.loyalty_program?.daily_point_limit_per_member || 0))),
+        suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, provisioned.loyalty_program?.suspicion_score_threshold || 70)))),
         active: body.active !== false,
         require_staff_code: body.require_staff_code !== false,
         metadata: {
@@ -2393,6 +2540,8 @@ function v33FunctionalRoutes(supabase) {
           title: body.qr_title || body.title || provisioned.qr_campaign.title || 'QR Kampagne',
           name: body.qr_title || body.title || provisioned.qr_campaign.name || 'QR Kampagne',
           active: body.active !== false,
+          daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, 0))),
+          suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, 70)))),
           updated_at: new Date().toISOString()
         }).eq('id', provisioned.qr_campaign.id)
       }
@@ -2401,6 +2550,8 @@ function v33FunctionalRoutes(supabase) {
       await supabase.from('v37_loyalty_settings').update({
         daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
         weekly_scan_limit: Number(body.weekly_scan_limit || settings.weekly_scan_limit || 5),
+        daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, settings.daily_point_limit_per_member || 0))),
+        suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, settings.suspicion_score_threshold || 70)))),
         updated_at: new Date().toISOString()
       }).eq('customer_id', customerId)
 
@@ -2458,10 +2609,12 @@ function v33FunctionalRoutes(supabase) {
         })
       }
 
-      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit) {
+      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit || body.daily_point_limit_per_member || body.suspicion_score_threshold) {
         const provisioned = await provisionCustomer(customerId, {})
         await supabase.from('loyalty_programs').update({
           points_per_scan: Number(body.points_per_scan || provisioned.loyalty_program?.points_per_scan || 10),
+          daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, provisioned.loyalty_program?.daily_point_limit_per_member || 0))),
+          suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, provisioned.loyalty_program?.suspicion_score_threshold || 70)))),
           updated_at: new Date().toISOString()
         }).eq('id', provisioned.loyalty_program.id)
 
@@ -2469,6 +2622,8 @@ function v33FunctionalRoutes(supabase) {
         await supabase.from('v37_loyalty_settings').update({
           daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
           weekly_scan_limit: Number(body.weekly_scan_limit || settings.weekly_scan_limit || 5),
+          daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, settings.daily_point_limit_per_member || 0))),
+          suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, settings.suspicion_score_threshold || 70)))),
           updated_at: new Date().toISOString()
         }).eq('customer_id', customerId)
       }

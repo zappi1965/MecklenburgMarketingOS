@@ -36,8 +36,23 @@ const OPTIONAL_TABLES = [
   'customer_invites',
   'customer_users',
   'user_profiles',
-  'schema_migrations_mmos'
+  'schema_migrations_mmos',
+  'loyalty_security_settings',
+  'loyalty_member_security_scores',
+  'security_events',
+  'dsar_requests'
 ]
+
+
+
+async function listCustomerScopedTables(supabaseAdmin) {
+  if (!supabaseAdmin) return []
+  try {
+    const { data, error } = await supabaseAdmin.rpc('mmos_customer_scoped_tables')
+    if (!error && Array.isArray(data)) return data
+  } catch (_) {}
+  return []
+}
 
 async function checkTable(supabaseAdmin, table) {
   try {
@@ -126,7 +141,8 @@ function systemRoutes(supabaseAdmin) {
         { version: 'V42.21.3', file: 'SQL_V42_21_3_CUSTOMER_LOGIN_APPROVAL.sql', tables: ['customer_registrations','customer_invites','customer_users','user_profiles'] },
         { version: 'V42.21.4', file: 'SQL_V42_21_4_LIVE_ADMIN_PROFILES.sql', tables: ['user_profiles'] },
         { version: 'V42.21.5', file: 'SQL_V42_21_5_INTERNAL_DEMO_ACCESS.sql', tables: ['landing_page_settings'] },
-        { version: 'V42.23', file: 'SQL_V42_23_STABILITY_PRODUCTION_READINESS.sql', tables: ['activity_logs','api_usage_cache','data_integrity_checks','customer_invites','user_profiles'] }
+        { version: 'V42.23', file: 'SQL_V42_23_STABILITY_PRODUCTION_READINESS.sql', tables: ['activity_logs','api_usage_cache','data_integrity_checks','customer_invites','user_profiles'] },
+        { version: 'V42.24', file: 'SQL_V42_24_SECURITY_PRIVACY_CENTER.sql', tables: ['loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests'] }
       ]
     })
   })
@@ -142,6 +158,69 @@ function systemRoutes(supabaseAdmin) {
       gotenberg: { connected: Boolean(process.env.GOTENBERG_URL), missing_env: process.env.GOTENBERG_URL ? [] : ['GOTENBERG_URL'], purpose: 'serverseitige PDF-Erzeugung' },
       mail: { connected: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST), missing_env: (process.env.RESEND_API_KEY || process.env.SMTP_HOST) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
     })
+  })
+
+
+  router.get('/security-center', async (_, res) => {
+    const missing = missingEnv(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
+    const health = {
+      ok: Boolean(supabaseAdmin) && missing.length === 0,
+      supabase_configured: Boolean(supabaseAdmin),
+      missing_env: missing,
+      gotenberg: Boolean(process.env.GOTENBERG_URL),
+      google_oauth: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI),
+      google_places: Boolean(process.env.GOOGLE_PLACES_API_KEY),
+      mail: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST)
+    }
+
+    let accessTables = []
+    try {
+      if (supabaseAdmin) {
+        const scoped = await listCustomerScopedTables(supabaseAdmin)
+        accessTables = scoped.map((x) => ({ table_name: x.table_name || x.table || x }))
+      }
+    } catch (_) {}
+
+    let securityEvents = []
+    let dsar = []
+    try {
+      if (supabaseAdmin) {
+        const ev = await supabaseAdmin.from('security_events').select('*').order('created_at', { ascending: false }).limit(25)
+        securityEvents = ev.data || []
+      }
+    } catch (_) {}
+    try {
+      if (supabaseAdmin) {
+        const rq = await supabaseAdmin.from('dsar_requests').select('*').order('created_at', { ascending: false }).limit(25)
+        dsar = rq.data || []
+      }
+    } catch (_) {}
+
+    res.json({
+      ok: true,
+      health,
+      customer_access: {
+        strategy: 'RLS + Backend customer_id checks + admin/service-role bypass',
+        protected_tables: accessTables.length,
+        tables: accessTables.map((r) => ({ table: r.table_name, customer_scoped: true })).slice(0, 100),
+        note: 'Führe SQL_V42_24_SECURITY_PRIVACY_CENTER.sql aus, um RLS-Hilfsfunktionen und Policies anzulegen.'
+      },
+      security_events: securityEvents,
+      dsar_requests: dsar,
+      controls: {
+        login_rate_limit: true,
+        admin_profile_hardening: true,
+        demo_live_separation: true,
+        qr_daily_point_limit: true,
+        loyalty_suspicion_score: true,
+        dsar_workflow: true
+      }
+    })
+  })
+
+  router.get('/customer-access-audit', async (_, res) => {
+    const checks = await Promise.all([...CORE_TABLES, ...OPTIONAL_TABLES].map((table) => checkTable(supabaseAdmin, table)))
+    res.json({ ok: true, checks, customer_id_required: true, hint: 'Kundenrollen müssen backend- und RLS-seitig auf customer_id begrenzt werden.' })
   })
 
   return router

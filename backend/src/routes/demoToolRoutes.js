@@ -36,7 +36,7 @@ function demoToolRoutes(supabase) {
   }
 
   router.get('/health', (_, res) => {
-    res.json({ ok: true, service: 'MMOS Demo Tools', resend: Boolean(process.env.RESEND_API_KEY) })
+    res.json({ ok: true, service: 'MMOS Internal Test Tools', resend: Boolean(process.env.RESEND_API_KEY) })
   })
 
   router.get('/state', async (_, res, next) => {
@@ -63,7 +63,7 @@ function demoToolRoutes(supabase) {
     try {
       const key = req.params.key
       const body = req.body || {}
-      const customer_name = body.customer_name || 'Demo NordDach GmbH'
+      const customer_name = body.customer_name || 'Interner Testkunde'
       const customer_id = body.customer_id || null
 
       const titles = {
@@ -92,7 +92,7 @@ function demoToolRoutes(supabase) {
         const pdf = await createDemoMonthlyReportPdf({ customer_name })
         result.pdf_base64 = pdf.toString('base64')
         result.file_name = `Demo_Monatsreport_${customer_name.replace(/\s+/g,'_')}.pdf`
-        message = 'Demo-Monatsreport als PDF erzeugt.'
+        message = 'Test-Monatsreport als PDF erzeugt.'
       }
 
       if (key === 'review_funnel') {
@@ -117,7 +117,7 @@ function demoToolRoutes(supabase) {
         }).select('*').single()
         if (error) throw error
         result.campaign = campaign
-        message = 'Demo Review Funnel QR-Kampagne erzeugt.'
+        message = 'Test Review Funnel QR-Kampagne erzeugt.'
       }
 
       const run = await createRun({
@@ -136,7 +136,7 @@ function demoToolRoutes(supabase) {
   router.post('/invoice', async (req, res, next) => {
     try {
       const body = req.body || {}
-      const customer_name = body.customer_name || 'Demo Kunde'
+      const customer_name = body.customer_name || 'Interner Testkunde'
       const countRes = await supabase.from('demo_invoices').select('id', { count: 'exact', head: true }).eq('customer_name', customer_name)
       const nextNumber = (countRes.count || 0) + 1
       const invoice_number = body.invoice_number || `RE_${customer_name.replace(/\s+/g,'_')}_${nextNumber}`
@@ -145,7 +145,7 @@ function demoToolRoutes(supabase) {
         customer_name,
         customer_id: body.customer_id || null,
         invoice_number,
-        service_type: body.service_type || 'Demo Rechnung',
+        service_type: body.service_type || 'Testrechnung',
         amount: Number(body.amount || 0),
         status: body.status || 'Offen',
         created_by: body.created_by || 'Demo System'
@@ -165,7 +165,7 @@ function demoToolRoutes(supabase) {
       await insertNotification({
         customer_name,
         customer_id: body.customer_id || null,
-        title: 'Demo-Rechnung erstellt',
+        title: 'Testrechnung erstellt',
         message: `${invoice_number} wurde als PDF erzeugt.`,
         type: 'invoice_created'
       })
@@ -177,7 +177,7 @@ function demoToolRoutes(supabase) {
   router.post('/qr-campaign', async (req, res, next) => {
     try {
       const body = req.body || {}
-      const customer_name = body.customer_name || 'Demo Kunde'
+      const customer_name = body.customer_name || 'Interner Testkunde'
       const name = body.name || 'Review Kampagne'
       const qrPayload = await createQrPayload({
         name,
@@ -228,7 +228,7 @@ function demoToolRoutes(supabase) {
       const to = body.to || body.to_email
       if (!to) return res.status(400).json({ ok: false, error: 'Empfänger fehlt' })
 
-      const subject = body.subject || 'MMOS Demo Mail Test'
+      const subject = body.subject || 'MMOS Test Mail'
       const html = body.html || '<b>MMOS Resend Test erfolgreich.</b>'
 
       const { data: job, error } = await supabase.from('demo_mail_jobs').insert({
@@ -263,12 +263,9 @@ function demoToolRoutes(supabase) {
 
   router.delete('/reset', async (_, res, next) => {
     try {
-      await supabase.from('demo_workflow_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      await supabase.from('demo_notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      await supabase.from('demo_invoices').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      await supabase.from('demo_qr_campaigns').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      await supabase.from('demo_mail_jobs').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      res.json({ ok: true })
+      // V42.24.3: Non-destructive by design. Demo records must stay available
+      // for internal test views and must never be purged by the live cleanup path.
+      res.json({ ok: true, preserved: true, message: 'Demo-Daten wurden nicht gelöscht. Die interne Testumgebung bleibt vollständig erhalten.' })
     } catch (e) { next(e) }
   })
 

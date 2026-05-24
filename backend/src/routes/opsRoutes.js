@@ -151,7 +151,7 @@ function opsRoutes(supabase) {
   })
 
   router.get('/integrations/google/status', (_,res)=>{
-    res.json({ok:true,configured:Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET),analytics:Boolean(process.env.GOOGLE_ANALYTICS_PROPERTY_ID),search_console:Boolean(process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL),note:'Mit Google ENV/OAuth können KPI-Jobs Live-Daten synchronisieren. Ohne Keys Fallbackdaten.'})
+    res.json({ok:true,configured:Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CLIENT_SECRET),analytics:Boolean(process.env.GOOGLE_ANALYTICS_PROPERTY_ID),search_console:Boolean(process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL),note:'Mit Google ENV/OAuth können KPI-Jobs Live-Daten synchronisieren. Ohne Keys werden keine Live-KPIs synchronisiert.'})
   })
 
   return router

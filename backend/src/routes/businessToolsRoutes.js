@@ -44,43 +44,6 @@ function scoreFromBusiness(input = {}) {
   return Math.max(20, Math.min(96, score))
 }
 
-function fallbackLeads({ branch = 'Betrieb', city = 'Schwerin', max_reviews = 80 } = {}) {
-  return [
-    {
-      name: `${branch} Zentrum ${city}`,
-      branch,
-      city,
-      rating: 4.2,
-      reviews: Math.min(Number(max_reviews || 80), 42),
-      website: '',
-      score: 88,
-      reasons: ['keine Website erkannt', 'wenige Bewertungen', 'Google Business Profil optimierbar'],
-      source: 'demo-fallback'
-    },
-    {
-      name: `${city} ${branch} Studio`,
-      branch,
-      city,
-      rating: 4.5,
-      reviews: Math.min(Number(max_reviews || 80), 67),
-      website: '',
-      score: 79,
-      reasons: ['wenige aktuelle Fotos', 'wenig Google Beiträge', 'Bewertungskampagne sinnvoll'],
-      source: 'demo-fallback'
-    },
-    {
-      name: `${branch} am Markt`,
-      branch,
-      city,
-      rating: 4.0,
-      reviews: Math.min(Number(max_reviews || 80), 29),
-      website: 'https://example.de',
-      score: 71,
-      reasons: ['lokale SEO ausbaufähig', 'Profilbeschreibung knapp', 'Leistungen unvollständig'],
-      source: 'demo-fallback'
-    }
-  ]
-}
 
 async function googlePlacesTextSearch(query, apiKey, options = {}) {
   const cacheKey = `places:${query}`
@@ -122,7 +85,7 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
       service: 'MMOS Business Tools',
       google_places: hasPlaces,
       gotenberg: Boolean(process.env.GOTENBERG_URL),
-      mode: hasPlaces ? 'live_google_places' : 'demo_fallback',
+      mode: hasPlaces ? 'live_google_places' : 'live_google_places_required',
       timestamp: new Date().toISOString(),
       features: ['google_business_audit','lead_search','acquisition_campaign_center','data_integrity','places_cache','places_rate_limit','gotenberg_pdf_render'],
       rate_limit: { max_searches_per_hour: MAX_SEARCHES_PER_HOUR },
@@ -141,7 +104,7 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
       if (!rate.ok) return res.status(429).json({ ok: false, code: 'GOOGLE_PLACES_RATE_LIMIT', error: 'Zu viele Google-Places-Abfragen in diesem Zeitraum.', rate })
       const apiKey = process.env.GOOGLE_PLACES_API_KEY
       let places = []
-      let source = apiKey ? 'google_places' : 'demo_fallback'
+      let source = apiKey ? 'google_places' : 'manual_input'
       if (apiKey && (input.business_name || input.city)) {
         const lookup = await googlePlacesTextSearch(`${input.business_name || ''} ${input.city || ''}`.trim(), apiKey)
         places = lookup.results
@@ -187,7 +150,7 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
       if (!rate.ok) return res.status(429).json({ ok: false, code: 'GOOGLE_PLACES_RATE_LIMIT', error: 'Zu viele Google-Places-Abfragen in diesem Zeitraum.', rate })
       const apiKey = process.env.GOOGLE_PLACES_API_KEY
       if (!apiKey) {
-        return res.json({ ok: true, source: 'demo_fallback', warning: 'GOOGLE_PLACES_API_KEY fehlt – Demo-Leads werden angezeigt.', rate, leads: fallbackLeads(input) })
+        return res.status(503).json({ ok: false, source: 'google_places_required', code: 'GOOGLE_PLACES_API_KEY_MISSING', error: 'Lead-Suche benötigt Live-Daten über GOOGLE_PLACES_API_KEY. Es werden keine Demo- oder Ersatz-Leads erzeugt.', rate, leads: [] })
       }
       const lookup = await googlePlacesTextSearch(`${input.branch || 'Betrieb'} in ${input.city || 'Schwerin'}`, apiKey)
       const results = lookup.results
@@ -220,7 +183,7 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
       const filename = `${safeFilename(req.body?.filename || req.body?.title || 'mmos-dokument')}.pdf`
       if (!html.trim()) return res.status(400).json({ ok: false, code: 'VALIDATION_ERROR', error: 'HTML-Inhalt fehlt. PDF kann nicht erzeugt werden.' })
       const pdf = await gotenberg.convertHtmlToPdf(html, filename)
-      if (pdf?.dryRun) return res.status(503).json({ ok: false, code: 'GOTENBERG_NOT_CONFIGURED', error: pdf.note, hint: 'Setze GOTENBERG_URL in Railway oder nutze den HTML-Export als Fallback.' })
+      if (pdf?.dryRun) return res.status(503).json({ ok: false, code: 'GOTENBERG_NOT_CONFIGURED', error: pdf.note, hint: 'Setze GOTENBERG_URL in Railway oder nutze die HTML-/Druckansicht.' })
       res.setHeader('Content-Type', 'application/pdf')
       res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
       res.setHeader('Cache-Control', 'no-store')

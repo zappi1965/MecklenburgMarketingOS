@@ -35,7 +35,7 @@ export function AuthPanel() {
   return (
     <section className="card">
       <h2>Live Auth</h2>
-      <p className="sub">Supabase Auth ist vorbereitet. Demo-Login kann parallel bestehen bleiben.</p>
+      <p className="sub">Supabase Auth ist vorbereitet. Live-Login läuft über freigegebene Profile.</p>
       {session ? (
         <>
           <div className="item"><b>Session aktiv</b><span>{session.user?.email}</span></div>

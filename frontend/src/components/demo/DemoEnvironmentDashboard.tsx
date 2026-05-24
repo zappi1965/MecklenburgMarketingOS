@@ -46,8 +46,8 @@ export default function DemoEnvironmentDashboard() {
 
       <div className="demoHeroCard">
         <div>
-          <span>Demo Kunde</span>
-          <strong>{demo.customer?.name || 'Demo Kunde'}</strong>
+          <span>Interner Testkunde</span>
+          <strong>{demo.customer?.name || 'Interner Testkunde'}</strong>
           <p>{demo.customer?.company} · Paket: {demo.customer?.package_key}</p>
         </div>
         <div className="demoHealthBadge">

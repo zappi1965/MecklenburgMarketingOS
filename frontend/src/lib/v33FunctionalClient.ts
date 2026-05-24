@@ -191,8 +191,8 @@ export const v33FunctionalClient = {
   qaReport: (customerId: string) => request(`/v36/${customerId}/qa-report`),
   runWorker: (customerId: string, payload: any = {}) =>
     request(`/v36/${customerId}/worker/run`, { method: 'POST', body: JSON.stringify(payload) }),
-  resetDemoData: (customerId: string) =>
-    request(`/v36/${customerId}/reset-demo-data`, { method: 'POST', body: JSON.stringify({}) }),
+  resetTestData: (customerId: string) =>
+    request(`/v36/${customerId}/reset-test-data`, { method: 'POST', body: JSON.stringify({}) }),
 
   getLoyaltySettings: (customerId: string) => request(`/v37/loyalty/${customerId}/settings`),
   saveLoyaltySettings: (customerId: string, payload: any) =>
@@ -239,6 +239,9 @@ export const v33FunctionalClient = {
     request(`/v42/${customerId}/customer-loyalty-settings`, { method: 'POST', body: JSON.stringify(payload) }),
   getCustomerLoyaltySettings: (customerId: string) =>
     request(`/v42/${customerId}/customer-loyalty-settings`),
+  securityCenter: (customerId: string) => request(`/v42/${customerId}/security-center`),
+  saveSecuritySettings: (customerId: string, payload: any) =>
+    request(`/v42/${customerId}/security-settings`, { method: 'POST', body: JSON.stringify(payload) }),
   savePackageMatrix: (customerId: string, payload: any) =>
     request(`/v42/${customerId}/package-matrix`, { method: 'POST', body: JSON.stringify(payload) }),
   getPackageMatrix: (customerId: string) => request(`/v42/${customerId}/package-matrix`),

@@ -9,7 +9,7 @@ import { enterpriseClient } from '@/lib/enterpriseClient'
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabaseAuth, getCurrentUserProfile } from '@/lib/authClient'
-import { DEMO_SANDBOX_KEY, markDemoMode, markLiveMode, clearDemoSandbox, isDemoMode } from '@/lib/demoSandbox'
+import { DEMO_SANDBOX_KEY, markDemoMode, markLiveMode, clearDemoSandbox, isDemoMode, isDemoFeatureEnabled } from '@/lib/demoSandbox'
 import { demoToolsClient, openPdfBase64, openQrCampaign } from '@/lib/demoToolsClient'
 import { API_BASE, hasSupabase, supabase } from '@/lib/supabase'
 import { startGoogleAuth, syncGoogleProvider, systemReady, systemSchema, integrationStatus, providerToApiKey } from '@/lib/apiReady'
@@ -27,20 +27,18 @@ const eur=(v:any)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR
 const slugifyLocal=(v:any,fb='seite')=>String(v||fb).toLowerCase().trim().replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||fb
 const appOrigin=()=>typeof window!=='undefined'?window.location.origin:''
 const publicSlugUrl=(slug:string)=>`${appOrigin()}/l/${slug}`
-const invoicePdfUrl=(i:any)=>i?.pdf_url||(i?.pdf_base64?`data:application/pdf;base64,${i.pdf_base64}`:i?.url||'/demo-files/demo-rechnung.pdf')
-function openInvoicePdf(i:any){window.open(invoicePdfUrl(i),'_blank')}
+const invoicePdfUrl=(i:any)=>i?.pdf_url||(i?.pdf_base64?`data:application/pdf;base64,${i.pdf_base64}`:i?.url||'')
+function openInvoicePdf(i:any){const url=invoicePdfUrl(i); if(url) window.open(url,'_blank'); else appToast('Für diese Rechnung ist noch kein Live-PDF hinterlegt. Bitte PDF neu erzeugen.')}
 async function generateInvoicePdf(store:any, invoice:any){
  try{
   const r=await opsClient.createInvoicePdf(invoice)
-  const pdf_url=r.pdf_url||(r.pdf_base64?`data:application/pdf;base64,${r.pdf_base64}`:'/demo-files/demo-rechnung.pdf')
+  const pdf_url=r.pdf_url||(r.pdf_base64?`data:application/pdf;base64,${r.pdf_base64}`:'')
+  if(!pdf_url) throw new Error('Backend hat kein PDF zurückgegeben')
   await store.update('invoices',invoice.id,{pdf_base64:r.pdf_base64,pdf_url,customer_id:invoice.customer_id})
   await store.create('customer_files',{customer_id:invoice.customer_id,name:`${invoice.invoice_number}.pdf`,original_name:`${invoice.invoice_number}.pdf`,file_type:'invoices',mime_type:'application/pdf',size_bytes:Math.round((r.pdf_base64||'').length*0.75),version:1,actor_name:'System',url:pdf_url})
   window.open(pdf_url,'_blank')
- }catch{
-  const pdf_url='/demo-files/demo-rechnung.pdf'
-  await store.update('invoices',invoice.id,{pdf_url,customer_id:invoice.customer_id})
-  await store.create('customer_files',{customer_id:invoice.customer_id,name:`${invoice.invoice_number}.pdf`,original_name:`${invoice.invoice_number}.pdf`,file_type:'invoices',mime_type:'application/pdf',size_bytes:142000,version:1,actor_name:'Demo PDF',url:pdf_url})
- window.open(pdf_url,'_blank')
+ }catch(e:any){
+  appToast(`PDF konnte nicht erzeugt werden: ${e?.message || e}. Es wird kein Beispiel-PDF mehr hinterlegt.`)
  }
 }
 async function deleteInvoiceAndPdf(store:any, invoice:any){
@@ -86,8 +84,6 @@ function V40AsyncButton({children,onClick,className='btn secondary'}:any){
 }
 
 
-const ids={barber:'11111111-1111-1111-1111-111111111111',roof:'22222222-2222-2222-2222-222222222222',restaurant:'33333333-3333-3333-3333-333333333333'}
-const dids={restaurant:'aaaaaaaa-3333-3333-3333-333333333333',barber:'aaaaaaaa-1111-1111-1111-111111111111',roof:'aaaaaaaa-2222-2222-2222-222222222222'}
 
 const adminProfiles=[
   {name:'DominiqueMM', email:'dominique@mm.local', role:'admin', avatar:''},
@@ -192,8 +188,8 @@ const defaultMainLandingSettings:any={
  hero_title:'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.',
  hero_subline:'Das lokale Marketing-Betriebssystem für Unternehmen in Mecklenburg-Vorpommern: Google Business Optimierung, Bewertungen, SEO, QR-Kampagnen, Reports und Kundenportal sauber verbunden.',
  primary_cta_label:'Anmelden',
- secondary_cta_label:'Demo',
- show_public_demo_button:true,
+ secondary_cta_label:'Portal öffnen',
+ show_public_demo_button:false,
  package_headline:'Pakete für lokale Unternehmen',
  package_subline:'Transparente Pakete für lokale Betriebe – vom Kundenportal bis zur laufenden Google Business Optimierung mit Reports.',
  footer_note:'Mecklenburg Marketing · Google Business Optimierung · lokale SEO · Reviews · QR-Kampagnen · Kundenportal.',
@@ -230,109 +226,87 @@ function mainLandingSettings(d:any){
 const automationLabels=['Rechnung überfällig','Neues Ticket erstellt','SEO Rückgang erkannt','Paket angefragt','Monatsreport fällig','Review Funnel auslösen']
 
 const seed:any={
- customers:[
-  {id:ids.barber,name:'Barber Lounge Rostock',branch:'Friseur',email:'kontakt@barber.de',phone:'0381 123456',address:'Kröpeliner Str. 12',city:'Rostock',package_name:'Growth',contact_person:'Marten Schulz',is_demo:true,demo_marked_at:'2026-05-23T13:10:00.000Z'},
-  {id:ids.roof,name:'NordDach GmbH',branch:'Dachdecker',email:'kontakt@norddach.de',phone:'0385 987654',address:'Wismarsche Str. 88',city:'Schwerin',package_name:'Premium',contact_person:'Nadine Krüger',is_demo:true,demo_marked_at:'2026-05-23T13:10:00.000Z'},
-  {id:ids.restaurant,name:'Alexas Inselblick',branch:'Restaurant',email:'kontakt@alexas.de',phone:'03991 123456',address:'Am See 4',city:'Waren',package_name:'Starter',contact_person:'Alexa Peters',is_demo:true,demo_marked_at:'2026-05-23T13:10:00.000Z'}
- ],
- demo_customers:[
-  {id:dids.restaurant,name:'DEMO Alexas Inselblick',branch:'Restaurant',package_name:'Starter',is_demo:true},
-  {id:dids.barber,name:'DEMO Barber Lounge Rostock',branch:'Friseur',package_name:'Growth',is_demo:true},
-  {id:dids.roof,name:'DEMO NordDach GmbH',branch:'Dachdecker',package_name:'Premium',is_demo:true}
- ],
- customer_subscriptions:[
-  {id:'sub1',customer_id:ids.barber,package_name:'Growth',status:'active',price_monthly:499},
-  {id:'sub2',customer_id:ids.roof,package_name:'Premium',status:'active',price_monthly:899},
-  {id:'sub3',customer_id:ids.restaurant,package_name:'Starter',status:'active',price_monthly:199},
-  {id:'sub4',customer_id:dids.restaurant,package_name:'Starter',status:'active',price_monthly:199},
-  {id:'sub5',customer_id:dids.barber,package_name:'Growth',status:'active',price_monthly:499},
-  {id:'sub6',customer_id:dids.roof,package_name:'Premium',status:'active',price_monthly:899}
- ],
+ customers:[],
+ demo_customers:[],
+ demo_invoices:[],
+ demo_contracts:[],
+ demo_notes:[],
+ demo_appointments:[],
+ demo_files:[],
+ demo_notifications:[],
+ demo_workflow_runs:[],
+ demo_qr_campaigns:[],
+ demo_mail_jobs:[],
+ customer_subscriptions:[],
  customer_tool_access:[],
- package_requests:[{id:'pr1',customer_id:ids.restaurant,package_name:'Growth',status:'Angefragt',created_at:'2026-05-10'}],
- invoices:[
-  {id:'i1',customer_id:ids.barber,invoice_number:'Re_Barber_Lounge_Rostock_1',service_type:'Growth Paketgebühr',amount:499,status:'Bezahlt',created_at:'2026-05-01',is_demo:false},
-  {id:'i2',customer_id:ids.barber,invoice_number:'Re_Barber_Lounge_Rostock_2',service_type:'Google Business',amount:249,status:'Offen',created_at:'2026-05-10',is_demo:false},
-  {id:'i3',customer_id:ids.roof,invoice_number:'Re_NordDach_GmbH_1',service_type:'Premium Paketgebühr',amount:899,status:'Offen',created_at:'2026-05-03',is_demo:false},
-  {id:'di1',customer_id:dids.barber,invoice_number:'Re_DEMO_Barber_Lounge_Rostock_1',service_type:'Demo Rechnung',amount:499,status:'Bezahlt',created_at:'2026-05-01',is_demo:true}
- ],
- tickets:[
-  {id:'t1',customer_id:ids.barber,title:'Neue Bewertungsaktion',description:'Bitte QR Karten vorbereiten.',status:'Offen',priority:'Mittel',created_at:'2026-05-09'},
-  {id:'t2',customer_id:ids.roof,title:'Leadformular prüfen',description:'Formular wurde geprüft.',status:'Geschlossen',priority:'Hoch',created_at:'2026-05-04',closed_at:'2026-05-06'}
- ],
- ticket_messages:[{id:'tm1',ticket_id:'t2',customer_id:ids.roof,sender_role:'DominiqueMM',message:'Leadformular wurde angepasst und ist wieder aktiv.',created_at:'2026-05-06'}],
- appointments:[{id:'a1',customer_id:ids.barber,client_name:'Strategie Call',appointment_date:'2026-05-15',start_time:'10:00',end_time:'11:00',status:'Geplant',notes:'Quartalsplanung besprechen.'}],
- customer_service_categories:[{id:'cat1',customer_id:ids.barber,name:'Haarschnitt Herren',price:29,description:'Standard Haarschnitt'},{id:'cat2',customer_id:ids.barber,name:'Bartpflege',price:19,description:'Bart trimmen'}],
- customer_clients:[{id:'cc1',customer_id:ids.barber,name:'Max Mustermann',phone:'0176 123456'}],
- offers:[{id:'o1',customer_id:ids.barber,title:'Premium Upgrade',package_name:'Premium',amount:899,status:'Angebot',probability:60}],
- automations:[{id:'au1',name:'Rechnung überfällig → Notification',trigger_type:'Rechnung überfällig',action_type:'Benachrichtigung',enabled:true}],
- workflow_runs:[{id:'wr1',customer_id:ids.barber,workflow_name:'Monatsreport fällig',status:'completed',created_at:'2026-05-01'}],
- activity_logs:[{id:'al1',customer_id:ids.barber,actor_name:'DominiqueMM',action:'invoice_created',message:'Rechnung erstellt',created_at:'2026-05-01'}],
- customer_notes:[{id:'n1',customer_id:ids.barber,actor_name:'DominiqueMM',note:'Kunde möchte Paket im Juni prüfen.',created_at:'2026-05-08'}],
- integrations:[{id:'int1',customer_id:ids.barber,name:'Google Business Profile',api_key:'demo-key',status:'Verbunden'}],
- seo_snapshots:[{id:'s1',customer_id:ids.barber,organic_traffic:3100,created_at:'2026-05-06'},{id:'s2',customer_id:ids.barber,organic_traffic:3200,created_at:'2026-05-13'}],
- customer_files:[
-  {id:'f1',customer_id:ids.barber,name:'Re_Barber_Lounge_Rostock_1.pdf',file_type:'invoices',mime_type:'application/pdf',size_bytes:142000,version:1,actor_name:'DominiqueMM',created_at:'2026-05-01',url:'/demo-files/demo-rechnung.pdf'},
-  {id:'f2',customer_id:ids.barber,name:'Growth_Vertrag.pdf',file_type:'contracts',mime_type:'application/pdf',size_bytes:98000,version:1,actor_name:'DominiqueMM',created_at:'2026-05-02',url:'/demo-files/demo-vertrag.pdf'}
- ],
+ package_requests:[],
+ invoices:[],
+ tickets:[],
+ ticket_messages:[],
+ appointments:[],
+ customer_service_categories:[],
+ customer_clients:[],
+ offers:[],
+ automations:[],
+ workflow_runs:[],
+ activity_logs:[],
+ customer_notes:[],
+ integrations:[],
+ seo_snapshots:[],
+ customer_files:[],
  qr_campaigns:[],
- notifications:[
-  {id:'not1',customer_id:ids.restaurant,title:'Paketanfrage',message:'Alexas Inselblick hat Growth angefragt.',type:'package_request',actor_name:'Alexas Inselblick',created_at:'2026-05-10',is_read:false}
- ],
- knowledge_articles:[
-  {id:'ka1',title:'Wie sammle ich mehr Google Bewertungen?',category:'Google Business',summary:'Aktiv nach dem Besuch fragen, QR-Code sichtbar platzieren und jede Bewertung beantworten.',content:'Nutze den Bewertungs-Booster, lege den QR-Code an Tresen oder Rechnung und bitte zufriedene Kunden direkt um Feedback.',package_scope:'Starter',created_at:'2026-05-01'},
-  {id:'ka2',title:'Was bedeutet lokale Sichtbarkeit?',category:'SEO',summary:'Lokale Sichtbarkeit beschreibt, wie häufig dein Betrieb bei relevanten Suchanfragen erscheint.',content:'Sichtbarkeit steigt durch vollständige Google Business Daten, aktuelle Fotos, Leistungen, gute Bewertungen und regelmäßige Beiträge.',package_scope:'Growth',created_at:'2026-05-02'}
- ],
- competitor_benchmarks:[
-  {id:'cb1',customer_id:ids.barber,name:'Barber Rostock Zentrum',rating:4.6,reviews:182,visibility:76,profile_score:82,keywords:['barber rostock','herrenschnitt rostock'],notes:'Starke Bewertungsanzahl, aber wenig Beiträge.',created_at:'2026-05-03'},
-  {id:'cb2',customer_id:ids.barber,name:'Herrenfriseur Altstadt',rating:4.4,reviews:94,visibility:62,profile_score:71,keywords:['friseur herren rostock'],notes:'Gute Kategorie, wenig Fotos.',created_at:'2026-05-03'}
- ],
- google_business_audits:[
-  {id:'gba1',customer_id:ids.barber,business_name:'Barber Lounge Rostock',city:'Rostock',score:78,status:'Geprüft',summary:'Profil solide, aber mehr Fotos, Leistungen und Beiträge empfohlen.',findings:['Bewertungen regelmäßig beantworten','Leistungen präziser beschreiben','Neue Fotos alle 2 Wochen hochladen'],created_at:'2026-05-12'}
- ],
- mini_audits:[
-  {id:'ma1',customer_id:ids.barber,audit_id:'gba1',title:'Mini-Audit Barber Lounge Rostock',status:'Erstellt',recommendations:['Google Business Leistungen ergänzen','Bewertungskampagne starten','Monatlichen Beitrag veröffentlichen'],created_at:'2026-05-12'}
- ],
- prospect_leads:[
-  {id:'pl1',name:'L.A. Nails Schwerin',branch:'Beauty',city:'Schwerin',rating:4.2,reviews:48,website:'',score:84,status:'Neu',reasons:['wenige Bewertungen','keine Website erkannt','Google Profil ausbaufähig'],created_at:'2026-05-13'},
-  {id:'pl2',name:'Wunderwerk Medical Beauty',branch:'Beauty',city:'Schwerin',rating:4.7,reviews:33,website:'https://example.de',score:71,status:'Neu',reasons:['wenige Fotos','wenige Beiträge','SEO-Potenzial'],created_at:'2026-05-13'}
- ],
- generated_offers:[
-  {id:'go1',customer_id:ids.barber,title:'Angebot Growth Paket + Google Business Optimierung',package_name:'Growth',amount:499,status:'Entwurf',created_at:'2026-05-11'}
- ],
- generated_contracts:[
-  {id:'gc1',customer_id:ids.barber,title:'Dienstleistungsvertrag Growth Paket',package_name:'Growth',status:'Entwurf',created_at:'2026-05-11'}
- ],
- dunning_cases:[
-  {id:'dc1',invoice_id:'i2',customer_id:ids.barber,level:1,status:'Vorbereitet',due_date:'2026-05-24',message:'Zahlungserinnerung für offene Rechnung vorbereitet.',created_at:'2026-05-15'}
- ],
- acquisition_campaigns:[
-  {id:'acq1',name:'Beauty-Schwerin Review & GBP Sprint',branch:'Beauty',city:'Schwerin',goal:'10 qualifizierte Betriebe ansprechen und 3 Mini-Audits versenden',channel:'E-Mail + Telefon',status:'Aktiv',stage:'Mini-Audit versendet',lead_ids:['pl1','pl2'],customer_ids:[],next_step:'Follow-up bei L.A. Nails und Wunderwerk vorbereiten',follow_up_at:'2026-05-22',notes:'Fokus auf Google Business Optimierung, Reviews und lokale Sichtbarkeit.',created_at:'2026-05-17'}
- ],
- customer_health_scores:[
-  {id:'chs1',customer_id:ids.barber,score:82,status:'Grün',reasons:['Paket aktiv','Bewertungen stabil','keine kritischen Tickets'],created_at:'2026-05-15'},
-  {id:'chs2',customer_id:ids.roof,score:63,status:'Gelb',reasons:['offene Rechnung','wenige neue Aktivitäten'],created_at:'2026-05-15'}
- ],
- onboarding_checklists:[
-  {id:'onb1',customer_id:ids.barber,status:'In Arbeit',steps:{company:true,google:false,brand:true,qr:true,invoice:false,first_tasks:false},created_at:'2026-05-18'}
- ],
- monthly_reports:[
-  {id:'mr1',customer_id:ids.barber,title:'Monatsreport Mai 2026',status:'Entwurf',summary:'Sichtbarkeit stabil, QR-Kampagne aktiv, Bewertungsaufbau empfohlen.',created_at:'2026-05-18'}
- ],
- approval_requests:[
-  {id:'ap1',customer_id:ids.barber,title:'Google Beitrag Mai freigeben',type:'Google Beitrag',status:'Offen',description:'Kurzbeitrag zur Sommeraktion prüfen und freigeben.',created_at:'2026-05-18'}
- ],
+ loyalty_programs:[],
+ notifications:[],
+ knowledge_articles:[],
+ competitor_benchmarks:[],
+ google_business_audits:[],
+ mini_audits:[],
+ prospect_leads:[],
+ generated_offers:[],
+ generated_contracts:[],
+ dunning_cases:[],
+ acquisition_campaigns:[],
+ customer_health_scores:[],
+ onboarding_checklists:[],
+ monthly_reports:[],
+ approval_requests:[],
  output_documents:[],
  customer_registrations:[],
  customer_invites:[],
  customer_users:[],
+ loyalty_customers:[],
+ loyalty_transactions:[],
+ loyalty_reward_redemptions:[],
+ loyalty_security_settings:[],
+ loyalty_member_security_scores:[],
+ security_events:[],
+ dsar_requests:[],
+ public_landing_pages:[],
+ loyalty_rewards:[],
+ loyalty_reward_rules:[],
+ staff_codes:[],
+ customer_seo_metrics:[],
+ review_funnel_stats:[],
+ client_success_events:[],
  landing_page_settings:[defaultMainLandingSettings]
+}
+
+const demoScopedTables=new Set([
+ 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','competitor_benchmarks','google_business_audits','mini_audits','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_member_security_scores','security_events','dsar_requests'
+])
+function withModeScope(table:string,payload:any){
+ const scoped={...payload}
+ if(demoScopedTables.has(table)){
+  if(isDemoMode()) scoped.is_demo=true
+  else if(scoped.is_demo===undefined) scoped.is_demo=false
+ }
+ return scoped
 }
 
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
- const tables=['customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','landing_page_settings','public_landing_pages','loyalty_rewards','loyalty_reward_rules','staff_codes']
+ const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes']
  function notify(m:string){setToast(m);setTimeout(()=>setToast(''),3200)}
  useEffect(()=>{
   function onGlobalToast(e:any){notify(String(e?.detail||''))}
@@ -342,7 +316,18 @@ function useStore(){
  async function load(){
   if(!hasSupabase||!supabase)return
   const r:any={}
-  for(const t of tables){const {data}=await supabase.from(t).select('*');r[t]=data||[]}
+  const demoActive=isDemoMode()
+  for(const t of tables){
+   try{
+    let q:any=supabase.from(t).select('*')
+    if(!demoActive&&demoScopedTables.has(t)) q=q.or('is_demo.is.false,is_demo.is.null')
+    const {data,error}=await q
+    if(error&&(!demoActive&&demoScopedTables.has(t))){
+     const fallback=await supabase.from(t).select('*')
+     r[t]=fallback.data||[]
+    }else r[t]=data||[]
+   }catch(_){r[t]=[]}
+  }
   setData((p:any)=>({...p,...r}))
  }
  useEffect(()=>{load()},[])
@@ -353,32 +338,30 @@ function useStore(){
   try{if(hasSupabase&&supabase){void Promise.resolve(supabase.from('activity_logs').insert(log)).then(()=>undefined,()=>undefined)}}catch{}
  }
  async function create(table:string,row:any){
-  const payload={id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()}
+  const payload=withModeScope(table,{id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()})
   try{
    if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
    else setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
    addActivity('create',table,payload.id,{live:hasSupabase})
    notify('Gespeichert')
   }catch(e:any){
-   console.warn(`[MMOS] ${table} remote create failed, using local fallback`,e)
-   setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
-   addActivity('create_local_fallback',table,payload.id,{error:e?.message})
-   notify('Lokal gespeichert')
+   console.warn(`[MMOS] ${table} remote create failed`,e)
+   notify('Live-Speicherung fehlgeschlagen – es wurde kein lokaler Beispieldatensatz angelegt.')
+   throw e
   }
   return payload
  }
  async function update(table:string,id:string,row:any){
-  const normalized={...row,updated_at:row.updated_at||new Date().toISOString()}
+  const normalized=withModeScope(table,{...row,updated_at:row.updated_at||new Date().toISOString()})
   try{
    if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
    else setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
    addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
    notify('Aktualisiert')
   }catch(e:any){
-   console.warn(`[MMOS] ${table} remote update failed, using local fallback`,e)
-   setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
-   addActivity('update_local_fallback',table,id,{error:e?.message})
-   notify('Lokal aktualisiert')
+   console.warn(`[MMOS] ${table} remote update failed`,e)
+   notify('Live-Aktualisierung fehlgeschlagen – lokale Änderung wurde nicht gespeichert.')
+   throw e
   }
   return {id,...normalized}
  }
@@ -389,10 +372,9 @@ function useStore(){
    addActivity('delete',table,id,{live:hasSupabase})
    notify('Gelöscht')
   }catch(e:any){
-   console.warn(`[MMOS] ${table} remote delete failed, using local fallback`,e)
-   setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
-   addActivity('delete_local_fallback',table,id,{error:e?.message})
-   notify('Lokal gelöscht')
+   console.warn(`[MMOS] ${table} remote delete failed`,e)
+   notify('Live-Löschung fehlgeschlagen – lokale Löschung wurde nicht gespeichert.')
+   throw e
   }
   return true
  }
@@ -406,7 +388,7 @@ function demoCustomers(d:any){
  ;[...(d.demo_customers||[]),...(d.customers||[]).filter((c:any)=>isDemoRecord(c))].forEach((c:any)=>byId.set(c.id,c))
  return Array.from(byId.values())
 }
-function allCustomers(d:any){return isDemoMode()? [...liveCustomers(d),...demoCustomers(d)] : liveCustomers(d)}
+function allCustomers(d:any){return isDemoMode()? demoCustomers(d) : liveCustomers(d)}
 function liveCustomerById(d:any,id:string){return liveCustomers(d).find((c:any)=>String(c.id)===String(id))}
 function rawCustomerById(d:any,id:string){return [...(d.customers||[]),...(d.demo_customers||[])].find((c:any)=>String(c.id)===String(id))}
 function cname(d:any,id:string){return allCustomers(d).find((c:any)=>String(c.id)===String(id))?.name||'Kein Live-Kunde ausgewählt'}
@@ -458,13 +440,13 @@ function filterLiveDataForLive(d:any){
  Object.keys(out).forEach((key:string)=>{
   if(!Array.isArray(out[key]))return
   if(key==='customers'){out[key]=liveCustomers(d);return}
-  if(key==='demo_customers'){out[key]=[];return}
+  if(key.startsWith('demo_')){out[key]=[];return}
   if(alwaysKeep.has(key))return
   out[key]=out[key].filter((row:any)=>!isRecordLinkedToDemoCustomer(d,row))
  })
  return out
 }
-function liveOnlyMode(role?:string,view?:string){return !isDemoMode()&&!(role==='admin'&&view==='demo_environment')}
+function liveOnlyMode(role?:string,view?:string){return !isDemoMode()}
 function customerScopedView(view:string){return ['crm','finance','booking','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','package_recommendations','package_matrix','business_audit','mini_audit','offer_generator','contract_generator','output_engine','onboarding','reports','monthly_reports','approvals','packages'].includes(view)}
 function cpkg(d:any,id:string){return d.customer_subscriptions.find((s:any)=>s.customer_id===id)?.package_name||cobj(d,id)?.package_name||'Starter'}
 function pprice(p:string){return packageDefs[p]?.price||199}
@@ -478,7 +460,7 @@ function Toast({m}:any){return m?<div className="toast green" role="status" aria
 function Badge({children,type='purple'}:any){return <span className={`badge ${type}`}>{children}</span>}
 function Card({title,children,action}:any){return <section className="card"><div className="row between"><h2>{title}</h2>{action}</div>{children}</section>}
 function Head({title,sub,action}:any){return <div className="head"><div><h1>{title}</h1>{sub&&<div className="sub">{sub}</div>}</div>{action}</div>}
-function NoLiveCustomerPanel({setView}:any){return <><Head title="Kein Live-Kunde ausgewählt" sub="Alle bisherigen Kunden wurden als Demo markiert und sind im Live-Modus ausgeblendet." action={<LiveModeBadge/>}/><Card title="Live-Bereich ohne Demo-Daten"><p className="sub">In diesem Tool werden keine Demo-Kunden, Demo-Kommentare, Demo-Tickets, Demo-Paketanfragen, Demo-Kampagnen oder sonstige Demo-Datensätze mehr angezeigt. Lege einen neuen Live-Kunden an oder öffne vorhandene Demo-Daten ausschließlich über die interne Demo-Umgebung.</p><div className="toolbarActions"><button className="btn" onClick={()=>setView?.('crm')}>Live-Kunden anlegen</button><button className="btn secondary" onClick={()=>setView?.('demo_environment')}>Demo Umgebung öffnen</button></div></Card></>}
+function NoLiveCustomerPanel({setView}:any){return <><Head title="Kein Live-Kunde ausgewählt" sub="Für dieses Modul muss zuerst ein echter Kunde angelegt oder ausgewählt werden." action={<LiveModeBadge/>}/><Card title="Live-Bereich ohne Beispieldaten"><p className="sub">Dieses Live-System zeigt keine Beispiel- oder Testdatensätze mehr an. Lege im CRM einen echten Kunden an und öffne danach das gewünschte Modul.</p><div className="toolbarActions"><button className="btn" onClick={()=>setView?.('crm')}>Live-Kunden anlegen</button>{isDemoFeatureEnabled()&&<button className="btn secondary" onClick={()=>setView?.('demo_environment')}>Interne Testumgebung öffnen</button>}</div></Card></>}
 function Metric({label,value,sub}:any){return <div className="metric"><div className="metricLabel">{label}</div><div className="metricValue">{value}</div>{sub&&<div className="delta">{sub}</div>}</div>}
 function Search({items,value,onChange,placeholder}:any){const [q,setQ]=useState('');const s=items.find((x:any)=>x.id===value);const list=items.filter((x:any)=>(x.name+x.branch+x.email).toLowerCase().includes(q.toLowerCase()));return <div style={{position:'relative'}}><input className="input" placeholder={placeholder} value={s&&!q?s.name:q} onChange={e=>{setQ(e.target.value);if(s)onChange('')}}/>{q&&<div className="card floating">{list.map((x:any)=><button className="nav" key={x.id} onClick={()=>{onChange(x.id);setQ('')}}>{x.name}<div className="sub">{x.branch} · {x.package_name}</div></button>)}</div>}</div>}
 
@@ -492,9 +474,82 @@ function campaignOptionsForCustomer(store:any,cid:string){return (store.data.qr_
 
 // V42.20 Professional UX & Output helpers
 function EmptyState({icon='✨',title,children,action}:any){return <div className="proEmpty"><div className="proEmptyIcon">{icon}</div><h2>{title}</h2><p>{children}</p>{action}</div>}
-function TrustHint({source='System',updated}:any){return <div className="trustHint"><span>Quelle: {source}</span><span>Zuletzt aktualisiert: {updated?new Date(updated).toLocaleString('de-DE'):'Demo/Fallback'}</span></div>}
-function LiveModeBadge(){return <Badge type={hasSupabase?'green':'yellow'}>{hasSupabase?'Live-Daten':'Lokaler Fallback'}</Badge>}
+function TrustHint({source='System',updated}:any){return <div className="trustHint"><span>Quelle: {source}</span><span>Zuletzt aktualisiert: {updated?new Date(updated).toLocaleString('de-DE'):'noch nicht synchronisiert'}</span></div>}
+function LiveModeBadge(){return <Badge type={hasSupabase?'green':'yellow'}>{hasSupabase?'Live-Daten':'Nur lokal ohne Supabase'}</Badge>}
 function ToolTipHint({title,children}:any){return <div className="hintBox"><b>{title}</b><p>{children}</p></div>}
+
+function improvePlaceholder(raw:string){
+ const v=String(raw||'').trim()
+ const lower=v.toLowerCase()
+ if(!v)return ''
+ if(['name','titel','beschreibung','preis','e-mail','email','telefon','ort','stadt','kunde','slug'].includes(lower)){
+  const map:any={name:'Vollständiger Name oder klare Bezeichnung',titel:'Kurzer Titel, der den Eintrag eindeutig beschreibt',beschreibung:'Kurz erklären, worum es bei diesem Eintrag geht',preis:'Preis in Euro ohne Währungssymbol',email:'E-Mail-Adresse für Login oder Kontakt','e-mail':'E-Mail-Adresse für Login oder Kontakt',telefon:'Telefonnummer mit Vorwahl',ort:'Ort oder Einsatzgebiet',stadt:'Stadt oder Region',kunde:'Kunde suchen oder auswählen',slug:'URL-Kurzname, z. B. kunde-bonusclub'}
+  return map[lower]||v
+ }
+ return v.replace(/demo/gi,'intern').replace(/ersatz/gi,'Ersatzwert').replace(/muster/gi,'Beispiel')
+}
+function FieldHelpEnhancer(){
+ useEffect(()=>{
+  if(typeof document==='undefined')return
+  const nodes=Array.from(document.querySelectorAll('input[placeholder], textarea[placeholder]')) as HTMLInputElement[]
+  nodes.forEach((el:any)=>{
+   const next=improvePlaceholder(el.getAttribute('placeholder')||'')
+   if(next) el.setAttribute('placeholder',next)
+   if(!el.getAttribute('title')&&next) el.setAttribute('title',next)
+   if(!el.getAttribute('aria-label')&&next) el.setAttribute('aria-label',next)
+  })
+ },[])
+ return null
+}
+
+
+
+const rewardFieldMeta:any={
+ title:{label:'Prämienname',help:'Interner und öffentlicher Name der Prämie. Dieser Name erscheint später für den Endkunden auf der Slug-/Bonus-Seite.',example:'Beispiel: Kostenloser Kaffee, 10% Rabatt, Gratis Haarschnitt'},
+ type:{label:'Prämienart',help:'Ordnet die Prämie fachlich ein. Das hilft bei Übersicht, Reporting und späteren Auswertungen.',example:'Typische Werte: Rabatt, Gratisprodukt, Gutschein, Service, VIP-Vorteil'},
+ points:{label:'Benötigte Punkte',help:'So viele Punkte muss der Endkunde besitzen, bevor diese Prämie eingelöst werden kann.',example:'Beispiel: 100 = ab 100 Punkten sichtbar und einlösbar'},
+ qr_campaign_id:{label:'Zugehörige QR-Kampagne',help:'Verknüpft die Prämie optional mit einer bestimmten QR-/Loyalty-Kampagne des ausgewählten Kunden. Leer lassen, wenn die Prämie allgemein für den Kunden gelten soll.',example:'Nur Kampagnen des aktuell ausgewählten Kunden werden angeboten.'},
+ staff_code_required:{label:'Mitarbeitercode erforderlich',help:'Wenn aktiv, kann der Endkunde die Prämie nicht allein einlösen. Ein Mitarbeiter muss im Laden den Code oder die PIN eingeben.',example:'Empfohlen für Rabatte, Gutscheine und Gratisprodukte.'},
+ allow_multiple_redemptions:{label:'Mehrfach einlösbar',help:'Legt fest, ob derselbe Endkunde diese Prämie mehr als einmal nutzen darf.',example:'Nein = einmalig pro Endkunde. Ja = mehrfach möglich, solange Punkte und Limit passen.'},
+ max_redemptions_per_member:{label:'Max. Einlösungen pro Endkunde',help:'Zusätzliches Limit pro Endkunde. 1 bedeutet einmalig. 0 bedeutet unbegrenzt, sofern „Mehrfach einlösbar“ aktiv ist.',example:'0 = kein zusätzliches Limit, 1 = nur einmal, 3 = maximal dreimal.'}
+}
+const sharedFieldMeta:any={
+ name:{label:'Name',help:'Bezeichnung für den Eintrag.',example:'Kurzer, eindeutig verständlicher Name.'},
+ label:{label:'Bezeichnung',help:'Interne Bezeichnung, damit du den Eintrag später klar wiedererkennst.',example:'Beispiel: Thekencode Frühschicht'},
+ code:{label:'Code / PIN',help:'Der Code, den Mitarbeiter zur Bestätigung eingeben.',example:'Beispiel: 2468'},
+ purpose:{label:'Zweck',help:'Legt fest, ob der QR-Code für Loyalty, Google Reviews oder beides genutzt wird.',example:'loyalty, review oder both'},
+ points_per_scan:{label:'Punkte pro Scan',help:'Anzahl der Punkte, die ein Endkunde bei einem gültigen QR-Scan erhält.',example:'Beispiel: 10'},
+ max_scans_per_member:{label:'Max. QR-Einlösungen pro Endkunde',help:'Wie oft ein Endkunde diesen QR-Code insgesamt gültig einlösen darf. 0 bedeutet unbegrenzt.',example:'1 = nur einmal, 5 = maximal fünfmal, 0 = unbegrenzt.'},
+ scan_cooldown_minutes:{label:'QR-Cooldown in Minuten',help:'Mindestabstand zwischen zwei gültigen QR-Einlösungen desselben Endkunden.',example:'1440 = einmal pro Tag, 360 = alle 6 Stunden, 0 = kein Cooldown.'},
+ daily_point_limit_per_member:{label:'Punkte-Tageslimit pro Endkunde',help:'Maximale Punkte, die ein Endkunde pro Tag sammeln darf. 0 bedeutet unbegrenzt.',example:'Beispiel: 50'},
+ suspicion_score_threshold:{label:'Verdachts-Score Warnschwelle',help:'Ab diesem Score wird ein Endkunde im Security Center als auffällig markiert.',example:'Empfohlen: 70'},
+ trigger:{label:'Auslöser',help:'Ereignis, das eine Regel startet.',example:'Beispiel: QR Scan'},
+ condition:{label:'Bedingung',help:'Zusätzliche Bedingung, unter der die Regel gilt.',example:'Beispiel: 08:00-11:00 Uhr'},
+ multiplier:{label:'Multiplikator',help:'Faktor für Punkteaktionen.',example:'2 = doppelte Punkte'},
+ slug:{label:'Slug / Seitenadresse',help:'Öffentlicher Kurzname der Seite in der URL.',example:'kunde-bonusclub'},
+ headline:{label:'Überschrift',help:'Hauptüberschrift auf der öffentlichen Slug-Seite.',example:'Willkommen im Bonusclub'},
+ mode:{label:'Modus',help:'Legt fest, was die öffentliche Seite hauptsächlich macht.',example:'loyalty, review oder both'},
+ active:{label:'Aktiv',help:'Steuert, ob der Eintrag aktiv genutzt werden soll.',example:'Aktiv = sichtbar/nutzbar.'}
+}
+function formFieldMeta(view:string,k:string){return (view==='loyalty_rewards'&&rewardFieldMeta[k])||sharedFieldMeta[k]||{label:k.replace(/_/g,' '),help:'Feld für die Konfiguration dieses Moduls.',example:''}}
+function formatFieldDisplay(view:string,k:string,v:any){
+ if(k==='staff_code_required')return v?'Mitarbeitercode erforderlich':'ohne Mitarbeitercode'
+ if(k==='allow_multiple_redemptions')return v?'mehrfach einlösbar':'einmalig einlösbar'
+ if(v===0&&(k==='max_redemptions_per_member'||k==='max_scans_per_member'||k==='scan_cooldown_minutes'||k==='daily_point_limit_per_member'))return 'unbegrenzt / kein Limit'
+ return String(v)
+}
+function defaultFormValue(view:string,k:string,title:string){
+ if(view==='loyalty_rewards'){
+  if(k==='staff_code_required')return true
+  if(k==='allow_multiple_redemptions')return false
+  if(k==='max_redemptions_per_member')return 1
+  if(k==='points')return 0
+  return ''
+ }
+ if(['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold'].includes(k))return 0
+ if(['staff_code_required','allow_multiple_redemptions'].includes(k))return k==='staff_code_required'
+ return ''
+}
 function getDocumentCss(){return `<style>body{font-family:Inter,Arial,sans-serif;background:#f5f7fb;color:#111827;margin:0}.doc{max-width:860px;margin:0 auto;background:#fff;min-height:100vh;padding:42px}.top{display:flex;justify-content:space-between;border-bottom:2px solid #111827;padding-bottom:18px;margin-bottom:28px}.mark{width:46px;height:46px;border-radius:14px;background:#111827;color:#fff;display:grid;place-items:center;font-weight:900}.brand{display:flex;gap:12px;align-items:center}.badge{display:inline-block;border:1px solid #d4af37;color:#7c5c00;border-radius:999px;padding:6px 12px;font-size:12px}.metric{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.metric div{border:1px solid #e5e7eb;border-radius:12px;padding:12px}.section{margin:24px 0}.section h2{font-size:18px}.footer{margin-top:38px;border-top:1px solid #e5e7eb;padding-top:16px;color:#6b7280;font-size:12px}@media print{body{background:#fff}.doc{box-shadow:none}}</style>`}
 function buildBrandDocument(title:string, subtitle:string, body:string, meta:any={}){return `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title>${getDocumentCss()}</head><body><main class="doc"><div class="top"><div class="brand"><div class="mark">M</div><div><b>Mecklenburg Marketing</b><div>Google Business · lokale SEO · Reviews · Kampagnen</div></div></div><span class="badge">${meta.status||'Entwurf'}</span></div><h1>${title}</h1><p>${subtitle||''}</p>${body}<div class="footer">Erstellt mit Mecklenburg Marketing OS · ${new Date().toLocaleDateString('de-DE')} · Dieses Dokument ist ein professioneller Entwurf und kann vor Versand final geprüft werden.</div></main></body></html>`}
 function openBrandDocument(title:string, subtitle:string, body:string, meta:any={}){const w=window.open('','_blank');if(!w)return;w.document.write(buildBrandDocument(title,subtitle,body,meta));w.document.close();setTimeout(()=>w.focus(),150)}
@@ -507,7 +562,7 @@ async function openPdfDocument(title:string, subtitle:string, body:string, meta:
   window.open(url,'_blank')
   setTimeout(()=>URL.revokeObjectURL(url),60000)
  }catch(e:any){
-  appToast(`PDF-Erzeugung über Gotenberg nicht möglich: ${e.message || e}. HTML/Print-Fallback wird geöffnet.`)
+  appToast(`PDF-Erzeugung über Gotenberg nicht möglich: ${e.message || e}. HTML-/Druckansicht wird geöffnet.`)
   openBrandDocument(title,subtitle,body,meta)
  }
 }
@@ -526,7 +581,7 @@ function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
  const steps=Array.isArray(lp.steps)&&lp.steps.length?lp.steps:defaultMainLandingSettings.steps
  const faq=Array.isArray(lp.faq)&&lp.faq.length?lp.faq:defaultMainLandingSettings.faq
  const metrics=Array.isArray(lp.example_metrics)&&lp.example_metrics.length?lp.example_metrics:defaultMainLandingSettings.example_metrics
- return <div className="landing proLanding"><div className="landingNav proLandingNav"><div className={lp.logo_url?'logo hasImage':'logo'}>{lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}{lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||'Mecklenburg Marketing'}</span>}</div><div className="row"><button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button>{lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Demo ansehen'}</button>}</div></div><section className="hero proHero"><div><Badge>Lokales Marketing-Betriebssystem</Badge><h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1><p>{lp.hero_subline}</p><div className="landingCtas"><button className="btn" onClick={()=>{window.location.href='/auth'}}>Portal öffnen</button>{lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Live-Demo starten'}</button>}</div></div><div className="proMock"><div className="mockTop"><span></span><span></span><span></span></div><div className="grid4"><Metric label="Sichtbarkeit" value="+34%"/><Metric label="Reviews" value="128"/><Metric label="Leads" value="42"/><Metric label="Health" value="Grün"/></div><div className="chartLine">{Array.from({length:14},(_,i)=><span key={i} style={{height:`${22+(i*9)%70}px`}} />)}</div><div className="item"><b>Nächste Empfehlung</b><span>Google Business Fotos aktualisieren und Bewertungs-Booster starten.</span></div></div></section><section className="proSection"><h2>Ablauf in 3 Schritten</h2><div className="grid3">{steps.slice(0,3).map((s:any,i:number)=><Card key={`${s.title}-${i}`} title={`${i+1}. ${s.title}`}><p className="sub">{s.description}</p>{i===2&&<div className="miniMetrics">{metrics.map((m:any)=><Metric key={m.label} label={m.label} value={m.value}/>)}</div>}</Card>)}</div></section><section className="landingPackages proSection"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section><section className="proSection"><Card title="FAQ">{faq.map((f:any,i:number)=><div className="item" key={`${f.question}-${i}`}><b>{f.question}</b><span>{f.answer}</span></div>)}</Card></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
+ return <div className="landing proLanding"><div className="landingNav proLandingNav"><div className={lp.logo_url?'logo hasImage':'logo'}>{lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}{lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||'Mecklenburg Marketing'}</span>}</div><div className="row"><button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button>{isDemoFeatureEnabled()&&lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Interne Testansicht'}</button>}</div></div><section className="hero proHero"><div><Badge>Lokales Marketing-Betriebssystem</Badge><h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1><p>{lp.hero_subline}</p><div className="landingCtas"><button className="btn" onClick={()=>{window.location.href='/auth'}}>Portal öffnen</button>{isDemoFeatureEnabled()&&lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Interne Testansicht öffnen'}</button>}</div></div><div className="proMock"><div className="mockTop"><span></span><span></span><span></span></div><div className="grid4"><Metric label="Live-KPIs" value="bereit"/><Metric label="Reviews" value="sync"/><Metric label="Leads" value="sync"/><Metric label="Health" value="sync"/></div><div className="chartLine">{Array.from({length:14},(_,i)=><span key={i} style={{height:`${22+(i*9)%70}px`}} />)}</div><div className="item"><b>Nächste Empfehlung</b><span>Google Business Fotos aktualisieren und Bewertungs-Booster starten.</span></div></div></section><section className="proSection"><h2>Ablauf in 3 Schritten</h2><div className="grid3">{steps.slice(0,3).map((s:any,i:number)=><Card key={`${s.title}-${i}`} title={`${i+1}. ${s.title}`}><p className="sub">{s.description}</p>{i===2&&<div className="miniMetrics">{metrics.map((m:any)=><Metric key={m.label} label={m.label} value={m.value}/>)}</div>}</Card>)}</div></section><section className="landingPackages proSection"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section><section className="proSection"><Card title="FAQ">{faq.map((f:any,i:number)=><div className="item" key={`${f.question}-${i}`}><b>{f.question}</b><span>{f.answer}</span></div>)}</Card></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
 }
 
 function Avatar({name,src,size=34}:any){return src?<img className="avatar" style={{width:size,height:size}} src={src}/>:<div className="avatar fallback" style={{width:size,height:size}}>{String(name||'?').slice(0,1)}</div>}
@@ -558,8 +613,8 @@ async function upload(file:File|null=selected){
   if(!file){store.notify?.('Bitte Datei auswählen'); return}
   const fd=new FormData(); fd.append('file',file); fd.append('customer_id',cid); fd.append('file_type',fileType); if(refTable)fd.append('ref_table',refTable); if(refId)fd.append('ref_id',refId)
   try{await apiRequest(`${API_BASE}/api/storage/upload`,{method:'POST',body:fd,expectJson:false,timeoutMs:30000}); await store.load()}catch(e:any){
-   store.notify?.(e.message||'Upload im Backend fehlgeschlagen. Lokaler Fallback wird angelegt.')
-   await store.create('customer_files',{customer_id:cid,name:file.name,original_name:file.name,file_type:fileType,bucket:fileType,storage_path:'#',mime_type:file.type,size_bytes:file.size,version:1,ref_table:refTable,ref_id:refId,actor_name:activeAdmin,url:URL.createObjectURL(file)})
+   store.notify?.(e.message||'Upload im Backend fehlgeschlagen. Es wurde kein lokaler Beispieldatensatz angelegt.')
+   throw e
   }
   await store.create('notifications',{customer_id:cid,title:`${activeAdmin} hat Datei hochgeladen`,message:`${activeAdmin} hat ${file.name} hochgeladen.`,type:'admin_change',actor_name:activeAdmin})
  }
@@ -588,7 +643,7 @@ function QRCodes({store,cid,setCid,role='admin'}:any){
  }
  async function v34CreateQrCampaign(){
   try{
-   const r=await v33FunctionalClient.createQrCampaign(customer,{title:f.title||'Neue QR Kampagne',purpose:f.purpose,mode:f.purpose,points_per_scan:Number(f.points_per_scan||10),max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),google_review_url:f.google_review_url,create_loyalty:f.purpose!=='review'})
+   const r=await v33FunctionalClient.createQrCampaign(customer,{title:f.title||'Neue QR Kampagne',purpose:f.purpose,mode:f.purpose,points_per_scan:Number(f.points_per_scan||10),max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70),google_review_url:f.google_review_url,create_loyalty:f.purpose!=='review'})
    await createLocalQr({...r.qr_campaign,public_url:r.public_url_path?`${appOrigin()}${r.public_url_path}`:undefined})
    store.notify?.(`QR Kampagne erstellt: ${r.public_url_path}`)
    setF({...f,title:''})
@@ -598,7 +653,7 @@ function QRCodes({store,cid,setCid,role='admin'}:any){
    store.notify?.(`Backend nicht erreichbar, QR lokal erstellt`)
   }
  }
- return <><Head title="QR Codes" sub="Kampagnentyp, Google-Bewertungen, Loyalty-Punkte und öffentliche Slug-Seite." action={<button className="btn" onClick={v34CreateQrCampaign}>QR Kampagne erstellen</button>}/><div className="grid2"><Card title="Kunde & Ziel">{role==='admin'?<Search items={allCustomers(store.data)} value={customer} onChange={(id:string)=>{setCustomer(id);setCid?.(id)}} placeholder="Kunde für QR-Kampagne suchen"/>:<div className="item"><b>Kunde</b><span>{cname(store.data,cid)}</span></div>}<input className="input" placeholder="Kampagnentitel, z. B. Google Bewertung & Bonuspunkte" value={f.title} onChange={e=>setF({...f,title:e.target.value})}/><select className="input" value={f.purpose} onChange={e=>setF({...f,purpose:e.target.value})}><option value="review">Nur Google Bewertungen</option><option value="loyalty">Nur Loyalty / Punkte</option><option value="both">Google Bewertungen + Loyalty</option></select><input className="input" type="number" min="0" placeholder="Punkte pro Scan für diesen QR-Code" value={f.points_per_scan} onChange={e=>setF({...f,points_per_scan:Number(e.target.value)})}/><div className="grid2 mini"><input className="input" type="number" min="0" placeholder="Max. Einlösungen pro Endkunde, 0 = unbegrenzt" value={f.max_scans_per_member} onChange={e=>setF({...f,max_scans_per_member:Number(e.target.value)})}/><input className="input" type="number" min="0" placeholder="Cooldown in Minuten zwischen Scans, 0 = keiner" value={f.scan_cooldown_minutes} onChange={e=>setF({...f,scan_cooldown_minutes:Number(e.target.value)})}/></div><div className="sub">Missbrauchsschutz: begrenzt pro Bonuskonto, wie oft dieser QR-Code Punkte geben darf und nach wie vielen Minuten erneut Punkte möglich sind.</div><input className="input" placeholder="Interne Feedback-E-Mail für kritische Bewertungen" value={f.internal_email} onChange={e=>setF({...f,internal_email:e.target.value})}/><input className="input" placeholder="Google Bewertungslink des Kunden" value={f.google_review_url} onChange={e=>setF({...f,google_review_url:e.target.value})}/></Card><Card title="Sterne-Regeln"><div className="row"><input className="input" type="number" min="1" max="5" value={f.internal_from} onChange={e=>setF({...f,internal_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.internal_to} onChange={e=>setF({...f,internal_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für internes Feedback</div><div className="row"><input className="input" type="number" min="1" max="5" value={f.google_from} onChange={e=>setF({...f,google_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.google_to} onChange={e=>setF({...f,google_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für Google Weiterleitung</div></Card></div><Card title="QR Kampagnen">{rows.length===0&&<div className="sub">Noch keine Kampagne für diesen Kunden.</div>}{rows.map((q:any)=>{const slug=q.slug||slugifyLocal(q.title||q.name||q.id);const url=q.public_url||publicSlugUrl(slug);const mode=q.purpose||q.mode||q.metadata?.purpose||'loyalty';return <div className="item" key={q.id}><V424QrImage value={url}/><div><b>{q.title||q.name}</b><div className="sub">{slug} · Typ: {mode==='both'?'Bewertung + Loyalty':mode==='review'?'Google Bewertung':'Loyalty'} · {q.points_per_scan||q.metadata?.points_per_scan||10} Punkte</div><div className="sub">Limit: {Number(q.max_scans_per_member ?? q.metadata?.max_scans_per_member ?? 0) || '∞'}x pro Endkunde · Cooldown: {Number(q.scan_cooldown_minutes ?? q.metadata?.scan_cooldown_minutes ?? 0) || 0} Min.</div><div className="sub">{q.active===false?'Inaktiv':'Aktiv'} · {q.internal_from||1}-{q.internal_to||3} intern · {q.google_from||4}-{q.google_to||5} Google</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button>{(q.google_review_url||q.metadata?.google_review_url)&&<button className="btn secondary" onClick={()=>window.open(q.google_review_url||q.metadata?.google_review_url,'_blank')}>Bewertungsseite öffnen</button>}<button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>store.update('qr_campaigns',q.id,{active:q.active===false,status:q.active===false?'Aktiv':'Inaktiv'})}>{q.active===false?'Aktivieren':'Deaktivieren'}</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div></div></div>})}</Card><V42PublicLandingPreview campaigns={rows} customer={cobj(store.data,customer)}/></>
+ return <><Head title="QR Codes" sub="Kampagnentyp, Google-Bewertungen, Loyalty-Punkte und öffentliche Slug-Seite." action={<button className="btn" onClick={v34CreateQrCampaign}>QR Kampagne erstellen</button>}/><div className="grid2"><Card title="Kunde & Ziel">{role==='admin'?<Search items={allCustomers(store.data)} value={customer} onChange={(id:string)=>{setCustomer(id);setCid?.(id)}} placeholder="Kunde für QR-Kampagne suchen"/>:<div className="item"><b>Kunde</b><span>{cname(store.data,cid)}</span></div>}<input className="input" placeholder="Kampagnentitel, z. B. Google Bewertung & Bonuspunkte" value={f.title} onChange={e=>setF({...f,title:e.target.value})}/><select className="input" value={f.purpose} onChange={e=>setF({...f,purpose:e.target.value})}><option value="review">Nur Google Bewertungen</option><option value="loyalty">Nur Loyalty / Punkte</option><option value="both">Google Bewertungen + Loyalty</option></select><input className="input" type="number" min="0" placeholder="Punkte pro Scan für diesen QR-Code" value={f.points_per_scan} onChange={e=>setF({...f,points_per_scan:Number(e.target.value)})}/><div className="grid2 mini"><input className="input" type="number" min="0" placeholder="Max. Einlösungen pro Endkunde, 0 = unbegrenzt" value={f.max_scans_per_member} onChange={e=>setF({...f,max_scans_per_member:Number(e.target.value)})}/><input className="input" type="number" min="0" placeholder="Cooldown in Minuten zwischen Scans, 0 = keiner" value={f.scan_cooldown_minutes} onChange={e=>setF({...f,scan_cooldown_minutes:Number(e.target.value)})}/></div><div className="grid2 mini"><input className="input" type="number" min="0" placeholder="Punkte-Tageslimit pro Endkunde, 0 = unbegrenzt" value={f.daily_point_limit_per_member||0} onChange={e=>setF({...f,daily_point_limit_per_member:Number(e.target.value)})}/><input className="input" type="number" min="0" max="100" placeholder="Verdachts-Score Warnschwelle, z. B. 70" value={f.suspicion_score_threshold||70} onChange={e=>setF({...f,suspicion_score_threshold:Number(e.target.value)})}/></div><div className="sub">Missbrauchsschutz: begrenzt pro Bonuskonto, wie oft dieser QR-Code Punkte geben darf, nach wie vielen Minuten erneut Punkte möglich sind und ab welchem Score der Endkunde auffällig ist.</div><input className="input" placeholder="Interne Feedback-E-Mail für kritische Bewertungen" value={f.internal_email} onChange={e=>setF({...f,internal_email:e.target.value})}/><input className="input" placeholder="Google Bewertungslink des Kunden" value={f.google_review_url} onChange={e=>setF({...f,google_review_url:e.target.value})}/></Card><Card title="Sterne-Regeln"><div className="row"><input className="input" type="number" min="1" max="5" value={f.internal_from} onChange={e=>setF({...f,internal_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.internal_to} onChange={e=>setF({...f,internal_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für internes Feedback</div><div className="row"><input className="input" type="number" min="1" max="5" value={f.google_from} onChange={e=>setF({...f,google_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.google_to} onChange={e=>setF({...f,google_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für Google Weiterleitung</div></Card></div><Card title="QR Kampagnen">{rows.length===0&&<div className="sub">Noch keine Kampagne für diesen Kunden.</div>}{rows.map((q:any)=>{const slug=q.slug||slugifyLocal(q.title||q.name||q.id);const url=q.public_url||publicSlugUrl(slug);const mode=q.purpose||q.mode||q.metadata?.purpose||'loyalty';return <div className="item" key={q.id}><V424QrImage value={url}/><div><b>{q.title||q.name}</b><div className="sub">{slug} · Typ: {mode==='both'?'Bewertung + Loyalty':mode==='review'?'Google Bewertung':'Loyalty'} · {q.points_per_scan||q.metadata?.points_per_scan||10} Punkte</div><div className="sub">Limit: {Number(q.max_scans_per_member ?? q.metadata?.max_scans_per_member ?? 0) || '∞'}x pro Endkunde · Cooldown: {Number(q.scan_cooldown_minutes ?? q.metadata?.scan_cooldown_minutes ?? 0) || 0} Min. · Punkte/Tag: {Number(q.daily_point_limit_per_member ?? q.metadata?.daily_point_limit_per_member ?? 0) || '∞'} · Score-Warnung: {Number(q.suspicion_score_threshold ?? q.metadata?.suspicion_score_threshold ?? 70)}</div><div className="sub">{q.active===false?'Inaktiv':'Aktiv'} · {q.internal_from||1}-{q.internal_to||3} intern · {q.google_from||4}-{q.google_to||5} Google</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button>{(q.google_review_url||q.metadata?.google_review_url)&&<button className="btn secondary" onClick={()=>window.open(q.google_review_url||q.metadata?.google_review_url,'_blank')}>Bewertungsseite öffnen</button>}<button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>store.update('qr_campaigns',q.id,{active:q.active===false,status:q.active===false?'Aktiv':'Inaktiv'})}>{q.active===false?'Aktivieren':'Deaktivieren'}</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div></div></div>})}</Card><V42PublicLandingPreview campaigns={rows} customer={cobj(store.data,customer)}/></>
 }
 
 
@@ -627,10 +682,10 @@ function MainLandingPageEditor({store}:any){
    if(existing) await store.update('landing_page_settings',existing.id||'main',payload)
    else await store.create('landing_page_settings',payload)
    setMsg('Landingpage gespeichert.')
-  }catch(e:any){setMsg('Lokal gespeichert. Für Live-Speicherung SQL_V42_21_LANDINGPAGE_SCHEMA_FIX.sql ausführen.')}
+  }catch(e:any){setMsg('Live-Speicherung fehlgeschlagen. Bitte Supabase-Schema und Verbindung prüfen.')}
  }
  function reset(){setF(defaultMainLandingSettings);setMsg('Standardtexte geladen – bitte speichern.')}
- return <><Head title="Haupt-Landingpage" sub="Texte der öffentlichen Startseite, Ablauf und FAQ bearbeiten" action={<button className="btn" onClick={save}>Landingpage speichern</button>}/><div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Fallback-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des Demo-Buttons"/></div><label className="checkline"><input type="checkbox" checked={f.show_public_demo_button!==false} onChange={e=>setF({...f,show_public_demo_button:e.target.checked})}/> Öffentlichen Demo-Button auf der Landingpage anzeigen</label><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button>{f.show_public_demo_button!==false&&<button className="btn secondary">{f.secondary_cta_label}</button>}</div><div className="sub">Ablauf, Beispiel-Ergebnis und FAQ werden auf der Landingpage darunter angezeigt.</div></div></Card></div><Card title="Ablauf in 3 Schritten bearbeiten">{(f.steps||defaultMainLandingSettings.steps).slice(0,3).map((step:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={step.title||''} onChange={e=>patchStep(i,{title:e.target.value})} placeholder={`Titel Schritt ${i+1}`}/><textarea className="input textarea" value={step.description||''} onChange={e=>patchStep(i,{description:e.target.value})} placeholder={`Beschreibung Schritt ${i+1}`}/></div>)}<div className="sub">Beispiel-Ergebnisse werden im dritten Schritt angezeigt.</div><div className="grid3">{(f.example_metrics||defaultMainLandingSettings.example_metrics).map((m:any,i:number)=><Card key={i} title={`Beispielwert ${i+1}`}><input className="input" value={m.label||''} onChange={e=>patchMetric(i,{label:e.target.value})} placeholder="Kennzahl, z. B. neue Bewertungen"/><input className="input" value={m.value||''} onChange={e=>patchMetric(i,{value:e.target.value})} placeholder="Wert, z. B. +34"/></Card>)}</div></Card><Card title="FAQ bearbeiten">{(f.faq||defaultMainLandingSettings.faq).map((qa:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={qa.question||''} onChange={e=>patchFaq(i,{question:e.target.value})} placeholder="Frage"/><textarea className="input textarea" value={qa.answer||''} onChange={e=>patchFaq(i,{answer:e.target.value})} placeholder="Antwort"/><button className="btn secondary" onClick={()=>setF({...f,faq:(f.faq||[]).filter((_:any,idx:number)=>idx!==i)})}>FAQ entfernen</button></div>)}<button className="btn secondary" onClick={()=>setF({...f,faq:[...(f.faq||[]),{question:'Neue Frage',answer:'Antwort ergänzen.'}]})}>FAQ hinzufügen</button></Card><Card title="Paketauflistung bearbeiten"><input className="input" value={f.package_headline||''} onChange={e=>setF({...f,package_headline:e.target.value})} placeholder="Überschrift über der Paketauflistung"/><textarea className="input textarea" value={f.package_subline||''} onChange={e=>setF({...f,package_subline:e.target.value})} placeholder="Kurzbeschreibung oberhalb der Pakete"/><div className="grid3">{Object.keys(packageDefs).map(pkg=>{const p=(f.packages||{})[pkg]||{};return <Card key={pkg} title={pkg}><input className="input" value={p.headline||pkg} onChange={e=>setPackage(pkg,{headline:e.target.value})} placeholder={`Anzeigename für ${pkg}`}/><textarea className="input textarea" value={p.description||''} onChange={e=>setPackage(pkg,{description:e.target.value})} placeholder={`Beschreibung für ${pkg} auf der Landingpage`}/><div className="sub">Preis und Featureliste kommen weiterhin aus der zentralen Paketlogik.</div></Card>})}</div><div className="toolbarActions"><button className="btn" onClick={save}>Änderungen speichern</button><button className="btn secondary" onClick={reset}>Standardtexte laden</button><button className="btn secondary" onClick={()=>{setF(mainLandingSettings(store.data));window.open('/', '_blank')}}>Öffentliche Seite öffnen</button></div></Card></>
+ return <><Head title="Haupt-Landingpage" sub="Texte der öffentlichen Startseite, Ablauf und FAQ bearbeiten" action={<button className="btn" onClick={save}>Landingpage speichern</button>}/><div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Logo-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des zweiten Buttons, z. B. Portal öffnen"/></div><label className="checkline"><input type="checkbox" checked={f.show_public_demo_button!==false} onChange={e=>setF({...f,show_public_demo_button:e.target.checked})}/> Zweiten öffentlichen Button auf der Landingpage anzeigen</label><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button>{isDemoFeatureEnabled()&&f.show_public_demo_button!==false&&<button className="btn secondary">{f.secondary_cta_label}</button>}</div><div className="sub">Ablauf, Ergebnisvorschau und FAQ werden auf der Landingpage darunter angezeigt.</div></div></Card></div><Card title="Ablauf in 3 Schritten bearbeiten">{(f.steps||defaultMainLandingSettings.steps).slice(0,3).map((step:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={step.title||''} onChange={e=>patchStep(i,{title:e.target.value})} placeholder={`Titel Schritt ${i+1}`}/><textarea className="input textarea" value={step.description||''} onChange={e=>patchStep(i,{description:e.target.value})} placeholder={`Beschreibung Schritt ${i+1}`}/></div>)}<div className="sub">Beispiel-Ergebnisse werden im dritten Schritt angezeigt.</div><div className="grid3">{(f.example_metrics||defaultMainLandingSettings.example_metrics).map((m:any,i:number)=><Card key={i} title={`Beispielwert ${i+1}`}><input className="input" value={m.label||''} onChange={e=>patchMetric(i,{label:e.target.value})} placeholder="Kennzahl, z. B. neue Bewertungen"/><input className="input" value={m.value||''} onChange={e=>patchMetric(i,{value:e.target.value})} placeholder="Wert, z. B. +34"/></Card>)}</div></Card><Card title="FAQ bearbeiten">{(f.faq||defaultMainLandingSettings.faq).map((qa:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={qa.question||''} onChange={e=>patchFaq(i,{question:e.target.value})} placeholder="Frage"/><textarea className="input textarea" value={qa.answer||''} onChange={e=>patchFaq(i,{answer:e.target.value})} placeholder="Antwort"/><button className="btn secondary" onClick={()=>setF({...f,faq:(f.faq||[]).filter((_:any,idx:number)=>idx!==i)})}>FAQ entfernen</button></div>)}<button className="btn secondary" onClick={()=>setF({...f,faq:[...(f.faq||[]),{question:'Neue Frage',answer:'Antwort ergänzen.'}]})}>FAQ hinzufügen</button></Card><Card title="Paketauflistung bearbeiten"><input className="input" value={f.package_headline||''} onChange={e=>setF({...f,package_headline:e.target.value})} placeholder="Überschrift über der Paketauflistung"/><textarea className="input textarea" value={f.package_subline||''} onChange={e=>setF({...f,package_subline:e.target.value})} placeholder="Kurzbeschreibung oberhalb der Pakete"/><div className="grid3">{Object.keys(packageDefs).map(pkg=>{const p=(f.packages||{})[pkg]||{};return <Card key={pkg} title={pkg}><input className="input" value={p.headline||pkg} onChange={e=>setPackage(pkg,{headline:e.target.value})} placeholder={`Anzeigename für ${pkg}`}/><textarea className="input textarea" value={p.description||''} onChange={e=>setPackage(pkg,{description:e.target.value})} placeholder={`Beschreibung für ${pkg} auf der Landingpage`}/><div className="sub">Preis und Featureliste kommen weiterhin aus der zentralen Paketlogik.</div></Card>})}</div><div className="toolbarActions"><button className="btn" onClick={save}>Änderungen speichern</button><button className="btn secondary" onClick={reset}>Standardtexte laden</button><button className="btn secondary" onClick={()=>{setF(mainLandingSettings(store.data));window.open('/', '_blank')}}>Öffentliche Seite öffnen</button></div></Card></>
 }
 
 function LandingTextEditor({store,q}:any){
@@ -650,7 +705,7 @@ function LandingTextEditor({store,q}:any){
  async function save(){
   await store.update('qr_campaigns',q.id,{title:f.title,name:f.title,headline:f.headline,metadata:{...md,hero_headline:f.headline,hero_subline:f.subline,cta_label:f.cta_label,review_cta_label:f.review_cta_label,success_title:f.success_title,success_message:f.success_message,fineprint:f.fineprint,max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0)},max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0)})
  }
- return <div className="v42PackageEdit"><input className="input" value={f.title} onChange={e=>setF({...f,title:e.target.value})} placeholder="Interner Seitentitel"/><input className="input" value={f.headline} onChange={e=>setF({...f,headline:e.target.value})} placeholder="Öffentliche Headline auf der Slug-Seite"/><textarea className="input textarea" value={f.subline} onChange={e=>setF({...f,subline:e.target.value})} placeholder="Unterzeile / Erklärung auf der Slug-Seite"/><div className="grid2"><input className="input" value={f.cta_label} onChange={e=>setF({...f,cta_label:e.target.value})} placeholder="Button-Text für Loyalty"/><input className="input" value={f.review_cta_label} onChange={e=>setF({...f,review_cta_label:e.target.value})} placeholder="Button-Text für Review"/></div><input className="input" value={f.success_title} onChange={e=>setF({...f,success_title:e.target.value})} placeholder="Erfolgsüberschrift nach Scan/Absenden"/><textarea className="input textarea" value={f.success_message} onChange={e=>setF({...f,success_message:e.target.value})} placeholder="Erfolgstext nach Scan/Absenden"/><textarea className="input textarea" value={f.fineprint} onChange={e=>setF({...f,fineprint:e.target.value})} placeholder="Rechtlicher Hinweis / Kleingedrucktes"/><div className="grid2 mini"><input className="input" type="number" min="0" value={f.max_scans_per_member} onChange={e=>setF({...f,max_scans_per_member:Number(e.target.value)})} placeholder="Max. QR-Einlösungen pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" min="0" value={f.scan_cooldown_minutes} onChange={e=>setF({...f,scan_cooldown_minutes:Number(e.target.value)})} placeholder="Cooldown Minuten zwischen gültigen Scans"/></div><div className="sub">Diese Werte begrenzen, wie oft ein Endkunde diesen QR-Code Punkte sammeln/einlösen kann und wie lange er zwischen zwei gültigen Scans warten muss.</div><div className="toolbarActions"><button className="btn" onClick={save}>Slug-Seiten-Texte speichern</button><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Live ansehen</button></div></div>
+ return <div className="v42PackageEdit"><input className="input" value={f.title} onChange={e=>setF({...f,title:e.target.value})} placeholder="Interner Seitentitel"/><input className="input" value={f.headline} onChange={e=>setF({...f,headline:e.target.value})} placeholder="Öffentliche Headline auf der Slug-Seite"/><textarea className="input textarea" value={f.subline} onChange={e=>setF({...f,subline:e.target.value})} placeholder="Unterzeile / Erklärung auf der Slug-Seite"/><div className="grid2"><input className="input" value={f.cta_label} onChange={e=>setF({...f,cta_label:e.target.value})} placeholder="Button-Text für Loyalty"/><input className="input" value={f.review_cta_label} onChange={e=>setF({...f,review_cta_label:e.target.value})} placeholder="Button-Text für Review"/></div><input className="input" value={f.success_title} onChange={e=>setF({...f,success_title:e.target.value})} placeholder="Erfolgsüberschrift nach Scan/Absenden"/><textarea className="input textarea" value={f.success_message} onChange={e=>setF({...f,success_message:e.target.value})} placeholder="Erfolgstext nach Scan/Absenden"/><textarea className="input textarea" value={f.fineprint} onChange={e=>setF({...f,fineprint:e.target.value})} placeholder="Rechtlicher Hinweis / Kleingedrucktes"/><div className="grid2 mini"><input className="input" type="number" min="0" value={f.max_scans_per_member} onChange={e=>setF({...f,max_scans_per_member:Number(e.target.value)})} placeholder="Max. QR-Einlösungen pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" min="0" value={f.scan_cooldown_minutes} onChange={e=>setF({...f,scan_cooldown_minutes:Number(e.target.value)})} placeholder="Cooldown Minuten zwischen gültigen Scans"/></div><div className="grid2 mini"><input className="input" type="number" min="0" value={f.daily_point_limit_per_member||0} onChange={e=>setF({...f,daily_point_limit_per_member:Number(e.target.value)})} placeholder="Punkte-Tageslimit pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" min="0" max="100" value={f.suspicion_score_threshold||70} onChange={e=>setF({...f,suspicion_score_threshold:Number(e.target.value)})} placeholder="Verdachts-Score Warnschwelle, z. B. 70"/></div><div className="sub">Diese Werte begrenzen, wie oft ein Endkunde diesen QR-Code Punkte sammeln/einlösen kann und wie lange er zwischen zwei gültigen Scans warten muss.</div><div className="toolbarActions"><button className="btn" onClick={save}>Slug-Seiten-Texte speichern</button><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Live ansehen</button></div></div>
 }
 
 function V42PublicLandingManager({store,cid}:any){
@@ -662,7 +717,7 @@ function V42PublicLandingManager({store,cid}:any){
   await store.create('qr_campaigns',{customer_id:cid,title:form.title,name:form.title,slug,headline:form.headline,mode:form.mode,metadata:{purpose:form.mode,hero_headline:form.headline,hero_subline:form.subline,cta_label:form.mode==='review'?'Bewertung absenden':'Punkte sammeln',review_cta_label:'Bewertung absenden',max_scans_per_member:Number(form.max_scans_per_member||0),scan_cooldown_minutes:Number(form.scan_cooldown_minutes||0)},max_scans_per_member:Number(form.max_scans_per_member||0),scan_cooldown_minutes:Number(form.scan_cooldown_minutes||0),public_url:publicSlugUrl(slug),target_url:`/l/${slug}`,status:'Aktiv',active:true,created_at:new Date().toISOString()})
   await store.create('notifications',{customer_id:cid,title:'Öffentliche Slug-Seite erstellt',message:`/l/${slug} wurde erstellt.`,type:'public_landing',actor_name:'DominiqueMM'})
  }
- return <><Head title="Öffentliche /l/[slug] Seite" sub={`Nur Kampagnen von ${customer?.name||'diesem Kunden'} anzeigen, bearbeiten und previewen`}/><div className="grid2"><Card title="Slug-Seite erstellen"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Seitentitel, z. B. Bonusclub Café Morgenlicht"/><input className="input" value={form.slug} onChange={e=>setForm({...form,slug:slugifyLocal(e.target.value)})} placeholder="URL-Slug, z. B. cafe-morgenlicht-bonus"/><input className="input" value={form.headline} onChange={e=>setForm({...form,headline:e.target.value})} placeholder="Headline, die öffentlich oben angezeigt wird"/><textarea className="input textarea" value={form.subline} onChange={e=>setForm({...form,subline:e.target.value})} placeholder="Unterzeile der öffentlichen Landingpage"/><select className="input" value={form.mode} onChange={e=>setForm({...form,mode:e.target.value})}><option value="loyalty">Loyalty</option><option value="review">Review</option><option value="both">Bewertung + Loyalty</option><option value="lead">Lead</option></select><div className="grid2 mini"><input className="input" type="number" min="0" value={form.max_scans_per_member} onChange={e=>setForm({...form,max_scans_per_member:Number(e.target.value)})} placeholder="Max. QR-Einlösungen pro Endkunde"/><input className="input" type="number" min="0" value={form.scan_cooldown_minutes} onChange={e=>setForm({...form,scan_cooldown_minutes:Number(e.target.value)})} placeholder="Cooldown Minuten"/></div><button className="btn" onClick={create}>Slug-Seite erstellen</button></Card><V42PublicLandingPreview campaigns={campaigns} customer={customer}/></div><Card title="Bestehende Slug-Seiten">{campaigns.map((q:any)=><div className="item" key={q.id}><b>/l/{q.slug}</b><span>{q.title||q.name}</span><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Öffnen</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div>)}</Card><Card title="Slug-Seiten-Texte bearbeiten">{campaigns.length===0&&<div className="sub">Erstelle zuerst eine Slug-Seite. Danach kannst du die öffentlichen Texte ändern.</div>}{campaigns.map((q:any)=><LandingTextEditor key={q.id} store={store} q={q}/>)}</Card></>
+ return <><Head title="Öffentliche /l/[slug] Seite" sub={`Nur Kampagnen von ${customer?.name||'diesem Kunden'} anzeigen, bearbeiten und previewen`}/><div className="grid2"><Card title="Slug-Seite erstellen"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Seitentitel, z. B. Bonusclub des Kunden"/><input className="input" value={form.slug} onChange={e=>setForm({...form,slug:slugifyLocal(e.target.value)})} placeholder="URL-Slug, z. B. kundenname-bonusclub"/><input className="input" value={form.headline} onChange={e=>setForm({...form,headline:e.target.value})} placeholder="Headline, die öffentlich oben angezeigt wird"/><textarea className="input textarea" value={form.subline} onChange={e=>setForm({...form,subline:e.target.value})} placeholder="Unterzeile der öffentlichen Landingpage"/><select className="input" value={form.mode} onChange={e=>setForm({...form,mode:e.target.value})}><option value="loyalty">Loyalty</option><option value="review">Review</option><option value="both">Bewertung + Loyalty</option><option value="lead">Lead</option></select><div className="grid2 mini"><input className="input" type="number" min="0" value={form.max_scans_per_member} onChange={e=>setForm({...form,max_scans_per_member:Number(e.target.value)})} placeholder="Max. QR-Einlösungen pro Endkunde"/><input className="input" type="number" min="0" value={form.scan_cooldown_minutes} onChange={e=>setForm({...form,scan_cooldown_minutes:Number(e.target.value)})} placeholder="Cooldown Minuten"/></div><button className="btn" onClick={create}>Slug-Seite erstellen</button></Card><V42PublicLandingPreview campaigns={campaigns} customer={customer}/></div><Card title="Bestehende Slug-Seiten">{campaigns.map((q:any)=><div className="item" key={q.id}><b>/l/{q.slug}</b><span>{q.title||q.name}</span><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Öffnen</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div>)}</Card><Card title="Slug-Seiten-Texte bearbeiten">{campaigns.length===0&&<div className="sub">Erstelle zuerst eine Slug-Seite. Danach kannst du die öffentlichen Texte ändern.</div>}{campaigns.map((q:any)=><LandingTextEditor key={q.id} store={store} q={q}/>)}</Card></>
 }
 
 
@@ -675,6 +730,7 @@ function ProductionStatusCard(){
 
 
 function applyDemoSandboxStorePatch(store:any){
+ if(!isDemoFeatureEnabled()) return store
  if(!store || store.__demoSandboxPatched) return store
  store.__demoSandboxPatched=true
  const persist=()=>{try{localStorage.setItem(DEMO_SANDBOX_KEY,JSON.stringify(store.data))}catch{}}
@@ -715,7 +771,7 @@ function applyDemoSandboxStorePatch(store:any){
 }
 
 
-async function runDemoWorkflow(key:string, customer_name='Demo NordDach GmbH'){
+async function runInternalWorkflow(key:string, customer_name='Test NordDach GmbH'){
   const result = await demoToolsClient.workflow(key,{customer_name})
   const pdf = result?.run?.result?.pdf_base64
   const campaign = result?.run?.result?.campaign
@@ -723,12 +779,12 @@ async function runDemoWorkflow(key:string, customer_name='Demo NordDach GmbH'){
   if(campaign) openQrCampaign(campaign)
   return result
 }
-async function createDemoInvoice(customer_name='Demo NordDach GmbH'){
-  const result = await demoToolsClient.createInvoice({customer_name, service_type:'Demo Rechnung', amount:199})
+async function createInternalInvoice(customer_name='Test NordDach GmbH'){
+  const result = await demoToolsClient.createInvoice({customer_name, service_type:'Test Rechnung', amount:199})
   if(result?.pdf_base64) openPdfBase64(result.pdf_base64)
   return result
 }
-async function createDemoQr(customer_name='Demo NordDach GmbH'){
+async function createInternalQr(customer_name='Test NordDach GmbH'){
   const result = await demoToolsClient.createQrCampaign({customer_name, name:'Review Kampagne'})
   if(result?.campaign) openQrCampaign(result.campaign)
   return result
@@ -797,7 +853,7 @@ function BrandOutputEngine({store,cid}:any){
   {key:'dunning',title:'Mahnung',subtitle:`Zahlungserinnerung für ${customer}`,body:`<div class="section"><h2>Offener Betrag</h2><p>Bitte prüfen und Zahlungseingang abgleichen.</p></div>`,status:'Vorlage'},
   {key:'report',title:'Monatsreport',subtitle:`Monatsreport für ${customer}`,body:`<div class="section"><h2>Zusammenfassung</h2><p>SEO, Reviews, QR-Kampagnen, Leads und Potenziale des Monats.</p></div>`,status:'Entwurf'}
  ]
- return <><Head title="Output Engine" sub="Gebrandete Dokumente als echtes PDF über Gotenberg oder HTML-Fallback erzeugen" action={<LiveModeBadge/>}/><CentralCustomerSelector store={store} cid={target||cid} setCid={setTarget} title="Kunde für Dokumente auswählen"/><div className="grid2">{docs.map(d=><Card key={d.key} title={d.title}><p className="sub">{d.subtitle}</p><div className="toolbarActions"><button className="btn" onClick={()=>openPdfDocument(d.title,d.subtitle,d.body,{status:d.status})}>PDF öffnen</button><button className="btn secondary" onClick={()=>downloadHtmlDocument(`${d.title}-${customer}.html`,d.title,d.subtitle,d.body,{status:d.status})}>HTML exportieren</button></div></Card>)}</div></>
+ return <><Head title="Output Engine" sub="Gebrandete Dokumente als echtes PDF über Gotenberg oder HTML-/Druckansicht erzeugen" action={<LiveModeBadge/>}/><CentralCustomerSelector store={store} cid={target||cid} setCid={setTarget} title="Kunde für Dokumente auswählen"/><div className="grid2">{docs.map(d=><Card key={d.key} title={d.title}><p className="sub">{d.subtitle}</p><div className="toolbarActions"><button className="btn" onClick={()=>openPdfDocument(d.title,d.subtitle,d.body,{status:d.status})}>PDF öffnen</button><button className="btn secondary" onClick={()=>downloadHtmlDocument(`${d.title}-${customer}.html`,d.title,d.subtitle,d.body,{status:d.status})}>HTML exportieren</button></div></Card>)}</div></>
 }
 
 function AdminProfilesManager(){
@@ -845,9 +901,9 @@ function AdminProfilesManager(){
  return <>
   <Head title="Admin Profile" sub="Echte Live-Adminzugänge für den Supabase-Login anlegen und verwalten." action={<button className="btn" onClick={load}>{busy?'Lädt...':'Neu laden'}</button>}/>
   <Card title="Sicherheit & Autorisierung">
-   <ToolTipHint title="Live-Login, keine lokalen Demo-Profile">Diese Profile werden über das Backend in Supabase Auth erstellt. Passwörter werden nicht im Frontend gespeichert, sondern nur zum Erstellen oder Aktualisieren des Auth-Users übergeben. V42.23 verhindert das Sperren des letzten aktiven Admins und protokolliert Änderungen im Activity Log.</ToolTipHint>
+   <ToolTipHint title="Live-Login, keine lokalen Test-Profile">Diese Profile werden über das Backend in Supabase Auth erstellt. Passwörter werden nicht im Frontend gespeichert, sondern nur zum Erstellen oder Aktualisieren des Auth-Users übergeben. V42.23 verhindert das Sperren des letzten aktiven Admins und protokolliert Änderungen im Activity Log.</ToolTipHint>
    <input className="input" value={setupToken} onChange={e=>setSetupToken(e.target.value)} placeholder="Optionaler Setup-Key aus Railway ENV ADMIN_PROFILE_SETUP_TOKEN" type="password"/>
-   <div className="sub">Wenn du bereits als Live-Admin angemeldet bist, reicht deine Session. Für den ersten Admin oder Demo-Adminmodus kannst du den Setup-Key verwenden.</div>
+   <div className="sub">Wenn du bereits als Live-Admin angemeldet bist, reicht deine Session. Für den ersten Admin oder Test-Adminmodus kannst du den Setup-Key verwenden.</div>
   </Card>
   <Card title="Neues Adminprofil anlegen">
    <div className="grid2">
@@ -900,19 +956,19 @@ export default function App(){
  useEffect(()=>{
   if(typeof window==='undefined'){setLiveAuthChecked(true);return}
   const params=new URLSearchParams(window.location.search)
-  if(params.get('demo')){setLiveAuthChecked(true);return}
+  if(isDemoFeatureEnabled()&&params.get('demo')){setLiveAuthChecked(true);return}
   const openApp=params.get('app')==='1'||params.get('mode')==='app'
   if(!openApp){setLiveAuthChecked(true);return}
   ;(async()=>{try{const profile=await getCurrentUserProfile(); if(profile){markLiveMode();setRole(profile.role==='admin'?'admin':'customer'); if(profile.customer_id)setCid(profile.customer_id); setView('dashboard')}}finally{setLiveAuthChecked(true)}})()
  },[])
  const [adminAvatars,setAdminAvatars]=useState<any>({DominiqueMM:'',JanneMM:''})
- useEffect(()=>{const p=new URLSearchParams(window.location.search);const demo=p.get('demo');const c=p.get('customer');if(demo==='admin'){markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM');setView('dashboard');return}if(c){if(demo==='customer')markDemoMode();setRole('customer');setCid(c);setView('dashboard')}},[])
+ useEffect(()=>{if(!isDemoFeatureEnabled())return;const p=new URLSearchParams(window.location.search);const demo=p.get('demo');const c=p.get('customer');if(demo==='admin'){markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM');setView('dashboard');return}if(c){if(demo==='customer')markDemoMode();setRole('customer');setCid(c);setView('dashboard')}},[])
  const admin=[
    'dashboard','admin_profiles','main_landing','demo_environment','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr',
    'public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty',
    'reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','heatmap','kpi',
    'customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events',
-   'business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine','monthly_reports','onboarding','approvals','health_scores','dunning','health_center'
+   'business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine','monthly_reports','onboarding','approvals','health_scores','dunning','health_center','security_center'
  ]
  const packageToolRoutes:any={
    'QR Kampagnen':'qr',
@@ -959,7 +1015,7 @@ export default function App(){
  const disabledRoutes=new Set(accessRows.filter((x:any)=>x.enabled===false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean))
  const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route))
  const labels:any={
-   dashboard:'Dashboard',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Demo Kunden',demo_environment:'Demo Umgebung',integrations:'Integrationen',packages:'Pakete & Billing',
+   dashboard:'Dashboard',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',
    public_landing:'Öffentliche /l/[slug] Seite',
    loyalty:'Loyalty Programm',
    loyalty_rewards:'Rewards',
@@ -982,19 +1038,19 @@ export default function App(){
    package_matrix:'Paket-Matrix',
    timeline_events:'Timeline Events',
    seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',
-   knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Health Center'
+   knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Health Center',security_center:'Security Center'
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
-   {label:'Übersicht',hint:'Start, Landingpage, Revenue & interne Demo',tools:['dashboard','main_landing','demo_environment','revenue_forecasting','revenue_share']},
-   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins und Zugriff',tools:['admin_profiles','health_center']},
+   {label:'Übersicht',hint:'Start, Landingpage & Revenue',tools:['dashboard','main_landing','demo_environment','revenue_forecasting','revenue_share']},
+   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins und Zugriff',tools:['admin_profiles','security_center','health_center']},
    {label:'CRM & Betrieb',hint:'Kunden, Onboarding, Termine, Tickets',tools:['crm','onboarding','finance','tickets','booking','pipeline','media','timeline_events','health_scores']},
    {label:'QR & Loyalty',hint:'QR-Code, Endkundenseite, Punkte, Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
    {label:'Reviews',hint:'Feedback, KI-Auswertung, Vorlagen',tools:['reviews']},
    {label:'Akquise & Sales',hint:'Audit, Leads, Angebote, Verträge',tools:['business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine']},
    {label:'Automation & Marketing',hint:'Kampagnen, Regeln, AI Assistant',tools:['automations','workflows','smart_automation','marketing_automation','ai_assistant']},
    {label:'SEO & Analytics',hint:'Google/API, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']},
-   {label:'Reports & System',hint:'Reports, Output, Mahnwesen, Health',tools:['monthly_reports','approvals','dunning','health_center']}
+   {label:'Reports & System',hint:'Reports, Output, Mahnwesen, Health',tools:['monthly_reports','approvals','dunning','security_center','health_center']}
  ]
  const customerNavGroups=[
    {label:'Übersicht',hint:'Portalstart',tools:['dashboard','onboarding','knowledge']},
@@ -1005,16 +1061,16 @@ export default function App(){
    {label:'SEO & Analytics',hint:'Integrationen, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence']}
  ]
  const navGroups=(role==='admin'?adminNavGroups:customerNavGroups)
-   .map((g:any)=>({...g,tools:g.tools.filter((k:string)=>visibleNavKeys.includes(k))}))
+   .map((g:any)=>({...g,tools:g.tools.filter((k:string)=>visibleNavKeys.includes(k)&&(k!=='demo_environment'||isDemoFeatureEnabled()))}))
    .filter((g:any)=>g.tools.length>0)
  if(role==='guest'){
   const lp=mainLandingSettings(store.data)
   return <ProfessionalLanding lp={lp} setRole={setRole} setActiveAdmin={setActiveAdmin}/>
  }
  const nav=role==='admin'?admin:customer
- const mobileBottomKeys=(role==='admin'?['dashboard','lead_scraper','acquisition_campaigns','crm','health_center']:['dashboard','seo','reviews','reports','finance']).filter((k:string)=>visibleNavKeys.includes(k))
+ const mobileBottomKeys=(role==='admin'?['dashboard','lead_scraper','acquisition_campaigns','crm','security_center']:['dashboard','seo','reviews','reports','finance']).filter((k:string)=>visibleNavKeys.includes(k))
  const blockCustomerScopedRender=liveOnlyMode(role,view)&&customerScopedView(view)&&!liveCidAvailable
- return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">DEMO MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div><button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Demo zurücksetzen</button><button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions"><NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/>
+ return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions"><NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><FieldHelpEnhancer/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  {blockCustomerScopedRender?<NoLiveCustomerPanel setView={setView}/>:<>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
@@ -1031,8 +1087,8 @@ export default function App(){
  
  {view==='media'&&<MediaCenter store={store} cid={cid} setCid={setCid} role={role} activeAdmin={activeAdmin}/>}
  {view==='qr'&&<QRCodes store={store} cid={cid} setCid={role==='admin'?setCid:undefined} role={role}/>}
- {view==='demo_environment'&&role==='admin'&&<DemoEnvironment store={store} setView={setView}/>}
- {/* V30.1: Demo tool modules visible in Admin and Customer UI */}
+ {isDemoFeatureEnabled()&&view==='demo_environment'&&role==='admin'&&<DemoEnvironment store={store} setView={setView}/>}
+ {/* V30.1: Test tool modules visible in Admin and Customer UI */}
  {['public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','smart_automation','marketing_automation','ai_assistant','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events'].includes(view)&&<V40ErrorBoundary moduleName={view}><V30ToolModule view={view} store={store} cid={cid} role={role} setCid={setCid}/></V40ErrorBoundary>}
  {view==='integrations'&&<Integrations store={store} cid={cid} role={role}/>}
  {view==='packages'&&role==='customer'&&<CustomerPackages store={store} cid={cid}/>} 
@@ -1057,6 +1113,7 @@ export default function App(){
  {view==='health_scores'&&role==='admin'&&<CustomerSuccessTrafficLight store={store} setCid={setCid} setView={setView}/>}
  {view==='dunning'&&role==='admin'&&<DunningCenter store={store} setCid={setCid} setView={setView}/>}
  {view==='health_center'&&role==='admin'&&<HealthCenterV42 store={store}/>} 
+ {view==='security_center'&&role==='admin'&&<SecurityCenterV42 store={store} cid={cid} setCid={setCid}/>} 
  {view==='onboarding'&&<GuidedOnboardingCenter store={store} cid={cid} role={role} setCid={setCid} setView={setView}/>} 
  {view==='reports'&&<MonthlyReportCenter store={store} cid={cid} role={role}/>} 
  {view==='monthly_reports'&&role==='admin'&&<MonthlyReportCenter store={store} cid={cid} role={role}/>} 
@@ -1071,7 +1128,7 @@ export default function App(){
 function MobileContextStrip({store,cid,role,view,labels,setView,openMenu}:any){
  const customer=cobj(store.data,cid)
  const pkg=cpkg(store.data,cid)
- const isDemo=typeof window!=='undefined'&&((localStorage.getItem('mmos_mode')==='demo')||new URLSearchParams(window.location.search).has('demo'))
+ const isDemo=isDemoFeatureEnabled()&&typeof window!=='undefined'&&((localStorage.getItem('mmos_mode')==='demo')||new URLSearchParams(window.location.search).has('demo'))
  const quicks=role==='admin'
   ?[{key:'dashboard',label:'Cockpit'},{key:'crm',label:'CRM'},{key:'lead_scraper',label:'Leads'},{key:'acquisition_campaigns',label:'Akquise'},{key:'health_center',label:'Health'}]
   :[{key:'dashboard',label:'Start'},{key:'seo',label:'SEO'},{key:'reviews',label:'Reviews'},{key:'reports',label:'Reports'},{key:'finance',label:'Rechnungen'}]
@@ -1079,7 +1136,7 @@ function MobileContextStrip({store,cid,role,view,labels,setView,openMenu}:any){
   <div className="mobileContextCard">
    <span>{role==='admin'?'Aktiver Arbeitskontext':'Dein Kundenportal'}</span>
    <strong>{role==='admin'?`${customer?.name||'Global'} · ${labels[view]||view}`:`${customer?.name||'Kunde'} · ${pkg}`}</strong>
-   <small>{isDemo?'Demo-/Fallback-Daten':'Live-Daten'} · Tippe unten auf „Mehr“ für alle Tools.</small>
+   <small>{isDemo?'Interne Testansicht':'Live-Daten'} · Tippe unten auf „Mehr“ für alle Tools.</small>
   </div>
   <div className="mobileQuickRail">
    {quicks.map((q:any)=><button key={q.key} type="button" className={view===q.key?'active':''} onClick={()=>setView(q.key)}>{q.label}</button>)}
@@ -1089,8 +1146,8 @@ function MobileContextStrip({store,cid,role,view,labels,setView,openMenu}:any){
 }
 
 function MobileAppBottomNav({role,view,keys,labels,setView,openMenu}:any){
- const icon:any={dashboard:'⌂',seo:'◌',reviews:'★',reports:'▤',finance:'€',lead_scraper:'◎',acquisition_campaigns:'↗',crm:'◍',health_center:'✓'}
- const short:any={dashboard:'Start',lead_scraper:'Leads',acquisition_campaigns:'Akquise',health_center:'Health'}
+ const icon:any={dashboard:'⌂',seo:'◌',reviews:'★',reports:'▤',finance:'€',lead_scraper:'◎',acquisition_campaigns:'↗',crm:'◍',health_center:'✓',security_center:'🛡'}
+ const short:any={dashboard:'Start',lead_scraper:'Leads',acquisition_campaigns:'Akquise',health_center:'Health',security_center:'Security'}
  return <nav className="mobileAppBottomNav" aria-label="Mobile App Navigation">{keys.map((k:string)=><button key={k} type="button" className={view===k?'active':''} onClick={()=>setView(k)}><span>{icon[k]||'•'}</span><small>{short[k]||labels[k]||k}</small></button>)}<button type="button" onClick={openMenu}><span>☰</span><small>Mehr</small></button></nav>
 }
 
@@ -1137,12 +1194,12 @@ const STATUS_BADGE:any={Gewonnen:'green',Bezahlt:'green',Unterschrieben:'green',
 function statusBadge(v:any){return STATUS_BADGE[String(v||'')]||'purple'}
 function normalizeStatus(kind:string,value:any){const opts=STATUS_OPTIONS[kind]||[];return opts.includes(value)?value:(opts[0]||String(value||'Neu'))}
 function StatusSelect({kind,value,onChange,compact=true}:any){const opts=STATUS_OPTIONS[kind]||['Neu'];return <select className={compact?'input compactInput':'input'} value={normalizeStatus(kind,value)} onChange={e=>onChange(e.target.value)}>{opts.map((s:string)=><option key={s}>{s}</option>)}</select>}
-function safeText(v:any,fallback=''){return String(v??fallback).trim()}
+function safeText(v:any,ersatz=''){return String(v??ersatz).trim()}
 function safeFilename(v:any){return slugifyLocal(String(v||'export')).replace(/-+/g,'_')}
 function v4219Export(title:string,body:string){return `Mecklenburg Marketing OS\n${title}\n${new Date().toLocaleString('de-DE')}\n${'-'.repeat(54)}\n\n${body}\n\n${'-'.repeat(54)}\nHinweis: Export aus MMOS. Bitte vor Versand prüfen.`}
 function confirmAction(label:string){return typeof window==='undefined'||window.confirm(label)}
 async function archiveOrRemove(store:any,table:string,row:any,label='Eintrag'){if(!row?.id)return;if(!confirmAction(`${label} wirklich archivieren?`))return; if(['prospect_leads','generated_offers','generated_contracts','dunning_cases','acquisition_campaigns','google_business_audits','mini_audits'].includes(table)){await store.update(table,row.id,{status:'Archiviert',stage:row.stage==='Gewonnen'||row.stage==='Verloren'?row.stage:'Archiviert',archived_at:new Date().toISOString()})}else await store.remove(table,row.id)}
-function LocalLiveBadge(){return <Badge type={hasSupabase?'green':'yellow'}>{hasSupabase?'Live/Supabase':'Lokal/Fallback'}</Badge>}
+function LocalLiveBadge(){return <Badge type={hasSupabase?'green':'yellow'}>{hasSupabase?'Live/Supabase':'Lokal ohne Supabase'}</Badge>}
 function validateRequired(payload:any,fields:string[]){const missing=fields.filter(f=>!safeText(payload?.[f]));return {ok:missing.length===0,missing,message:missing.length?`Bitte ausfüllen: ${missing.join(', ')}`:''}}
 function uniqueIds(ids:any[]){return Array.from(new Set(safeList(ids).filter(Boolean)))}
 function cleanCampaignPayload(p:any){return {...p,name:safeText(p.name,'Neue Akquise-Kampagne'),branch:safeText(p.branch),city:safeText(p.city),goal:safeText(p.goal),channel:safeText(p.channel,'Telefon + E-Mail'),lead_ids:uniqueIds(p.lead_ids),follow_up_at:p.follow_up_at||new Date().toISOString().slice(0,10),stage:normalizeStatus('acquisition',p.stage||'Neu'),status:normalizeStatus('campaign',p.status||'Aktiv')}}
@@ -1230,9 +1287,7 @@ function GoogleBusinessAuditTool({store,cid}:any){
    await store.create('google_business_audits',{customer_id:cid,business_name:form.business_name,city:form.city,branch:form.branch,website:form.website,google_url:form.google_url,rating:Number(form.rating||0),reviews:Number(form.reviews||0),score,status:'Geprüft',summary:remote?.audit?.summary||`Google Business Audit mit Score ${score}/100 erstellt.`,findings,created_at:new Date().toISOString()})
    setMsg('Audit erstellt und gespeichert.')
   }catch(e:any){
-   const score=auditScoreFromPayload(form)
-   await store.create('google_business_audits',{customer_id:cid,business_name:form.business_name,city:form.city,branch:form.branch,website:form.website,google_url:form.google_url,rating:Number(form.rating||0),reviews:Number(form.reviews||0),score,status:'Entwurf',summary:`Lokaler Audit-Fallback mit Score ${score}/100 erstellt.`,findings:['Google Places API nicht erreichbar oder nicht konfiguriert','Manuelle Profildaten wurden bewertet','Für Live-Daten GOOGLE_PLACES_API_KEY in Railway setzen'],created_at:new Date().toISOString()})
-   setMsg(e.message||'Lokal gespeichert')
+   setMsg(e.message||'Live-Audit konnte nicht erstellt werden. Es wurde kein Beispiel-Audit erzeugt.')
   }
  }
  return <><Head title="Google Business Audit Tool" sub="Akquise- und Bestandskunden-Audit für Google Business Optimierung" action={<button className="btn" onClick={runAudit}>Audit durchführen</button>}/>
@@ -1280,9 +1335,7 @@ function LeadScraperTool({store,setCid,setView}:any){
    for(const lead of result){await store.create('prospect_leads',{...lead,status:'Neu',created_at:new Date().toISOString()})}
    setMsg(`${result.length} Leads importiert.`)
   }catch(e:any){
-   const samples=['Musterbetrieb '+form.branch+' Mitte','Lokaler Anbieter '+form.city,'Studio '+form.city].map((name,i)=>({name,branch:form.branch,city:form.city,rating:4.1+i/10,reviews:28+i*17,website:i===0?'':'',score:86-i*8,status:'Neu',reasons:['Demo-Fallback','Google Places API nicht konfiguriert','Profil für Akquise geeignet']}))
-   for(const lead of samples){await store.create('prospect_leads',{...lead,created_at:new Date().toISOString()})}
-   setMsg('Live-Suche nicht verfügbar, Demo-Leads erzeugt. Für echte Daten GOOGLE_PLACES_API_KEY in Railway setzen.')
+   setMsg(e.message||'Live-Suche nicht verfügbar. Es wurden keine Beispiel-Leads erzeugt. Bitte GOOGLE_PLACES_API_KEY in Railway setzen.')
   }
  }
  async function convert(l:any){
@@ -1290,7 +1343,7 @@ function LeadScraperTool({store,setCid,setView}:any){
   await store.create('customer_subscriptions',{customer_id:c.id,package_name:'Starter',status:'lead',price_monthly:199})
   setCid(c.id);setView('business_audit')
  }
- return <><Head title="Lead Scraper" sub="Google-Maps-/Places-basierte Lead-Recherche mit Demo-Fallback – nutzt GOOGLE_PLACES_API_KEY, kein aggressives Webseiten-Scraping" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={search}>Lead-Suche starten</button></div>}/>
+ return <><Head title="Lead Scraper" sub="Google-Maps-/Places-basierte Lead-Recherche mit Google Places Live-Daten – nutzt GOOGLE_PLACES_API_KEY, kein aggressives Webseiten-Scraping" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={search}>Lead-Suche starten</button></div>}/>
  <Card title="Suchparameter"><div className="grid4"><input className="input" value={form.branch} onChange={e=>setForm({...form,branch:e.target.value})} placeholder="Branche, z. B. Friseur, Beauty, Kiosk"/><input className="input" value={form.city} onChange={e=>setForm({...form,city:e.target.value})} placeholder="Ort, z. B. Schwerin"/><input className="input" type="number" value={form.min_rating} onChange={e=>setForm({...form,min_rating:e.target.value})} placeholder="Mindestbewertung"/><input className="input" type="number" value={form.max_reviews} onChange={e=>setForm({...form,max_reviews:e.target.value})} placeholder="Max. Bewertungen"/></div><label className="checkline"><input type="checkbox" checked={form.without_website} onChange={e=>setForm({...form,without_website:e.target.checked})}/> Betriebe ohne Website bevorzugen</label>{msg&&<div className="sub">{msg}</div>}</Card>
  <Card title="Lead-Liste">{leads.map((l:any)=><div className="item" key={l.id}><div><b>{l.name}</b><div className="sub">{l.branch} · {l.city} · ⭐ {l.rating||'-'} · {l.reviews||0} Bewertungen · Score {l.score||0}</div><div className="sub">{safeList(l.reasons).join(' · ')}</div></div><div className="toolbarActions"><StatusSelect kind="lead" value={l.status||'Neu'} onChange={(v:string)=>store.update('prospect_leads',l.id,{status:v})}/><button className="btn secondary" onClick={()=>convert(l)}>Als Kunde anlegen</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'prospect_leads',l,'Lead')}>Archivieren</button></div></div>)}</Card></>
 }
@@ -1420,6 +1473,52 @@ function DunningCenter({store,setCid,setView}:any){
  <Card title="Mahnfälle">{cases.map((c:any)=><div className="item" key={c.id}><div><b>{c.message}</b><div className="sub">{cname(store.data,c.customer_id)} · Stufe {c.level} · Fällig bis {c.due_date} · {c.status}</div></div><div className="toolbarActions"><StatusSelect kind="dunning" value={c.status||'Vorbereitet'} onChange={(v:string)=>store.update('dunning_cases',c.id,{status:v})}/><button className="btn secondary" onClick={()=>downloadTextFile(`Mahnung_${c.invoice_id}.txt`,dunningText(c))}>Text exportieren</button><button className="btn secondary" onClick={()=>archiveOrRemove(store,'dunning_cases',c,'Mahnfall')}>Archivieren</button></div></div>)}</Card></>
 }
 
+
+function securityScoreColor(score:number){return score>=80?'red':score>=55?'yellow':'green'}
+function securityScoreLabel(score:number){return score>=80?'Verdächtig':score>=55?'Beobachten':'Unauffällig'}
+function startOfTodayIso(){const d=new Date();d.setHours(0,0,0,0);return d.toISOString()}
+function calcMemberSecurityRows(data:any, cid:string){
+ const members=safeList(data.loyalty_customers).filter((m:any)=>!cid||m.customer_id===cid)
+ const tx=safeList(data.loyalty_transactions)
+ const reds=safeList(data.loyalty_reward_redemptions)
+ const since=new Date(startOfTodayIso()).getTime()
+ return members.map((m:any)=>{
+  const mtx=tx.filter((t:any)=>String(t.loyalty_customer_id)===String(m.id))
+  const today=mtx.filter((t:any)=>new Date(t.created_at||0).getTime()>=since)
+  const scansToday=today.filter((t:any)=>t.action==='qr_scan').length
+  const pointsToday=today.reduce((s:number,t:any)=>s+Math.max(0,Number(t.points||0)),0)
+  const redToday=reds.filter((r:any)=>String(r.loyalty_customer_id)===String(m.id)&&new Date(r.created_at||r.redeemed_at||0).getTime()>=since).length
+  const deviceFlags=new Set(mtx.map((t:any)=>t.metadata?.device_id||t.metadata?.deviceId).filter(Boolean)).size
+  const score=Math.min(100,Math.round(scansToday*12 + pointsToday/3 + redToday*18 + Math.max(0,deviceFlags-2)*12))
+  return {member:m,score,scansToday,pointsToday,redemptionsToday:redToday,deviceFlags,status:securityScoreLabel(score)}
+ }).sort((a:any,b:any)=>b.score-a.score)
+}
+function SecurityCenterV42({store,cid,setCid}:any){
+ const [remote,setRemote]=useState<any>(null)
+ const [msg,setMsg]=useState('')
+ const [settings,setSettings]=useState<any>({daily_point_limit_per_member:50,suspicion_score_threshold:70,auto_block_threshold:95})
+ const rows=calcMemberSecurityRows(store.data,cid)
+ const high=rows.filter((r:any)=>r.score>=Number(settings.suspicion_score_threshold||70))
+ const liveCustomersList=allCustomers(store.data)
+ async function load(){try{setRemote(await apiRequest('/api/system/security-center',{timeoutMs:15000}))}catch(e:any){setMsg(e.message)}}
+ useEffect(()=>{load()},[])
+ async function saveSettings(){
+  const payload={id:`sec_${cid||'global'}`,customer_id:cid||null,...settings,updated_at:new Date().toISOString(),active:true}
+  const existing=safeList(store.data.loyalty_security_settings).find((x:any)=>String(x.customer_id||'')===String(cid||''))
+  if(existing) await store.update('loyalty_security_settings',existing.id,payload); else await store.create('loyalty_security_settings',payload)
+  appToast('Security-Einstellungen gespeichert')
+ }
+ async function createDsar(type:string){
+  await store.create('dsar_requests',{customer_id:cid||null,type,status:'Offen',requested_by:'Admin',notes:type==='export'?'DSGVO-Auskunft / Datenexport vorbereiten':'DSGVO-Löschung/Anonymisierung prüfen',created_at:new Date().toISOString()})
+ }
+ return <><Head title="Security Center" sub="System Health, Missbrauchsschutz, Kundendatenzugriff und DSGVO-Funktionen" action={<div className="toolbarActions"><LiveModeBadge/><button className="btn" onClick={load}>Neu prüfen</button></div>}/>
+ <div className="grid4"><Metric label="System Health" value={remote?.health?.ok?'OK':'Prüfen'}/><Metric label="Auffällige Endkunden" value={high.length}/><Metric label="Datenzugriff" value={remote?.customer_access?.protected_tables||'Audit'}/><Metric label="DSGVO Anfragen" value={safeList(store.data.dsar_requests).length}/></div>
+ <div className="grid2"><Card title="Security Einstellungen"><Search items={liveCustomersList} value={cid} onChange={setCid} placeholder="Kunde für Security-Regeln suchen"/><div className="grid2 mini"><input className="input" type="number" min="0" value={settings.daily_point_limit_per_member} onChange={e=>setSettings({...settings,daily_point_limit_per_member:Number(e.target.value)})} placeholder="Punkte-Tageslimit pro Endkunde"/><input className="input" type="number" min="0" max="100" value={settings.suspicion_score_threshold} onChange={e=>setSettings({...settings,suspicion_score_threshold:Number(e.target.value)})} placeholder="Verdachts-Score Warnschwelle"/></div><input className="input" type="number" min="0" max="100" value={settings.auto_block_threshold} onChange={e=>setSettings({...settings,auto_block_threshold:Number(e.target.value)})} placeholder="Auto-Block Schwelle optional"/><button className="btn" onClick={saveSettings}>Einstellungen speichern</button><div className="sub">Diese Werte gelten als zentrale Missbrauchsschutz-Einstellungen. Punkte-Tageslimit wird zusätzlich backendseitig beim QR-Scan berücksichtigt, wenn es in QR/Loyalty-Konfiguration gespeichert ist.</div></Card><Card title="System Health eingebunden"><pre className="codeBox">{JSON.stringify(remote||{status:'Noch nicht geladen'},null,2)}</pre>{msg&&<div className="sub">{msg}</div>}</Card></div>
+ <Card title="Verdachts-Score pro Endkunde">{rows.length===0&&<div className="sub">Noch keine Loyalty-Endkunden im Live-Kontext vorhanden.</div>}{rows.slice(0,25).map((r:any)=><div className="item" key={r.member.id}><div><b>{r.member.display_name||r.member.email||'Endkunde'}</b><div className="sub">Heute: {r.scansToday} Scans · {r.pointsToday} Punkte · {r.redemptionsToday} Prämien · Gerätehinweise: {r.deviceFlags}</div></div><Badge type={securityScoreColor(r.score)}>{r.score}/100 · {r.status}</Badge></div>)}</Card>
+ <div className="grid2"><Card title="Datenzugriff pro Kunde"><div className="sub">Backend- und SQL-Härtung prüfen customer_id-Isolation, RLS-Policies und Tabellen mit Kundendaten. Kundenrollen sollen nur eigene Daten sehen, Admins alles.</div>{remote?.customer_access?.tables?.slice?.(0,12)?.map((t:any)=><div className="item" key={t.table}><b>{t.table}</b><Badge type={t.customer_scoped?'green':'yellow'}>{t.customer_scoped?'customer_id':'prüfen'}</Badge></div>)}</Card><Card title="DSGVO Funktionen"><div className="toolbarActions"><button className="btn" onClick={()=>createDsar('export')}>Auskunft / Export anlegen</button><button className="btn secondary" onClick={()=>createDsar('delete')}>Löschung / Anonymisierung anlegen</button></div>{safeList(store.data.dsar_requests).slice(0,8).map((r:any)=><div className="item" key={r.id}><div><b>{r.type==='delete'?'Löschung / Anonymisierung':'Auskunft / Export'}</b><div className="sub">{cname(store.data,r.customer_id)} · {r.status}</div></div><Badge type={r.status==='Erledigt'?'green':'yellow'}>{r.status}</Badge></div>)}</Card></div>
+ <HealthCenterV42 store={store}/></>
+}
+
 function HealthCenterV42({store}:any){
  const [ready,setReady]=useState<any>(null)
  const [schema,setSchema]=useState<any>(null)
@@ -1452,8 +1551,8 @@ function HealthCenterV42({store}:any){
  const localTables=Array.from(new Set(migrations.flatMap(m=>m.tables)))
  const activity=safeList(store.data.activity_logs).slice(0,8)
  return <><Head title="Health Center" sub="Systemstatus, Migrationen, Live/Lokal-Status, API-Keys und Datenintegrität" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={run}>Neu prüfen</button></div>}/>
- <div className="grid4"><Metric label="Backend" value={ready?.ok?'OK':'Prüfen'}/><Metric label="Schema" value={missing.length?`${missing.length} fehlt`:'OK'}/><Metric label="Business Tools" value={bt?.ok?'OK':'Fallback'}/><Metric label="Aktivitäten" value={safeList(store.data.activity_logs).length}/></div>
- <div className="grid2"><Card title="Backend / Supabase"><pre className="codeBox">{JSON.stringify(ready,null,2)}</pre></Card><Card title="Business Tools & ENV"><pre className="codeBox">{JSON.stringify(bt,null,2)}</pre><div className="sub">Live Lead-Suche und echte Places-Daten benötigen GOOGLE_PLACES_API_KEY in Railway. Ohne Key arbeitet das System mit Demo-/Fallback-Modus.</div>{msg&&<div className="sub">{msg}</div>}</Card></div>
+ <div className="grid4"><Metric label="Backend" value={ready?.ok?'OK':'Prüfen'}/><Metric label="Schema" value={missing.length?`${missing.length} fehlt`:'OK'}/><Metric label="Business Tools" value={bt?.ok?'OK':'Prüfen'}/><Metric label="Aktivitäten" value={safeList(store.data.activity_logs).length}/></div>
+ <div className="grid2"><Card title="Backend / Supabase"><pre className="codeBox">{JSON.stringify(ready,null,2)}</pre></Card><Card title="Business Tools & ENV"><pre className="codeBox">{JSON.stringify(bt,null,2)}</pre><div className="sub">Live Lead-Suche und echte Places-Daten benötigen GOOGLE_PLACES_API_KEY in Railway. Ohne Key liefert die Live-Lead-Suche keine Beispiel-Leads.</div>{msg&&<div className="sub">{msg}</div>}</Card></div>
  <Card title="Migrationen & SQL-Status">{migrationRows.map((m:any)=><div className="item" key={m.version}><div><b>{m.version} · {m.file}</b><div className="sub">Tabellen: {m.tables.join(', ')}</div>{m.missing.length>0&&<div className="sub">Fehlend laut Backend: {m.missing.join(', ')}</div>}</div><Badge type={m.missing.length?'yellow':'green'}>{m.missing.length?'prüfen':'OK'}</Badge></div>)}</Card>
  <Card title="Live/Lokal Datenzählung">{localTables.map(t=><div className="item" key={t}><b>{t}</b><span>{safeList(store.data[t]).length} Einträge</span><Badge type={Array.isArray(store.data[t])?'green':'yellow'}>{Array.isArray(store.data[t])?'verfügbar':'nicht geladen'}</Badge></div>)}</Card>
  <Card title="Aktivitätslog">{activity.length===0&&<div className="sub">Noch keine kritischen Aktionen protokolliert.</div>}{activity.map((a:any)=><div className="item" key={a.id}><div><b>{a.title||a.type}</b><div className="sub">{a.ref_table||a.type} · {new Date(a.created_at).toLocaleString('de-DE')}</div></div><Badge type={a.severity==='warning'?'yellow':'green'}>{a.type||'log'}</Badge></div>)}</Card>
@@ -1472,7 +1571,7 @@ function V42BackendStatus(){
 function V42CustomerLoyaltySettings({cid}:any){
  const [data,setData]=useState<any>(null)
  const [msg,setMsg]=useState('')
- const [form,setForm]=useState<any>({staff_code:'',staff_label:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:''})
+ const [form,setForm]=useState<any>({staff_code:'',staff_label:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:'',daily_point_limit_per_member:'',suspicion_score_threshold:'70'})
  const [rule,setRule]=useState<any>({trigger:'qr_scan',condition:'always',action:'add_points',points:''})
  async function load(){try{const r=await v33FunctionalClient.getCustomerLoyaltySettings(cid);setData(r)}catch(e:any){setMsg(e.message)}}
  useEffect(()=>{load()},[cid])
@@ -1484,14 +1583,14 @@ function V42CustomerLoyaltySettings({cid}:any){
    await load()
   }catch(e:any){setMsg(e.message)}
  }
- return <><Head title="QR & Loyalty Einstellungen" sub="Kundenbereich · Mitarbeitercode · Punkte · Reward-Regeln"/><div className="grid2"><Card title="Mitarbeitercode & Punkte"><input className="input" value={form.staff_label} onChange={e=>setForm({...form,staff_label:e.target.value})} placeholder="Bezeichnung, z. B. Thekencode"/><input className="input" value={form.staff_code} onChange={e=>setForm({...form,staff_code:e.target.value})} placeholder="Mitarbeitercode, z. B. 2468"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan, z. B. 10"/><input className="input" type="number" value={form.daily_scan_limit} onChange={e=>setForm({...form,daily_scan_limit:e.target.value})} placeholder="Tageslimit pro Gast, z. B. 1"/><input className="input" type="number" value={form.weekly_scan_limit} onChange={e=>setForm({...form,weekly_scan_limit:e.target.value})} placeholder="Wochenlimit pro Gast, z. B. 5"/><button className="btn" onClick={save}>Speichern</button></Card><Card title="Reward-Regel erstellen"><select className="input" value={rule.trigger} onChange={e=>setRule({...rule,trigger:e.target.value})}><option value="qr_scan">Wenn QR gescannt wird</option><option value="review_positive">Wenn positive Bewertung abgegeben wird</option><option value="birthday">Wenn Geburtstag erreicht</option><option value="referral">Wenn Empfehlung eingeht</option><option value="level_up">Wenn Level erreicht</option></select><select className="input" value={rule.condition} onChange={e=>setRule({...rule,condition:e.target.value})}><option value="always">Immer</option><option value="first_scan">Nur beim ersten Scan</option><option value="weekday">Nur Wochentag</option><option value="weekend">Nur Wochenende</option><option value="points_over_100">Punkte größer 100</option><option value="vip_only">Nur VIP</option></select><select className="input" value={rule.action} onChange={e=>setRule({...rule,action:e.target.value})}><option value="add_points">Punkte vergeben</option><option value="multiply_points">Punkte multiplizieren</option><option value="unlock_reward">Reward freischalten</option><option value="create_followup">Follow-up erzeugen</option></select><input className="input" type="number" value={rule.points} onChange={e=>setRule({...rule,points:e.target.value})} placeholder="Punkte / Multiplikator, z. B. 50"/><button className="btn secondary" onClick={save}>Regel speichern</button></Card></div><Card title="Bestehende Programme & Regeln">{(data?.loyalty_programs||[]).map((p:any)=><div className="item" key={p.id}><b>{p.name||p.title}</b><span>{p.points_per_scan} Punkte pro Scan · {p.active?'aktiv':'inaktiv'}</span></div>)}{(data?.rules||[]).map((r:any)=><div className="item" key={r.id}><b>{r.payload?.trigger} → {r.payload?.action}</b><span>{r.payload?.condition} · {r.payload?.points||0} Punkte</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
+ return <><Head title="QR & Loyalty Einstellungen" sub="Kundenbereich · Mitarbeitercode · Punkte · Reward-Regeln"/><div className="grid2"><Card title="Mitarbeitercode & Punkte"><input className="input" value={form.staff_label} onChange={e=>setForm({...form,staff_label:e.target.value})} placeholder="Bezeichnung, z. B. Thekencode"/><input className="input" value={form.staff_code} onChange={e=>setForm({...form,staff_code:e.target.value})} placeholder="Mitarbeitercode, z. B. 2468"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan, z. B. 10"/><input className="input" type="number" value={form.daily_scan_limit} onChange={e=>setForm({...form,daily_scan_limit:e.target.value})} placeholder="Tageslimit pro Gast, z. B. 1"/><input className="input" type="number" value={form.weekly_scan_limit} onChange={e=>setForm({...form,weekly_scan_limit:e.target.value})} placeholder="Wochenlimit pro Gast, z. B. 5"/><input className="input" type="number" value={form.daily_point_limit_per_member} onChange={e=>setForm({...form,daily_point_limit_per_member:e.target.value})} placeholder="Punkte-Tageslimit pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" value={form.suspicion_score_threshold} onChange={e=>setForm({...form,suspicion_score_threshold:e.target.value})} placeholder="Verdachts-Score Warnschwelle, z. B. 70"/><button className="btn" onClick={save}>Speichern</button></Card><Card title="Reward-Regel erstellen"><select className="input" value={rule.trigger} onChange={e=>setRule({...rule,trigger:e.target.value})}><option value="qr_scan">Wenn QR gescannt wird</option><option value="review_positive">Wenn positive Bewertung abgegeben wird</option><option value="birthday">Wenn Geburtstag erreicht</option><option value="referral">Wenn Empfehlung eingeht</option><option value="level_up">Wenn Level erreicht</option></select><select className="input" value={rule.condition} onChange={e=>setRule({...rule,condition:e.target.value})}><option value="always">Immer</option><option value="first_scan">Nur beim ersten Scan</option><option value="weekday">Nur Wochentag</option><option value="weekend">Nur Wochenende</option><option value="points_over_100">Punkte größer 100</option><option value="vip_only">Nur VIP</option></select><select className="input" value={rule.action} onChange={e=>setRule({...rule,action:e.target.value})}><option value="add_points">Punkte vergeben</option><option value="multiply_points">Punkte multiplizieren</option><option value="unlock_reward">Reward freischalten</option><option value="create_followup">Follow-up erzeugen</option></select><input className="input" type="number" value={rule.points} onChange={e=>setRule({...rule,points:e.target.value})} placeholder="Punkte / Multiplikator, z. B. 50"/><button className="btn secondary" onClick={save}>Regel speichern</button></Card></div><Card title="Bestehende Programme & Regeln">{(data?.loyalty_programs||[]).map((p:any)=><div className="item" key={p.id}><b>{p.name||p.title}</b><span>{p.points_per_scan} Punkte pro Scan · {p.active?'aktiv':'inaktiv'}</span></div>)}{(data?.rules||[]).map((r:any)=><div className="item" key={r.id}><b>{r.payload?.trigger} → {r.payload?.action}</b><span>{r.payload?.condition} · {r.payload?.points||0} Punkte</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
 }
 
 function V42AdminLoyaltyEditor({cid}:any){
  const [msg,setMsg]=useState('')
- const [form,setForm]=useState<any>({title:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:'',qr_title:''})
+ const [form,setForm]=useState<any>({title:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:'',daily_point_limit_per_member:'',suspicion_score_threshold:'70',qr_title:''})
  async function save(){try{const r=await v33FunctionalClient.saveLoyaltyProgram(cid,form);setMsg(`Gespeichert: ${r.loyalty_program?.name||'Loyalty Programm'}`)}catch(e:any){setMsg(e.message)}}
- return <Card title="Bestehendes Loyalty Programm bearbeiten"><div className="grid4"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Programmname, z. B. Alexas Bonusclub"/><input className="input" value={form.qr_title} onChange={e=>setForm({...form,qr_title:e.target.value})} placeholder="QR Kampagnenname"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan"/><button className="btn" onClick={save}>Loyalty speichern</button></div>{msg&&<div className="sub">{msg}</div>}</Card>
+ return <Card title="Bestehendes Loyalty Programm bearbeiten"><div className="grid4"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Programmname, z. B. Alexas Bonusclub"/><input className="input" value={form.qr_title} onChange={e=>setForm({...form,qr_title:e.target.value})} placeholder="QR Kampagnenname"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan"/><input className="input" type="number" value={form.daily_point_limit_per_member} onChange={e=>setForm({...form,daily_point_limit_per_member:e.target.value})} placeholder="Punkte-Tageslimit pro Endkunde"/><input className="input" type="number" value={form.suspicion_score_threshold} onChange={e=>setForm({...form,suspicion_score_threshold:e.target.value})} placeholder="Verdachts-Score Warnschwelle"/><button className="btn" onClick={save}>Loyalty speichern</button></div>{msg&&<div className="sub">{msg}</div>}</Card>
 }
 
 function V42QrCodePanel({cid}:any){
@@ -1508,12 +1607,12 @@ function V42QrCodePanel({cid}:any){
  const slug=data?.qr_campaign?.slug||data?.loyalty_program?.slug||manualSlug
  const appBase=process.env.NEXT_PUBLIC_APP_URL || (typeof window!=='undefined'?window.location.origin:'')
  const url=slug?`${appBase.replace(/\/+$/,'')}/l/${slug}`:''
- return <Card title="QR Kampagne erstellen" action={<button className="btn secondary" onClick={create}>QR + Loyalty erstellen</button>}>{url?<div className="qrExport"><V424QrImage value={url}/><div><b>{url}</b><p className="sub">QR wird extern erzeugt. Fallback: qrserver.com → quickchart.io</p><div className="toolbarActions"><button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button><a className="btn secondary" href={v424ExternalQrUrls(url)[0]} target="_blank">QR extern öffnen</a></div></div></div>:<div className="sub">Noch kein QR erstellt. Klicke auf „QR + Loyalty erstellen“.</div>}<input className="input" value={manualSlug} onChange={e=>setManualSlug(e.target.value)} placeholder="Optional: vorhandenen Slug manuell eingeben, z. B. demo-cafe-morgenlicht"/>{msg&&<div className="sub">{msg}</div>}</Card>
+ return <Card title="QR Kampagne erstellen" action={<button className="btn secondary" onClick={create}>QR + Loyalty erstellen</button>}>{url?<div className="qrExport"><V424QrImage value={url}/><div><b>{url}</b><p className="sub">QR wird extern erzeugt. Ausweichdienst: qrserver.com → quickchart.io</p><div className="toolbarActions"><button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button><a className="btn secondary" href={v424ExternalQrUrls(url)[0]} target="_blank">QR extern öffnen</a></div></div></div>:<div className="sub">Noch kein QR erstellt. Klicke auf „QR + Loyalty erstellen“.</div>}<input className="input" value={manualSlug} onChange={e=>setManualSlug(e.target.value)} placeholder="Optional: vorhandenen Slug manuell eingeben, z. B. kunde-bonusclub"/>{msg&&<div className="sub">{msg}</div>}</Card>
 }
 
 function V42ReviewsHub({store,cid}:any){
  const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
- const [form,setForm]=useState({reviewer_name:'Demo Gast',rating:5,feedback_text:'Sehr freundlicher Service und schnelle Bedienung.'})
+ const [form,setForm]=useState({reviewer_name:'Test Gast',rating:5,feedback_text:'Sehr freundlicher Service und schnelle Bedienung.'})
  const localReviews=(store?.data?.review_feedback||[]).filter((r:any)=>r.customer_id===cid)
  async function load(){try{const r=await v33FunctionalClient.reviewsHub(cid);setData({...r,reviews:[...(r.reviews||[]),...localReviews]});setMsg('Reviews geladen')}catch(e:any){setData({reviews:localReviews,templates:[],tickets:[],stats:{total:localReviews.length,positive:localReviews.filter((r:any)=>Number(r.rating)>=4).length,negative:localReviews.filter((r:any)=>Number(r.rating)<=2).length,open_tickets:0}});setMsg('Backend nicht erreichbar, lokale Reviews angezeigt')}}
  useEffect(()=>{load()},[cid])
@@ -1541,14 +1640,11 @@ function V42PackageRecommendations({cid}:any){
 function V42PackageMatrixEditor({cid}:any){
  const [packages,setPackages]=useState<any[]>([])
  const [msg,setMsg]=useState('')
- const fallbackPackages=Object.keys(packageDefs).map((key:string)=>({id:key.toLowerCase(),name:key,price:pprice(key),billing_interval:'month',features:packageDefs[key].tools,visible_on_landing:true,visible_to_customer:true,active:true}))
- const localKey=`v42_package_matrix_${cid}`
- function readLocalPackages(){return safeLocalStorageGet(localKey,null)}
- function persistPackages(next:any[]){setPackages(next);safeLocalStorageSet(localKey,next)}
- async function load(){const local=readLocalPackages();if(local?.length){setPackages(local);setMsg('Lokale Paket-Matrix geladen');return}try{const r=await v33FunctionalClient.getPackageMatrix(cid);setPackages((r.packages&&r.packages.length?r.packages:fallbackPackages)||[]);setMsg('Paket-Matrix geladen')}catch(e:any){setPackages(fallbackPackages);setMsg('Backend nicht erreichbar, lokale Paket-Matrix geladen')}}
+ function persistPackages(next:any[]){setPackages(next)}
+ async function load(){try{const r=await v33FunctionalClient.getPackageMatrix(cid);setPackages((r.packages&&r.packages.length?r.packages:[]));setMsg('Paket-Matrix geladen')}catch(e:any){setPackages([]);setMsg('Backend nicht erreichbar – keine Beispiel-Pakete geladen.')}}
  useEffect(()=>{load()},[cid])
  function patch(i:number,k:string,v:any){const next=[...packages];next[i]={...next[i],[k]:v};persistPackages(next)}
- async function save(){persistPackages(packages);try{await v33FunctionalClient.savePackageMatrix(cid,{packages});setMsg('Paket-Matrix gespeichert')}catch(e:any){setMsg('Lokal gespeichert · Backend nicht erreichbar')}}
+ async function save(){try{await v33FunctionalClient.savePackageMatrix(cid,{packages});persistPackages(packages);setMsg('Paket-Matrix gespeichert')}catch(e:any){setMsg('Backend nicht erreichbar – Paket-Matrix wurde nicht live synchronisiert.')}}
  function add(){persistPackages([...packages,{id:`package_${Date.now()}`,name:'',price:'',billing_interval:'month',features:[],visible_on_landing:true,visible_to_customer:true,active:true}])}
  return <><Head title="Paket-Matrix" sub="Bestehende Pakete bearbeiten · Preise · Tools · Sichtbarkeit"/><Card title="Pakete bearbeiten" action={<button className="btn secondary" onClick={add}>Paket hinzufügen</button>}>{packages.map((p:any,i:number)=><div className="v42PackageEdit" key={p.id||i}><input className="input" value={p.name||''} onChange={e=>patch(i,'name',e.target.value)} placeholder="Paketname, z. B. Growth"/><input className="input" type="number" value={p.price||''} onChange={e=>patch(i,'price',e.target.value)} placeholder="Preis, z. B. 499"/><select className="input" value={p.billing_interval||'month'} onChange={e=>patch(i,'billing_interval',e.target.value)}><option value="month">monatlich</option><option value="year">jährlich</option><option value="once">einmalig</option></select><textarea className="input" value={(p.features||[]).join('\n')} onChange={e=>patch(i,'features',e.target.value.split('\n').filter(Boolean))} placeholder="Inhalte, je Zeile ein Feature"/><label><input type="checkbox" checked={p.visible_on_landing!==false} onChange={e=>patch(i,'visible_on_landing',e.target.checked)}/> Auf Landingpage anzeigen</label><label><input type="checkbox" checked={p.visible_to_customer!==false} onChange={e=>patch(i,'visible_to_customer',e.target.checked)}/> Im Kundenbereich/Billing anzeigen</label><label><input type="checkbox" checked={p.active!==false} onChange={e=>patch(i,'active',e.target.checked)}/> Paket aktiv</label><button className="btn secondary" onClick={()=>persistPackages(packages.filter((_:any,idx:number)=>idx!==i))}>Paket löschen</button></div>)}<button className="btn" onClick={save}>Paket-Matrix speichern</button>{msg&&<div className="sub">{msg}</div>}</Card></>
 }
@@ -1560,9 +1656,11 @@ function V42AnalyticsBilling({store,cid}:any){
   const paid=invoices.filter((i:any)=>i.status==='Bezahlt').reduce((s:number,i:any)=>s+Number(i.amount||0),0)
   const campaigns=(store?.data?.qr_campaigns||[]).filter((q:any)=>q.customer_id===cid)
   const reviews=(store?.data?.review_feedback||[]).filter((r:any)=>r.customer_id===cid)
-  return {analytics:{qr_scans:campaigns.reduce((s:number,q:any)=>s+Number(q.scans||0),0),leads:0,members:0,reviews:reviews.length,pipeline_value:(store?.data?.offers||[]).filter((o:any)=>o.customer_id===cid).reduce((s:number,o:any)=>s+Number(o.amount||0),0),health:reviews.some((r:any)=>Number(r.rating)<=2)?68:86,risk:reviews.some((r:any)=>Number(r.rating)<=2)?44:16,upsell:paid>500?82:58,forecast:paid+499,revenue_share:Math.round(paid*0.15)},billing:{total:paid,base:paid,usage:campaigns.length*25}}
+  const pipelineValue=(store?.data?.offers||[]).filter((o:any)=>o.customer_id===cid).reduce((s:number,o:any)=>s+Number(o.amount||0),0)
+  const hasLiveRevenue=paid>0||pipelineValue>0
+  return {analytics:{qr_scans:campaigns.reduce((s:number,q:any)=>s+Number(q.scans||0),0),leads:0,members:0,reviews:reviews.length,pipeline_value:pipelineValue,health:reviews.length?reviews.some((r:any)=>Number(r.rating)<=2)?68:86:0,risk:reviews.length&&reviews.some((r:any)=>Number(r.rating)<=2)?44:0,upsell:hasLiveRevenue?(paid>500?82:58):0,forecast:paid+pipelineValue,revenue_share:Math.round(paid*0.15)},billing:{total:paid,base:paid,usage:campaigns.length*25}}
  }
- async function load(){try{const r=await v33FunctionalClient.analyticsBilling(cid);setData(r);setMsg('Analytics & Billing geladen')}catch(e:any){setData(localData());setMsg('Backend nicht erreichbar, lokale Analytics berechnet')}}
+ async function load(){try{const r=await v33FunctionalClient.analyticsBilling(cid);setData(r);setMsg('Analytics & Billing geladen')}catch(e:any){setData(localData());setMsg('Backend nicht erreichbar – Kennzahlen aus vorhandenen Kundendaten berechnet')}}
  useEffect(()=>{load()},[cid])
  const a=data?.analytics||{}
  return <><Head title="Analytics & Billing" sub="Live Kennzahlen · Usage · Billing" action={<button className="btn secondary" onClick={load}>Neu berechnen</button>}/><div className="grid4"><Metric label={<span>QR Scans <InfoI text="Anzahl der gescannten QR-Codes über alle Kampagnen dieses Kunden."/></span>} value={a.qr_scans??'-'}/><Metric label={<span>Reviews <InfoI text="Erfasste Bewertungen und Feedbacks aus QR-, Review- und Kundenportal-Flows."/></span>} value={a.reviews??'-'}/><Metric label={<span>Health <InfoI text="Gesundheitswert aus Nutzung, Reviews, Tickets, Rechnungen und Aktivität."/></span>} value={a.health??'-'}/><Metric label={<span>Forecast <InfoI text="Erwarteter Umsatz aus Paket, Usage, Pipeline und Add-ons."/></span>} value={eur(a.forecast??0)}/></div><div className="grid2"><Card title="Billing Berechnung"><div className="item"><b>Usage Total <InfoI text="Summe aus Paket- und nutzungsabhängigen Abrechnungspositionen."/></b><span>{eur(data?.billing?.total??0)}</span></div><div className="item"><b>Revenue Share <InfoI text="Berechneter Anteil aus Umsatzbeteiligungsregeln."/></b><span>{eur(a.revenue_share??0)}</span></div><div className="item"><b>Pipeline Value <InfoI text="Gewichteter Wert offener Verkaufschancen."/></b><span>{eur(a.pipeline_value??0)}</span></div>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Analytics Signale"><div className="v40Bars">{[['QR',a.qr_scans||0],['Reviews',a.reviews||0],['Health',a.health||0],['Upsell',a.upsell||0]].map(([k,v]:any)=><div key={k}><b>{k}</b><div><span style={{width:`${Math.min(100,Number(v))}%`}}></span></div><em>{v}</em></div>)}</div></Card></div></>
@@ -1574,19 +1672,19 @@ function V41DeepModuleShell({cid,children,title,sub}:any){
 
 function V41ForecastDetail({cid}:any){
  const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
- const fallback={forecast:{series:['Mai','Jun','Jul','Aug','Sep','Okt'].map((month,i)=>({month,conservative:350+i*70,expected:520+i*95,optimistic:760+i*130,confidence:82-i})),assumptions:['Bestehende Paketgebühren bleiben aktiv','QR/Review-Nutzung steigt monatlich','Ein Add-on wird im Quartal wahrscheinlich']}}
- async function load(){try{const r=await v33FunctionalClient.deepModules(cid);setData(r.detail);setMsg('Forecast geladen')}catch(e:any){setData(fallback);setMsg('Lokaler Forecast berechnet')}}
+ const emptyForecast={forecast:{series:[],assumptions:[]}}
+ async function load(){try{const r=await v33FunctionalClient.deepModules(cid);const detail=r?.detail||emptyForecast;const series=safeList(detail?.forecast?.series).filter((m:any)=>Number(m.expected||m.optimistic||m.conservative||0)>0);setData({forecast:{...(detail.forecast||{}),series,assumptions:series.length?safeList(detail?.forecast?.assumptions):[]}});setMsg(series.length?'Forecast geladen':'Keine Live-Daten für Forecast vorhanden')}catch(e:any){setData(emptyForecast);setMsg('Keine Live-Daten für Forecast vorhanden')}}
  useEffect(()=>{load()},[cid])
  const f=data?.forecast
- return <V41DeepModuleShell cid={cid} title="Revenue Forecasting Detail" sub="Forecast · Monatsvergleich · Annahmen · Confidence"><div className="grid2"><Card title="6-Monats Forecast" action={<button className="btn secondary" onClick={load}>Neu berechnen</button>}><div className="v41ForecastChart">{(f?.series||[]).map((m:any)=><div key={m.month}><b>{m.month}</b><div className="v41ForecastBars"><span style={{height:`${Math.max(10,Math.min(100,m.conservative/20))}%`}}></span><span style={{height:`${Math.max(10,Math.min(100,m.expected/20))}%`}}></span><span style={{height:`${Math.max(10,Math.min(100,m.optimistic/20))}%`}}></span></div><em>{eur(m.expected)}</em></div>)}</div><div className="sub">Dunkel = konservativ · Gold = erwartet · hell = optimistisch</div></Card><Card title="Annahmen & Confidence">{(f?.assumptions||[]).map((a:string)=><div className="item" key={a}><b>✓</b><span>{a}</span></div>)}{(f?.series||[]).map((m:any)=><div className="item" key={m.month}><b>{m.month}</b><span>Confidence {m.confidence}% · Erwartet {eur(m.expected)}</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></div></V41DeepModuleShell>
+ return <V41DeepModuleShell cid={cid} title="Revenue Forecasting Detail" sub="Forecast · Monatsvergleich · Annahmen · Confidence"><div className="grid2"><Card title="6-Monats Forecast" action={<button className="btn secondary" onClick={load}>Neu berechnen</button>}>{(f?.series||[]).length===0?<EmptyState icon="€" title="Noch kein Live-Forecast vorhanden">Lege echte Live-Kunden, Angebote oder Rechnungen an. Ohne Live-Daten bleibt der Forecast bewusst bei 0 €.</EmptyState>:<><div className="v41ForecastChart">{(f?.series||[]).map((m:any)=><div key={m.month}><b>{m.month}</b><div className="v41ForecastBars"><span style={{height:`${Math.max(10,Math.min(100,m.conservative/20))}%`}}></span><span style={{height:`${Math.max(10,Math.min(100,m.expected/20))}%`}}></span><span style={{height:`${Math.max(10,Math.min(100,m.optimistic/20))}%`}}></span></div><em>{eur(m.expected)}</em></div>)}</div><div className="sub">Dunkel = konservativ · Gold = erwartet · hell = optimistisch</div></>}</Card><Card title="Annahmen & Confidence">{(f?.assumptions||[]).map((a:string)=><div className="item" key={a}><b>✓</b><span>{a}</span></div>)}{(f?.series||[]).map((m:any)=><div className="item" key={m.month}><b>{m.month}</b><span>Confidence {m.confidence}% · Erwartet {eur(m.expected)}</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></div></V41DeepModuleShell>
 }
 
 function V41RevenueShareDetail({cid}:any){
  const [data,setData]=useState<any>(null)
- const fallback={revenue_share:{total:224,items:[{label:'Paketumsatz',base:899,percent:15,amount:135},{label:'Usage Billing',base:390,percent:15,amount:59},{label:'Add-ons',base:199,percent:15,amount:30}]}}
- useEffect(()=>{v33FunctionalClient.deepModules(cid).then((r:any)=>setData(r.detail)).catch(()=>setData(fallback))},[cid])
+ const empty={revenue_share:{total:0,items:[]}}
+ useEffect(()=>{v33FunctionalClient.deepModules(cid).then((r:any)=>setData(r.detail)).catch(()=>setData(empty))},[cid])
  const rs=data?.revenue_share
- return <V41DeepModuleShell cid={cid} title="Revenue Share Detail" sub="Abrechnung · Komponenten · Transparenz"><Card title="Revenue Share Aufschlüsselung"><div className="v41ShareDonut"><div><b>{eur(rs?.total||0)}</b><span>gesamt</span></div></div>{(rs?.items||[]).map((x:any)=><div className="item" key={x.label}><b>{x.label}</b><span>{eur(x.base)} × {x.percent}%</span><Badge type="green">{eur(x.amount)}</Badge></div>)}</Card></V41DeepModuleShell>
+ return <V41DeepModuleShell cid={cid} title="Revenue Share Detail" sub="Abrechnung · Komponenten · Transparenz"><Card title="Revenue Share Aufschlüsselung"><div className="v41ShareDonut"><div><b>{eur(rs?.total||0)}</b><span>gesamt</span></div></div>{!(rs?.items||[]).length&&<EmptyState icon="€" title="Noch keine Live-Daten vorhanden">Revenue-Share wird erst angezeigt, wenn echte Umsätze oder Usage-Daten synchronisiert wurden.</EmptyState>}{(rs?.items||[]).map((x:any)=><div className="item" key={x.label}><b>{x.label}</b><span>{eur(x.base)} × {x.percent}%</span><Badge type="green">{eur(x.amount)}</Badge></div>)}</Card></V41DeepModuleShell>
 }
 
 function V41PackageMatrixDetail({cid}:any){
@@ -1600,10 +1698,10 @@ function V41PackageMatrixDetail({cid}:any){
 
 function V41CustomerIntelligenceDetail({cid}:any){
  const [data,setData]=useState<any>(null)
- const fallback={customer_intelligence:{drivers:[{label:'Review-Signal',explanation:'Neue Bewertungen erzeugen Handlungsbedarf.',value:'hoch',impact:'hoch'},{label:'Paket-Fit',explanation:'Aktuelle Tools passen zu Growth/Premium.',value:'84%',impact:'mittel'},{label:'Billing-Signal',explanation:'Offene Rechnung und Add-on-Chance vorhanden.',value:'aktiv',impact:'mittel'}],next_best_actions:['QR Kampagne aktivieren und Link testen','Review Follow-up anlegen','Paketmatrix im nächsten Termin besprechen']}}
- useEffect(()=>{v33FunctionalClient.deepModules(cid).then((r:any)=>setData(r.detail)).catch(()=>setData(fallback))},[cid])
+ const empty={customer_intelligence:{drivers:[],next_best_actions:[]}}
+ useEffect(()=>{v33FunctionalClient.deepModules(cid).then((r:any)=>setData(r.detail)).catch(()=>setData(empty))},[cid])
  const ci=data?.customer_intelligence
- return <V41DeepModuleShell cid={cid} title="Customer Intelligence Detail" sub="Ursachenanalyse · Treiber · Next Best Actions"><div className="grid2"><Card title="Treiberanalyse">{(ci?.drivers||[]).map((d:any)=><div className="v41Driver" key={d.label}><div><b>{d.label}</b><span>{d.explanation}</span></div><strong>{d.value}</strong><Badge type={d.impact==='hoch'?'green':d.impact==='mittel'?'yellow':'gray'}>{d.impact}</Badge></div>)}</Card><Card title="Next Best Actions">{(ci?.next_best_actions||[]).map((a:string,i:number)=><div className="v41Action" key={a}><b>{i+1}</b><span>{a}</span></div>)}</Card></div></V41DeepModuleShell>
+ return <V41DeepModuleShell cid={cid} title="Customer Intelligence Detail" sub="Ursachenanalyse · Treiber · Next Best Actions"><div className="grid2"><Card title="Treiberanalyse">{!(ci?.drivers||[]).length&&<EmptyState icon="◎" title="Noch keine Live-Signale vorhanden">Customer Intelligence wird aus echten Reviews, Tickets, Rechnungen und Nutzungsdaten berechnet.</EmptyState>}{(ci?.drivers||[]).map((d:any)=><div className="v41Driver" key={d.label}><div><b>{d.label}</b><span>{d.explanation}</span></div><strong>{d.value}</strong><Badge type={d.impact==='hoch'?'green':d.impact==='mittel'?'yellow':'gray'}>{d.impact}</Badge></div>)}</Card><Card title="Next Best Actions">{!(ci?.next_best_actions||[]).length&&<div className="sub">Noch keine Handlungsempfehlungen vorhanden.</div>}{(ci?.next_best_actions||[]).map((a:string,i:number)=><div className="v41Action" key={a}><b>{i+1}</b><span>{a}</span></div>)}</Card></div></V41DeepModuleShell>
 }
 
 function V41MarketingDetail({cid}:any){
@@ -1618,12 +1716,12 @@ function V41MarketingDetail({cid}:any){
 function V41AiAssistantDetail({cid}:any){
  const [data,setData]=useState<any>(null),[input,setInput]=useState('Was soll ich dem Kunden als nächstes empfehlen?'),[msg,setMsg]=useState('')
  const [history,setHistory]=useState<any[]>([])
- const fallback={ai:{insights:[{title:'Nächste beste Aktion',message:'QR-Kampagne aktivieren, Review-Anfrage senden und Paket-Fit prüfen.',reasons:['Demo-Daten','Kundensignale','Billing-Potenzial'],action:'Follow-up vorbereiten'}]}}
- async function load(){try{const r=await v33FunctionalClient.deepModules(cid);setData(r.detail)}catch{setData(fallback)}}
+ const empty={ai:{insights:[]}}
+ async function load(){try{const r=await v33FunctionalClient.deepModules(cid);setData(r.detail)}catch{setData(empty)}}
  useEffect(()=>{load()},[cid])
- async function ask(){const localAnswer=`Empfehlung: ${input.includes('Paket')?'Paket-Matrix und Upsell-Fit prüfen':'QR/Loyalty, Reviews und nächste Kundenaktion bündeln'}. Danach Ticket oder Pipeline-Lead anlegen.`;try{const r=await v33FunctionalClient.aiMessage(cid,{message:input});setMsg(r.answer||localAnswer);setHistory([{q:input,a:r.answer||localAnswer},...history]);await load()}catch(e:any){setMsg(localAnswer);setHistory([{q:input,a:localAnswer},...history])}}
+ async function ask(){try{const r=await v33FunctionalClient.aiMessage(cid,{message:input});setMsg(r.answer||'Keine Antwort vom Assistant erhalten.');setHistory([{q:input,a:r.answer||'Keine Antwort vom Assistant erhalten.'},...history]);await load()}catch(e:any){setMsg(e.message||'Assistant derzeit nicht erreichbar. Es wurde keine Beispielantwort erzeugt.')}}
  const ai=data?.ai
- return <V41DeepModuleShell cid={cid} title="AI Business Assistant Detail" sub="Chat · Insight-Verlauf · Warum-Erklärung"><div className="grid2"><Card title="AI Insight Verlauf">{(ai?.insights||[]).map((x:any)=><div className="v41AiBubble" key={x.title}><div className="v40Avatar">AI</div><div><b>{x.title}</b><p>{x.message}</p>{(x.reasons||[]).map((r:string)=><Badge key={r}>{r}</Badge>)}<em>Aktion: {x.action}</em></div></div>)}</Card><Card title="Demo Chat"><textarea className="input" value={input} onChange={e=>setInput(e.target.value)}/><div className="toolbarActions"><button className="btn" onClick={ask}>Assistant fragen</button><button className="btn secondary" onClick={()=>setInput('Erzeuge eine Follow-up Aufgabe aus den aktuellen Reviews')}>Review Follow-up</button><button className="btn secondary" onClick={()=>setInput('Welche Paketempfehlung passt für diesen Kunden?')}>Paketempfehlung</button></div>{msg&&<div className="v41AiAnswer">{msg}</div>}{history.map((h:any,i:number)=><div className="item" key={i}><b>{h.q}</b><span>{h.a}</span></div>)}</Card></div></V41DeepModuleShell>
+ return <V41DeepModuleShell cid={cid} title="AI Business Assistant Detail" sub="Chat · Insight-Verlauf · Warum-Erklärung"><div className="grid2"><Card title="AI Insight Verlauf">{!(ai?.insights||[]).length&&<EmptyState icon="AI" title="Noch keine Assistant-Insights vorhanden">Insights erscheinen, sobald der Backend-Assistant echte Kundensignale verarbeitet.</EmptyState>}{(ai?.insights||[]).map((x:any)=><div className="v41AiBubble" key={x.title}><div className="v40Avatar">AI</div><div><b>{x.title}</b><p>{x.message}</p>{(x.reasons||[]).map((r:string)=><Badge key={r}>{r}</Badge>)}<em>Aktion: {x.action}</em></div></div>)}</Card><Card title="Assistant testen"><textarea className="input" value={input} onChange={e=>setInput(e.target.value)}/><div className="toolbarActions"><button className="btn" onClick={ask}>Assistant fragen</button><button className="btn secondary" onClick={()=>setInput('Erzeuge eine Follow-up Aufgabe aus den aktuellen Reviews')}>Review Follow-up</button><button className="btn secondary" onClick={()=>setInput('Welche Paketempfehlung passt für diesen Kunden?')}>Paketempfehlung</button></div>{msg&&<div className="v41AiAnswer">{msg}</div>}{history.map((h:any,i:number)=><div className="item" key={i}><b>{h.q}</b><span>{h.a}</span></div>)}</Card></div></V41DeepModuleShell>
 }
 
 function V40QualityPanel({cid}:any){
@@ -1645,15 +1743,15 @@ function V40AutomationStudio({cid}:any){
  function persistFlows(next:any[]){setFlows(next);safeLocalStorageSet(localKey,next)}
  useEffect(()=>{setFlows(safeLocalStorageGet(localKey,[]))},[cid])
  async function create(t=selectedTrigger,a=selectedAction){const flow={id:uid(),customer_id:cid,name:`${t} → ${a}`,trigger:t,action:a,active:true,runs:0};persistFlows([flow,...flows]);setMsg('Speichere Flow...');try{await v33FunctionalClient.createRecord('smart_automations',flow);setMsg('Flow gespeichert')}catch(e:any){setMsg('Flow lokal gespeichert · Backend später synchronisieren')}}
- async function run(){setMsg('Automation Engine läuft...');try{await v33FunctionalClient.runAutomation(cid,{trigger:selectedTrigger,action:selectedAction});setMsg('Automation Engine gelaufen')}catch(e:any){setMsg('Demo-Lauf lokal simuliert: Aktion wurde vorgemerkt')}}
+ async function run(){setMsg('Automation Engine läuft...');try{await v33FunctionalClient.runAutomation(cid,{trigger:selectedTrigger,action:selectedAction});setMsg('Automation Engine gelaufen')}catch(e:any){setMsg('Test-Lauf lokal simuliert: Aktion wurde vorgemerkt')}}
  return <><Head title="Smart Automation Studio" sub="Automation · Flow Builder · Trigger und Aktion wählbar"/><div className="grid2"><Card title="Flow konfigurieren"><select className="input" value={selectedTrigger} onChange={e=>setSelectedTrigger(e.target.value)}>{triggers.map(t=><option key={t}>{t}</option>)}</select><select className="input" value={selectedAction} onChange={e=>setSelectedAction(e.target.value)}>{actions.map(a=><option key={a}>{a}</option>)}</select><div className="item"><b>{selectedTrigger}</b><span>führt aus</span><Badge>{selectedAction}</Badge></div><button className="btn" onClick={()=>create()}>Flow speichern</button><button className="btn secondary" onClick={run}>Ausgewählten Flow testen</button></Card><Card title="Trigger-Bibliothek"><div className="v40Flow"><div className="v40FlowCol"><h3>Trigger</h3>{triggers.map(t=><button className={selectedTrigger===t?'active':''} key={t} onClick={()=>setSelectedTrigger(t)}>{t}</button>)}</div><div className="v40FlowArrow">→</div><div className="v40FlowCol"><h3>Aktionen</h3>{actions.map(a=><button className={selectedAction===a?'active':''} key={a} onClick={()=>setSelectedAction(a)}>{a}</button>)}</div></div></Card></div><Card title="Gespeicherte Flows">{flows.length===0&&<div className="sub">Noch kein Flow gespeichert.</div>}{flows.map(f=><div className="item" key={f.id}><b>{f.name}</b><button className="btn secondary" onClick={()=>persistFlows(flows.map(x=>x.id===f.id?{...x,active:!x.active}:x))}>{f.active?'Aktiv':'Inaktiv'}</button></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
 }
 
 function V40MarketingFunnel({cid}:any){
  const [msg,setMsg]=useState('')
  const stages=['Entwurf','Bereit','Gestartet','Leads','Conversion']
- async function run(){setMsg('Starte Kampagne...');try{await v33FunctionalClient.runMarketing(cid,{name:'V40 Demo Kampagne',audience:'Reward-bereit',reward:'Bonus'});setMsg('Kampagne gestartet')}catch(e:any){setMsg(e.message)}}
- return <><Head title="Marketing Automation Funnel" sub="Marketing · Kampagnen-Funnel · Demo Run"/><Card title="Kampagnen-Funnel" action={<V40AsyncButton onClick={run}>Kampagne starten</V40AsyncButton>}><div className="v40Funnel">{stages.map((s,i)=><div className="v40FunnelStage" key={s}><b>{s}</b><span>{i===0?'Idee':i===1?'Segment':i===2?'Versand':i===3?'Follow-up':'Abschluss'}</span></div>)}</div>{msg&&<div className="sub">{msg}</div>}</Card></>
+ async function run(){setMsg('Starte Kampagne...');try{await v33FunctionalClient.runMarketing(cid,{name:'V40 Test Kampagne',audience:'Reward-bereit',reward:'Bonus'});setMsg('Kampagne gestartet')}catch(e:any){setMsg(e.message)}}
+ return <><Head title="Marketing Automation Funnel" sub="Marketing · Kampagnen-Funnel · Test Run"/><Card title="Kampagnen-Funnel" action={<V40AsyncButton onClick={run}>Kampagne starten</V40AsyncButton>}><div className="v40Funnel">{stages.map((s,i)=><div className="v40FunnelStage" key={s}><b>{s}</b><span>{i===0?'Idee':i===1?'Segment':i===2?'Versand':i===3?'Follow-up':'Abschluss'}</span></div>)}</div>{msg&&<div className="sub">{msg}</div>}</Card></>
 }
 
 function V40AiInsightFeed({cid}:any){
@@ -1705,13 +1803,13 @@ function V39StabilityPanel({cid}:any){
   finally{setBusy('')}
  }
  const missing=schema?.missing||[]
- return <Card title="Stability & Schema Guard" action={<button className="btn secondary" disabled={!!busy} onClick={()=>run('Schema Health',()=>v33FunctionalClient.schemaHealth())}>Schema prüfen</button>}><div className="sub">Prüft Migrationen, härtet Demo gegen fehlende Tabellen ab und zeigt konkrete Fix-Hinweise.</div><div className="toolbarActions"><button className="btn secondary" disabled={!!busy} onClick={()=>run('Safe Provisioning',()=>v33FunctionalClient.provisionSafe(cid,{}))}>Idempotent provisionieren</button><button className="btn secondary" disabled={!!busy} onClick={()=>run('Testscan',()=>v33FunctionalClient.simulateScan(cid,{name:'V39 Testscan'}))}>Doppelklick-sicherer Testscan</button></div>{msg&&<div className="sub">{msg}</div>}{schema&&<div className="grid4"><Metric label="Ready" value={schema.ready?'Ja':'Nein'}/><Metric label="Fehlend" value={missing.length}/><Metric label="Hinweis" value={schema.ready?'OK':'0050 SQL'}/><Metric label="Status" value={busy||'bereit'}/></div>}{missing.map((m:any)=><div className="item" key={m.table}><b>⚠️ {m.table}</b><span>{m.hint}</span><Badge type="red">0050 ausführen</Badge></div>)}</Card>
+ return <Card title="Stability & Schema Guard" action={<button className="btn secondary" disabled={!!busy} onClick={()=>run('Schema Health',()=>v33FunctionalClient.schemaHealth())}>Schema prüfen</button>}><div className="sub">Prüft Migrationen, härtet Test gegen fehlende Tabellen ab und zeigt konkrete Fix-Hinweise.</div><div className="toolbarActions"><button className="btn secondary" disabled={!!busy} onClick={()=>run('Safe Provisioning',()=>v33FunctionalClient.provisionSafe(cid,{}))}>Idempotent provisionieren</button><button className="btn secondary" disabled={!!busy} onClick={()=>run('Testscan',()=>v33FunctionalClient.simulateScan(cid,{name:'V39 Testscan'}))}>Doppelklick-sicherer Testscan</button></div>{msg&&<div className="sub">{msg}</div>}{schema&&<div className="grid4"><Metric label="Ready" value={schema.ready?'Ja':'Nein'}/><Metric label="Fehlend" value={missing.length}/><Metric label="Hinweis" value={schema.ready?'OK':'0050 SQL'}/><Metric label="Status" value={busy||'bereit'}/></div>}{missing.map((m:any)=><div className="item" key={m.table}><b>⚠️ {m.table}</b><span>{m.hint}</span><Badge type="red">0050 ausführen</Badge></div>)}</Card>
 }
 
 function V38Customer360({cid}:any){
  const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
  async function load(){setMsg('Lade Kundenakte...');try{const r=await v33FunctionalClient.customer360(cid);setData(r);setMsg('Kundenakte geladen')}catch(e:any){setMsg(e.message)}}
- async function scan(){setMsg('Simuliere Testscan...');try{await v33FunctionalClient.simulateScan(cid,{name:'Demo Testscan',email:`testscan-${Date.now()}@demo.local`});await load();setMsg('Testscan erzeugt Lead, Member, Punkte und Scores')}catch(e:any){setMsg(e.message)}}
+ async function scan(){setMsg('Simuliere Testscan...');try{await v33FunctionalClient.simulateScan(cid,{name:'Test Testscan',email:`testscan-${Date.now()}@example.invalid`});await load();setMsg('Testscan erzeugt Lead, Member, Punkte und Scores')}catch(e:any){setMsg(e.message)}}
  useEffect(()=>{load()},[cid])
  const c=data?.counts||{}, ai=data?.ai_explanations||[]
  return <Card title="CRM 360 Kundenakte" action={<button className="btn secondary" onClick={load}>Aktualisieren</button>}><div className="grid4"><Metric label="QR Scans" value={c.qrScans??'-'}/><Metric label="Leads" value={c.leads??'-'}/><Metric label="Members" value={c.members??'-'}/><Metric label="Pipeline" value={c.pipelineValue??'-'}/></div><div className="toolbarActions"><button className="btn" onClick={scan}>Testscan simulieren</button><button className="btn secondary" onClick={()=>v33FunctionalClient.qaChecklist(cid).then((r:any)=>{setData({...data,checklist:r.checklist});setMsg(r.ready?'QA bereit':'QA prüfen')}).catch((e:any)=>setMsg(e.message))}>QA-Checkliste</button></div>{ai.map((x:any)=><div className="item" key={x.title}><b>{x.title}</b><span>{(x.reason||[]).join(' · ')}</span><span className="whyHint">Warum? <InfoI text={(x.reason||[]).join(' · ') || x.explanation || x.title}/></span></div>)}{data?.checklist&&data.checklist.map((x:any)=><div className="item" key={x.key}><b>{x.ok?'✅':'⚠️'} {x.label}</b><span>{x.url||''}</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card>
@@ -1724,13 +1822,13 @@ function V38RewardHistory({cid}:any){
 }
 function V38BillingRevenueHub({cid}:any){
  const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
- async function load(){setMsg('Berechne Billing & Revenue...');try{const r=await v33FunctionalClient.billingRevenue(cid);setData(r);setMsg('Billing & Revenue berechnet')}catch(e:any){setData({billing:{total:499},snapshot:{forecast:998,revenue_share:75,upsell:68},records:[{id:'local_billing',resource:'dynamic_billing',title:'Lokale Usage-Berechnung',status:'Fallback'}]});setMsg('Lokale Billing & Revenue Berechnung aktiv')}}
+ async function load(){setMsg('Berechne Billing & Revenue...');try{const r=await v33FunctionalClient.billingRevenue(cid);setData(r);setMsg('Billing & Revenue berechnet')}catch(e:any){setData({billing:{total:0},snapshot:{forecast:0,revenue_share:0,upsell:0},records:[]});setMsg('Keine Live-Daten für Billing & Revenue vorhanden')}}
  return <Card title="Billing & Revenue Hub" action={<button className="btn secondary" onClick={load}>Neu berechnen</button>}><div className="sub">Paket, Usage, Forecast, Revenue Share und Package Recommendation werden zusammengeführt.</div>{data&&<div className="grid4"><Metric label="Usage" value={data.billing?.total??'-'}/><Metric label="Forecast" value={data.snapshot?.forecast??'-'}/><Metric label="Revenue Share" value={data.snapshot?.revenue_share??'-'}/><Metric label="Upsell" value={data.snapshot?.upsell??'-'}/></div>}{(data?.records||[]).slice(0,6).map((r:any)=><div className="item" key={r.id}><b>{r.resource}</b><span>{r.title}</span><Badge>{r.status}</Badge></div>)}{msg&&<div className="sub">{msg}</div>}</Card>
 }
 function V38ResetControls({cid}:any){
  const [msg,setMsg]=useState('')
  async function reset(scope:string){setMsg(`Reset ${scope} läuft...`);try{await v33FunctionalClient.resetScope(cid,scope);setMsg(`Reset ${scope} abgeschlossen`)}catch(e:any){setMsg(e.message)}}
- return <Card title="Feiner Demo-Reset"><div className="toolbarActions">{['loyalty','leads','reviews','automation','billing','all'].map(s=><button key={s} className="btn secondary" onClick={()=>reset(s)}>{s}</button>)}</div>{msg&&<div className="sub">{msg}</div>}</Card>
+ return <Card title="Feiner Test-Reset"><div className="toolbarActions">{['loyalty','leads','reviews','automation','billing','all'].map(s=><button key={s} className="btn secondary" onClick={()=>reset(s)}>{s}</button>)}</div>{msg&&<div className="sub">{msg}</div>}</Card>
 }
 function V38TriggerLibrary({cid}:any){
  const triggers=['QR Scan erfolgt','Neuer Lead entsteht','Reward eingelöst','Kunde wird VIP','Negative Review entsteht','Kunde 30 Tage inaktiv','Tageslimit erreicht','Referral Lead entsteht','Upsell Score > 80']
@@ -1790,7 +1888,7 @@ function V36QrExport({slug,path}:{slug?:string,path?:string}){
  return <div className="qrExport"><img src={qr} alt="QR Code"/><div><b>Scan-Link</b><div className="sub">{url}</div><div className="toolbarActions"><button className="btn secondary" onClick={copy}>Link kopieren</button><button className="btn secondary" onClick={download}>QR PNG öffnen/downloaden</button></div></div></div>
 }
 
-function V36DemoQaPanel({cid}:any){
+function V36QaPanel({cid}:any){
  const [status,setStatus]=useState<any>(null)
  const [report,setReport]=useState<any>(null)
  const [msg,setMsg]=useState('')
@@ -1799,7 +1897,7 @@ function V36DemoQaPanel({cid}:any){
   try{const r=await fn(); if(label.includes('Status'))setStatus(r); if(label.includes('Report'))setReport(r.report); setMsg(`${label} abgeschlossen`)}
   catch(e:any){setMsg(e.message||`${label} fehlgeschlagen`)}
  }
- return <Card title="Demo QA & Worker" action={<button className="btn secondary" onClick={()=>run('Statuscheck',()=>v33FunctionalClient.systemStatus())}>API-Status</button>}><div className="sub">Prüft Backend/Supabase, erzeugt QA-Report, startet Worker und setzt Kundendemo bei Bedarf zurück.</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>run('QA Report',()=>v33FunctionalClient.qaReport(cid))}>QA Report laden</button><button className="btn secondary" onClick={()=>run('Automation Worker',()=>v33FunctionalClient.runWorker(cid,{run_marketing:true}))}>Worker starten</button><button className="btn secondary" onClick={()=>run('Demo Reset',()=>v33FunctionalClient.resetDemoData(cid))}>Kundendemo zurücksetzen</button></div>{msg&&<div className="sub">{msg}</div>}{status&&<div className="grid4"><Metric label="Backend" value={status.checks?.backend?'OK':'Fehler'}/><Metric label="Supabase" value={status.checks?.supabase?'OK':'Warnung'}/><Metric label="Status" value={status.status}/><Metric label="Zeit" value="Live"/></div>}{report&&<div className="grid4"><Metric label="QR" value={report.counts.qr_campaigns}/><Metric label="Leads" value={report.counts.leads}/><Metric label="Members" value={report.counts.loyalty_members}/><Metric label="Engine Runs" value={report.counts.engine_runs}/></div>}{report?.qr_campaigns?.[0]?.slug&&<V36QrExport slug={report.qr_campaigns[0].slug}/>}</Card>
+ return <Card title="QA & Worker" action={<button className="btn secondary" onClick={()=>run('Statuscheck',()=>v33FunctionalClient.systemStatus())}>API-Status</button>}><div className="sub">Prüft Backend/Supabase, erzeugt QA-Report, startet Worker und setzt interne Testdaten bei Bedarf zurück.</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>run('QA Report',()=>v33FunctionalClient.qaReport(cid))}>QA Report laden</button><button className="btn secondary" onClick={()=>run('Automation Worker',()=>v33FunctionalClient.runWorker(cid,{run_marketing:true}))}>Worker starten</button><button className="btn secondary" onClick={()=>run('Testdaten-Reset',()=>v33FunctionalClient.resetTestData(cid))}>Testdaten zurücksetzen</button></div>{msg&&<div className="sub">{msg}</div>}{status&&<div className="grid4"><Metric label="Backend" value={status.checks?.backend?'OK':'Fehler'}/><Metric label="Supabase" value={status.checks?.supabase?'OK':'Warnung'}/><Metric label="Status" value={status.status}/><Metric label="Zeit" value="Live"/></div>}{report&&<div className="grid4"><Metric label="QR" value={report.counts.qr_campaigns}/><Metric label="Leads" value={report.counts.leads}/><Metric label="Members" value={report.counts.loyalty_members}/><Metric label="Engine Runs" value={report.counts.engine_runs}/></div>}{report?.qr_campaigns?.[0]?.slug&&<V36QrExport slug={report.qr_campaigns[0].slug}/>}</Card>
 }
 
 function V35BusinessEnginePanel({cid}:any){
@@ -1813,7 +1911,7 @@ function V35BusinessEnginePanel({cid}:any){
    setMsg(`${label} abgeschlossen`)
   }catch(e:any){setMsg(e.message||`${label} fehlgeschlagen`)}
  }
- return <Card title="Business Engine" action={<button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.recalculateCustomer(cid),'Recalculate')}>Alles neu berechnen</button>}><div className="sub">Produktionsnahe Demo-Engine: Health, Intelligence, Billing, Forecast, Revenue Share, Recommendations und AI-Hinweise werden aus echten Kundensignalen berechnet.</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.runAutomation(cid,{}),'Automation Engine')}>Automation Engine</button><button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.runMarketing(cid,{name:'Demo Booster'}),'Marketing Engine')}>Marketing Engine</button><button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.calculateBilling(cid),'Billing Engine')}>Billing Engine</button></div>{msg&&<div className="sub">{msg}</div>}{snapshot&&<div className="grid4"><Metric label="Health" value={snapshot.health??snapshot.snapshot?.health??'-'}/><Metric label="Risk" value={snapshot.risk??snapshot.snapshot?.risk??'-'}/><Metric label="Upsell" value={snapshot.upsell??snapshot.snapshot?.upsell??'-'}/><Metric label="Forecast" value={snapshot.forecast??snapshot.snapshot?.forecast??'-'}/></div>}</Card>
+ return <Card title="Business Engine" action={<button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.recalculateCustomer(cid),'Recalculate')}>Alles neu berechnen</button>}><div className="sub">Produktionsnahe Live-Engine: Health, Intelligence, Billing, Forecast, Revenue Share, Recommendations und AI-Hinweise werden aus echten Kundensignalen berechnet.</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.runAutomation(cid,{}),'Automation Engine')}>Automation Engine</button><button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.runMarketing(cid,{name:'Marketing Booster'}),'Marketing Engine')}>Marketing Engine</button><button className="btn secondary" onClick={()=>run(()=>v33FunctionalClient.calculateBilling(cid),'Billing Engine')}>Billing Engine</button></div>{msg&&<div className="sub">{msg}</div>}{snapshot&&<div className="grid4"><Metric label="Health" value={snapshot.health??snapshot.snapshot?.health??'-'}/><Metric label="Risk" value={snapshot.risk??snapshot.snapshot?.risk??'-'}/><Metric label="Upsell" value={snapshot.upsell??snapshot.snapshot?.upsell??'-'}/><Metric label="Forecast" value={snapshot.forecast??snapshot.snapshot?.forecast??'-'}/></div>}</Card>
 }
 
 function V34CustomerProvisioning({cid}:any){
@@ -1846,7 +1944,7 @@ function V33LeadQuickCheck({cid}:any){
   try{setData(await v33FunctionalClient.leads(cid))}
   catch(e:any){setError(e.message||'Leads konnten nicht geladen werden')}
  }
- return <Card title="QR/Loyalty Leads" action={<button className="btn secondary" onClick={load}>Leads laden</button>}><div className="sub">Lead-Test: Öffne /l/demo-cafe-morgenlicht, sammle Punkte und lade danach hier die Leads.</div>{error&&<Badge type="red">{error}</Badge>}{data?.leads?.slice(0,5).map((l:any)=><div className="item" key={l.id}><b>{l.name||l.email||'QR Lead'}</b><span>{l.email||l.phone||'ohne Kontakt'} · {l.points_added||0} Punkte</span><Badge type="green">Lead</Badge></div>)}</Card>
+ return <Card title="QR/Loyalty Leads" action={<button className="btn secondary" onClick={load}>Leads laden</button>}><div className="sub">Lead-Test: Öffne eine echte /l/[slug]-Seite, sammle Punkte und lade danach hier die Leads.</div>{error&&<Badge type="red">{error}</Badge>}{data?.leads?.slice(0,5).map((l:any)=><div className="item" key={l.id}><b>{l.name||l.email||'QR Lead'}</b><span>{l.email||l.phone||'ohne Kontakt'} · {l.points_added||0} Punkte</span><Badge type="green">Lead</Badge></div>)}</Card>
 }
 
 
@@ -1886,11 +1984,11 @@ function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
    {title:'Monatsreport ansehen',desc:reports[0]?.title||'Noch kein Report erstellt',view:'reports',badge:'blue'},
    {title:'Google & SEO prüfen',desc:'Sichtbarkeit, Quellen und Wettbewerber',view:'seo',badge:'green'}
   ]
-  return <><Head title="Mein Marketing-Portal" sub={`Willkommen zurück, ${cname(store.data,cid)} · klarer Überblick statt Tool-Suche`} action={<LiveModeBadge/>}/><div className="customerHero"><div><Badge type="green">Betreut durch Mecklenburg Marketing</Badge><h1>Das ist heute wichtig</h1><p>Du siehst die nächsten Aufgaben, offene Freigaben, Rechnungen und aktuelle Empfehlungen auf einen Blick.</p>{packageProgress(pct)}</div><div className="customerHeroCard"><b>Setup-Fortschritt</b><strong>{pct}%</strong><span>{steps.filter((s:any)=>!s.done)[0]?.label||'Setup vollständig'}</span></div></div><div className="grid4"><Metric label="Offene Tickets" value={open}/><Metric label="SEO-Wachstum" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Offene Rechnungen" value={inv.filter((i:any)=>i.status!=='Bezahlt').length}/><Metric label="Warnungen" value={overdue}/></div><Card title="Nächste Schritte">{actions.map((a:any)=><div className="item" key={a.title}><div><b>{a.title}</b><div className="sub">{a.desc}</div></div><div className="toolbarActions"><Badge type={a.badge}>{a.badge==='green'?'OK':'Offen'}</Badge><button className="btn secondary" onClick={()=>setView(a.view)}>Öffnen</button></div></div>)}</Card><div className="grid2"><Card title="Aktuelle Empfehlung"><ToolTipHint title="Google Business Optimierung">Aktualisiere regelmäßig Fotos, Leistungen und Beiträge. Das stärkt lokale Sichtbarkeit und Vertrauen bei neuen Kunden.</ToolTipHint><button className="btn secondary" onClick={()=>setView('knowledge')}>Erklärung im Wissenscenter öffnen</button></Card><Card title="Datenvertrauen"><TrustHint source={seo.length?'SEO Snapshot / Google Sync':'Demo-/Fallback-Daten'} updated={seo.at(-1)?.created_at}/><div className="sub">Live-/Fallback-Hinweise zeigen, ob Daten aus Supabase/API oder aus dem lokalen Demo-Modus stammen.</div></Card></div></>
+  return <><Head title="Mein Marketing-Portal" sub={`Willkommen zurück, ${cname(store.data,cid)} · klarer Überblick statt Tool-Suche`} action={<LiveModeBadge/>}/><div className="customerHero"><div><Badge type="green">Betreut durch Mecklenburg Marketing</Badge><h1>Das ist heute wichtig</h1><p>Du siehst die nächsten Aufgaben, offene Freigaben, Rechnungen und aktuelle Empfehlungen auf einen Blick.</p>{packageProgress(pct)}</div><div className="customerHeroCard"><b>Setup-Fortschritt</b><strong>{pct}%</strong><span>{steps.filter((s:any)=>!s.done)[0]?.label||'Setup vollständig'}</span></div></div><div className="grid4"><Metric label="Offene Tickets" value={open}/><Metric label="SEO-Wachstum" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Offene Rechnungen" value={inv.filter((i:any)=>i.status!=='Bezahlt').length}/><Metric label="Warnungen" value={overdue}/></div><Card title="Nächste Schritte">{actions.map((a:any)=><div className="item" key={a.title}><div><b>{a.title}</b><div className="sub">{a.desc}</div></div><div className="toolbarActions"><Badge type={a.badge}>{a.badge==='green'?'OK':'Offen'}</Badge><button className="btn secondary" onClick={()=>setView(a.view)}>Öffnen</button></div></div>)}</Card><div className="grid2"><Card title="Aktuelle Empfehlung"><ToolTipHint title="Google Business Optimierung">Aktualisiere regelmäßig Fotos, Leistungen und Beiträge. Das stärkt lokale Sichtbarkeit und Vertrauen bei neuen Kunden.</ToolTipHint><button className="btn secondary" onClick={()=>setView('knowledge')}>Erklärung im Wissenscenter öffnen</button></Card><Card title="Datenvertrauen"><TrustHint source={seo.length?'SEO Snapshot / Google Sync':'nicht synchronisierte Daten'} updated={seo.at(-1)?.created_at}/><div className="sub">Live-/Sync-Hinweise zeigen, ob Daten aus Supabase/API oder aus dem lokalen Test-Modus stammen.</div></Card></div></>
  }
  const todayFollowUps=(store.data.acquisition_campaigns||[]).filter((c:any)=>String(c.follow_up_at||'').slice(0,10)<=new Date().toISOString().slice(0,10)&&!['Gewonnen','Verloren','Archiviert'].includes(c.stage||c.status))
  const redCustomers=(store.data.customer_health_scores||[]).filter((h:any)=>h.status==='Rot'||Number(h.score||0)<55)
- return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne Demo-Kunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><div className="grid2"><Card title="Revenue Übersicht"><div className="item"><b>Revenue Forecasting</b><span>MRR, Pipeline und Umsatzpotenzial zentral sichtbar.</span><button className="btn secondary" onClick={()=>setView('revenue_forecasting')}>Forecast öffnen</button></div><div className="item"><b>Revenue Share</b><span>Beteiligung, Add-ons und Revenue-Modelle prüfen.</span><button className="btn secondary" onClick={()=>setView('revenue_share')}>Revenue Share öffnen</button></div></Card><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=><div className="item" key={p.id}><div><b>{cname(store.data,p.customer_id)} möchte {p.package_name}</b><div className="sub">{p.billing_interval}</div></div><button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button></div>)}</Card>}</>
+ return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne ausgeblendete Testkunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><div className="grid2"><Card title="Revenue Übersicht"><div className="item"><b>Revenue Forecasting</b><span>MRR, Pipeline und Umsatzpotenzial zentral sichtbar.</span><button className="btn secondary" onClick={()=>setView('revenue_forecasting')}>Forecast öffnen</button></div><div className="item"><b>Revenue Share</b><span>Beteiligung, Add-ons und Revenue-Modelle prüfen.</span><button className="btn secondary" onClick={()=>setView('revenue_share')}>Revenue Share öffnen</button></div></Card><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=><div className="item" key={p.id}><div><b>{cname(store.data,p.customer_id)} möchte {p.package_name}</b><div className="sub">{p.billing_interval}</div></div><button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button></div>)}</Card>}</>
 }
 
 
@@ -2064,8 +2162,8 @@ function MediaCenter({store,cid,setCid,role,activeAdmin}:any){
  const target=role==='admin'?selectedCid:cid
  return <><Head title="Media Center" sub="Dateien landen je nach Typ im passenden CRM-Bereich."/><div className="grid2"><Card title="Ziel auswählen">{role==='admin'&&<Search items={allCustomers(store.data)} value={target} onChange={(id:string)=>{setSelectedCid(id);setCid?.(id)}} placeholder="Kunde für Upload suchen"/>}<select className="input" value={type} onChange={e=>setType(e.target.value as FileType)}><option value="invoices">Rechnung</option><option value="contracts">Vertrag</option><option value="media">Bilder / Medien</option><option value="documents">Dokument</option><option value="reports">Report</option></select></Card><StorageUploader store={store} cid={target} fileType={type} title="Datei hochladen" activeAdmin={activeAdmin}/></div><Card title={`Gespeicherte Dateien für ${cname(store.data,target)}`}><FileList store={store} cid={target}/></Card></>
 }
-function DemoEnvironment({store,setView}:any){function openAdmin(){window.open(`${window.location.origin}${window.location.pathname}?demo=admin`,'_blank','noopener,noreferrer')}function openCustomer(c:any){window.open(`${window.location.origin}${window.location.pathname}?demo=customer&customer=${c.id}`,'_blank','noopener,noreferrer')}const demos=demoCustomers(store.data);return <><Head title="Demo Umgebung" sub="Interner Demo-Zugang für Admins. Demo-Kunden werden im Live-CRM ausgeblendet und sind nur hier erreichbar." action={<button className="btn" onClick={openAdmin}>Admin-Demo öffnen</button>}/><div className="grid2"><Card title="Admin-Demo"><p className="sub">Öffnet die vollständige Admin-Demo in einem neuen Tab mit Demo-/Fallback-Daten. Nur im Adminbereich sichtbar.</p><div className="toolbarActions"><button className="btn" onClick={openAdmin}>Admin-Demo öffnen</button><button className="btn secondary" onClick={()=>{clearDemoSandbox();location.reload()}}>Demo zurücksetzen</button></div></Card><Card title="Öffentlicher Demo-Button"><p className="sub">Den Demo-Button auf der Landingpage blendest du unter „Haupt-Landingpage“ mit der Checkbox „Öffentlichen Demo-Button anzeigen“ ein oder aus.</p><button className="btn secondary" onClick={()=>setView('main_landing')}>Reiter Haupt-Landingpage öffnen</button></Card></div><Card title="Demo-Kundenumgebungen">{demos.length===0&&<div className="sub">Keine Demo-Kunden vorhanden.</div>}{demos.map((c:any)=><div className="item" key={c.id}><div><b>{c.name}</b><div className="sub">{c.package_name} · öffnet Kundenportal-Demo im neuen Tab</div></div><button className="btn" onClick={()=>openCustomer(c)}>Kunden-Demo öffnen</button></div>)}</Card></>}
-function DemoCustomers({store}:any){return <DemoEnvironment store={store} setView={()=>{}}/>}
+function DemoEnvironment({store,setView}:any){function openAdmin(){window.open(`${window.location.origin}${window.location.pathname}?demo=admin`,'_blank','noopener,noreferrer')}function openCustomer(c:any){window.open(`${window.location.origin}${window.location.pathname}?demo=customer&customer=${c.id}`,'_blank','noopener,noreferrer')}const demos=demoCustomers(store.data);return <><Head title="Interne Testumgebung" sub="Interner Test-Zugang für Admins. Testkunden werden im Live-CRM ausgeblendet und sind nur hier erreichbar." action={<button className="btn" onClick={openAdmin}>Admin-Test öffnen</button>}/><div className="grid2"><Card title="Admin-Testansicht"><p className="sub">Öffnet die vollständige interne Admin-Testansicht in einem neuen Tab. Nur im Adminbereich sichtbar.</p><div className="toolbarActions"><button className="btn" onClick={openAdmin}>Admin-Test öffnen</button><button className="btn secondary" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button></div></Card><Card title="Zweiter öffentlicher Button"><p className="sub">Den zweiten Button auf der Landingpage blendest du unter „Haupt-Landingpage“ mit der Checkbox „Zweiten öffentlichen Button anzeigen“ ein oder aus.</p><button className="btn secondary" onClick={()=>setView('main_landing')}>Reiter Haupt-Landingpage öffnen</button></Card></div><Card title="Testkundenumgebungen">{demos.length===0&&<div className="sub">Keine Testkunden vorhanden.</div>}{demos.map((c:any)=><div className="item" key={c.id}><div><b>{c.name}</b><div className="sub">{c.package_name} · öffnet Kundenportal-Testansicht im neuen Tab</div></div><button className="btn" onClick={()=>openCustomer(c)}>Kundentest öffnen</button></div>)}</Card></>}
+function TestCustomers({store}:any){return <DemoEnvironment store={store} setView={()=>{}}/>}
 function Integrations({store,cid,role,setCid}:any){
  const [target,setTarget]=useState(cid)
  useEffect(()=>setTarget(cid),[cid])
@@ -2085,7 +2183,7 @@ function Integrations({store,cid,role,setCid}:any){
  async function sync(name:string){
   const provider=providerMap[name]||name
   if(provider==='meta'){setMsg('Meta Sync ist als Integration vorbereitet, aber noch nicht angebunden.');return}
-  try{const r=await syncGoogleProvider(provider,target,{site_url:f.site_url,property_id:f.property_id});const providerKey=providerToApiKey(provider);setMsg(r?.ok?`Sync für ${providerKey} ausgeführt. SEO Dashboard nutzt neue Daten bzw. Fallbackdaten.`:(r?.error||'Sync konnte nicht abgeschlossen werden.')); const row=rows.find((i:any)=>(i.name||i.provider)===provider||(i.provider===providerKey)); if(row) await store.update('integrations',row.id,{provider:providerKey,status:r?.ok?'Verbunden':'Fehler',last_sync_at:new Date().toISOString(),last_sync_status:r?.ok?'synced':'error',last_sync_error:r?.ok?'':r?.error})}catch(e:any){setMsg(e.message||'Sync nicht erreichbar')}
+  try{const r=await syncGoogleProvider(provider,target,{site_url:f.site_url,property_id:f.property_id});const providerKey=providerToApiKey(provider);setMsg(r?.ok?`Sync für ${providerKey} ausgeführt. SEO Dashboard nutzt nach erfolgreicher Synchronisierung neue Daten.`:(r?.error||'Sync konnte nicht abgeschlossen werden.')); const row=rows.find((i:any)=>(i.name||i.provider)===provider||(i.provider===providerKey)); if(row) await store.update('integrations',row.id,{provider:providerKey,status:r?.ok?'Verbunden':'Fehler',last_sync_at:new Date().toISOString(),last_sync_status:r?.ok?'synced':'error',last_sync_error:r?.ok?'':r?.error})}catch(e:any){setMsg(e.message||'Sync nicht erreichbar')}
  }
  return <><Head title="Integrationen" sub={`${cname(store.data,target)} · Google/API-Zugänge kundenbezogen hinterlegen und mit dem SEO Dashboard verbinden`} action={<button className="btn" onClick={save}>Integration speichern</button>}/>{role==='admin'&&<CentralCustomerSelector store={store} cid={target} setCid={(id:string)=>{setTarget(id);setCid?.(id)}} title="Integrationen · Kunde auswählen" sub="Hier wird festgelegt, für welchen Kunden Google/API-Daten hinterlegt werden."/>}<div className="grid2"><Card title="Tool verbinden"><select className="input" value={f.name} onChange={e=>setF({...f,name:e.target.value})}><option>Google Business Profile</option><option>Google Search Console</option><option>Google Analytics</option><option>Meta Business Suite</option></select><input className="input" placeholder="API-Key oder Token, falls vorhanden – wird nur serverseitig benötigt" value={f.api_key} onChange={e=>setF({...f,api_key:e.target.value})}/><input className="input" placeholder="Search Console Property / Website-URL, z. B. https://kunde.de" value={f.site_url} onChange={e=>setF({...f,site_url:e.target.value})}/><input className="input" placeholder="GA4 Property-ID, z. B. 123456789" value={f.property_id} onChange={e=>setF({...f,property_id:e.target.value})}/><div className="toolbarActions"><button className="btn secondary" onClick={oauth}>Google OAuth starten</button><button className="btn secondary" onClick={()=>sync(f.name)}>Jetzt ins SEO Dashboard syncen</button></div><div className="sub">Saubere Verbindung: Integrationen → Google Sync → SEO Dashboard / KPI Analytics / Heatmap.</div></Card><Card title="SEO-Verknüpfung"><div className="item"><b>SEO Dashboard</b><span>Nutzt Search Console, Analytics und Google Business Daten.</span></div><div className="item"><b>SEO Heatmap</b><span>Nutzt lokale Google-Business-/Maps-Signale.</span></div><div className="item"><b>KPI Analytics</b><span>Übernimmt Leads, Klicks, Conversion und Aktivität.</span></div>{msg&&<div className="sub">{msg}</div>}</Card></div><Card title="Verbindungen">{rows.length===0&&<div className="sub">Noch keine Integration für {cname(store.data,target)} gespeichert.</div>}{rows.map((i:any)=><div className="item" key={i.id}><div><b>{i.name||i.provider}</b><div className="sub">{i.site_url||'Keine Website hinterlegt'} · {i.property_id||'Keine GA4-ID'}</div></div><div className="toolbarActions"><Badge>{i.status||'Bereit'}</Badge><button className="btn secondary" onClick={()=>sync(i.name||i.provider)}>Sync</button><button className="btn secondary" onClick={()=>store.remove('integrations',i.id)}>Löschen</button></div></div>)}</Card></>}
 
@@ -2108,7 +2206,7 @@ function CustomerSEO({store,cid,role,setCid}:any){
   const providers=['google-business','search-console','analytics']
   const results=[]
   for(const provider of providers){try{results.push(await syncGoogleProvider(provider,cid,{site_url:integrations[0]?.site_url,property_id:integrations.find((i:any)=>String(i.name||i.provider).toLowerCase().includes('analytics'))?.property_id}))}catch(e:any){results.push({ok:false,error:e.message})}}
-  setMsg(results.some((r:any)=>r?.ok)?'SEO Sync ausgeführt. Neue Daten erscheinen nach Backend/Supabase-Aktualisierung.':'Sync noch nicht vollständig konfiguriert – Fallbackwerte bleiben sichtbar.')
+  setMsg(results.some((r:any)=>r?.ok)?'SEO Sync ausgeführt. Neue Daten erscheinen nach Backend/Supabase-Aktualisierung.':'Sync noch nicht vollständig konfiguriert – bestehende Werte bleiben sichtbar.')
  }
  return <><Head title="SEO Dashboard" sub={`${cname(store.data,cid)} · Analytics · Search Console · Google Business · Heatmap`} action={<button className="btn secondary" onClick={syncAll}>Google/API Sync starten</button>}/>{role==='admin'&&<CentralCustomerSelector store={store} cid={cid} setCid={setCid} title="SEO & Analytics · Kunde" sub="Alle SEO-, Heatmap- und KPI-Werte werden auf diesen Kunden bezogen."/>}<div className="grid4"><Metric label="Sichtbarkeit" value={latest.visibility||latest.visibility_score||72}/><Metric label="Klicks" value={latest.clicks||latest.organic_traffic||1450}/><Metric label="Impressionen" value={latest.impressions||42000}/><Metric label="Top Keywords" value={latest.top_keywords||data.length||18}/></div><div className="grid2"><Card title="SEO Analytics"><div className="chartLine">{Array.from({length:12},(_,i)=><span key={i} style={{height:`${30+(i*7)%58}px`}} />)}</div><div className="sub">Datenquelle: {integrations.length?integrations.map((i:any)=>i.name||i.provider).join(', '):'Noch keine Integration – bitte unter Integrationen verbinden.'}</div>{msg&&<div className="sub">{msg}</div>}</Card><Card title="SEO Heatmap"><div className="mapMock"><b>Lokale Sichtbarkeit</b><span>Heatmap wird mit Google Business/Maps-Signalen und Suchradius befüllt.</span></div></Card></div><Card title="Verbundene Quellen">{integrations.length===0?<div className="sub">Noch keine Google/API-Verbindung hinterlegt.</div>:integrations.map((i:any)=><div className="item" key={i.id}><b>{i.name||i.provider}</b><Badge>{i.status||'Bereit'}</Badge></div>)}</Card></>}
 function CustomerReview({store,cid}:any){return <CustomerToolPage title="Review Funnel"><div className="grid4"><Metric label="Positive Reviews" value="24"/><Metric label="Internes Feedback" value="6"/><Metric label="Google Redirects" value="18"/><Metric label="Ø Sterne" value="4.6"/></div><div className="sub">QR-Kampagnen werden im Adminbereich erstellt und hier ausgewertet.</div></CustomerToolPage>}
@@ -2169,28 +2267,28 @@ function ApprovalCenter({store,cid,role}:any){
 
 
 const v33ToolConfigs:any={
- qr:{title:'QR Kampagnen',category:'QR & Loyalty',resource:'qr_campaigns',fields:['title','purpose','points_per_scan','max_scans_per_member','scan_cooldown_minutes'],defaults:[{id:'qr_local_1',title:'Neue Loyalty QR Kampagne',purpose:'loyalty',points_per_scan:10,max_scans_per_member:1,scan_cooldown_minutes:0,active:true}],special:'qr'},
- public_landing:{title:'Öffentliche /l/[slug] Seite',category:'QR & Loyalty',resource:'public_landing_pages',fields:['title','slug','headline','mode'],defaults:[{id:'lp1',title:'Frühstücks-Loyalty Landingpage',slug:'demo-cafe-morgenlicht',headline:'Willkommen im Bonusclub',mode:'loyalty',active:true},{id:'lp2',title:'Google Review Landingpage',slug:'demo-review-morgenlicht',headline:'Wie war dein Besuch?',mode:'review',active:true}]},
- loyalty:{title:'Loyalty Programm',category:'QR & Loyalty',resource:'loyalty_programs',fields:['name','qr_campaign_id','points_per_scan'],defaults:[{id:'loy1',name:'Morgenlicht Bonusclub',qr_campaign_id:'22222222-2222-2222-2222-222222222222',points_per_scan:10,active:true}]},
- loyalty_rewards:{title:'Rewards',category:'QR & Loyalty',resource:'loyalty_rewards',fields:['title','type','points','qr_campaign_id','staff_code_required','allow_multiple_redemptions','max_redemptions_per_member'],defaults:[{id:'rew1',title:'Gratis Cappuccino',type:'Gratisprodukt',points:100,staff_code_required:true,allow_multiple_redemptions:false,max_redemptions_per_member:1,active:true},{id:'rew2',title:'10% Frühstücksrabatt',type:'Rabatt',points:180,staff_code_required:true,allow_multiple_redemptions:true,max_redemptions_per_member:0,active:true}]},
- loyalty_rules:{title:'Reward Regeln',category:'QR & Loyalty',resource:'loyalty_reward_rules',fields:['name','trigger','condition','points','multiplier','qr_campaign_id'],defaults:[{id:'rule1',name:'Doppelte Punkte am Vormittag',trigger:'QR Scan',condition:'08:00-11:00 Uhr',points:0,multiplier:2,active:true}]},
- staff_codes:{title:'Mitarbeiter-Bestätigungscode',category:'QR & Loyalty',resource:'staff_codes',fields:['label','code','qr_campaign_id'],defaults:[{id:'code1',label:'Demo Thekencode',code:'2468',uses:0,active:true}],special:'staff'},
- loyalty_segments:{title:'Loyalty Segmente',category:'QR & Loyalty',resource:'loyalty_segments',fields:['name','rule','members'],defaults:[{id:'seg1',name:'VIP Kunden',rule:'Punkte > 500',members:1,active:true},{id:'seg2',name:'Reward-bereit',rule:'Punkte >= 100',members:2,active:true}]},
- smart_loyalty:{title:'Smart Loyalty V2',category:'QR & Loyalty',resource:'loyalty_members',fields:['name','points','tier'],defaults:[{id:'mem1',name:'Anna Stammkundin',points:420,tier:'Gold',active:true},{id:'mem2',name:'Max Reviewfan',points:160,tier:'Silver',active:true}]},
- reviews:{title:'Reviews',category:'Reviews',resource:'reviews',fields:['name','rating','text'],defaults:[{id:'rv1',name:'Anna',rating:5,text:'Super freundlicher Service.',sentiment:'positiv',active:true},{id:'rv2',name:'Gast',rating:2,text:'Lange gewartet.',sentiment:'negativ',active:true}]},
- review_intelligence:{title:'Review Intelligence',category:'Reviews',resource:'review_intelligence',fields:['topic','severity','recommendation'],defaults:[{id:'ri1',topic:'Wartezeit',severity:'hoch',recommendation:'Service-Zeiten prüfen',active:true}]},
- review_templates:{title:'Antwortvorlagen',category:'Reviews',resource:'review_response_templates',fields:['label','sentiment','body'],defaults:[{id:'tpl1',label:'Positive Bewertung bedanken',sentiment:'positiv',body:'Vielen Dank für das tolle Feedback!',active:true}]},
- smart_automation:{title:'Smart Automation',category:'Automation & Marketing',resource:'smart_automations',fields:['name','trigger','action'],defaults:[{id:'auto1',name:'Negatives Review → Ticket',trigger:'Bewertung <= 3',action:'Ticket + AI Hinweis',runs:0,active:true}]},
- marketing_automation:{title:'Marketing Automation',category:'Automation & Marketing',resource:'marketing_campaigns',fields:['name','audience','reward','status'],defaults:[{id:'camp1',name:'Inaktive Gäste zurückholen',audience:'Inaktive Endkunden',reward:'10% Frühstücksrabatt',status:'Entwurf',active:true}]},
- ai_assistant:{title:'AI Business Assistant',category:'Automation & Marketing',resource:'assistant_messages',fields:['title','severity','message'],defaults:[{id:'ai1',title:'Hohe Upsell-Chance erkannt',severity:'success',message:'QR und Loyalty werden stark genutzt.',active:true}]},
- customer_health:{title:'Customer Health',category:'Analytics & Billing',resource:'customer_health',fields:['name','score','note'],defaults:[{id:'h1',name:'Health Score',score:86,note:'Stabil mit Review-Warnung',active:true}]},
- customer_intelligence:{title:'Customer Intelligence',category:'Analytics & Billing',resource:'customer_intelligence',fields:['name','score','recommendation'],defaults:[{id:'ci1',name:'Upsell Score',score:84,recommendation:'Premium Add-on anbieten',active:true}]},
- dynamic_billing:{title:'Dynamic Billing',category:'Analytics & Billing',resource:'dynamic_billing_usage',fields:['label','quantity','unit'],defaults:[{id:'bu1',label:'QR Scans',quantity:280,unit:0.01,active:true}]},
- revenue_forecasting:{title:'Revenue Forecasting',category:'Analytics & Billing',resource:'revenue_forecasts',fields:['period','expected','confidence'],defaults:[{id:'fc1',period:'Aktueller Monat',expected:1442,confidence:82,active:true}]},
- revenue_share:{title:'Revenue Share',category:'Analytics & Billing',resource:'revenue_shares',fields:['name','gross','percent'],defaults:[{id:'rs1',name:'MMOS Demo Revenue Share',gross:299,percent:15,active:true}]},
- package_recommendations:{title:'Package Recommendations',category:'Analytics & Billing',resource:'package_recommendations',fields:['title','uplift','confidence'],defaults:[{id:'pr1',title:'Premium Add-on empfehlen',uplift:499,confidence:86,active:true}]},
- package_matrix:{title:'Paket-Matrix',category:'Analytics & Billing',resource:'package_matrix',fields:['name','tools','price'],defaults:[{id:'pm1',name:'Premium',tools:28,price:899,active:true}]},
- timeline_events:{title:'Timeline Events',category:'CRM & Betrieb',resource:'timeline_events',fields:['type','title','severity'],defaults:[{id:'tl1',type:'QR',title:'QR-Kampagne erstellt',severity:'success',active:true}]}
+ qr:{title:'QR Kampagnen',category:'QR & Loyalty',resource:'qr_campaigns',fields:['title','purpose','points_per_scan','max_scans_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold'],defaults:[],special:'qr'},
+ public_landing:{title:'Öffentliche /l/[slug] Seite',category:'QR & Loyalty',resource:'public_landing_pages',fields:['title','slug','headline','mode'],defaults:[]},
+ loyalty:{title:'Loyalty Programm',category:'QR & Loyalty',resource:'loyalty_programs',fields:['name','qr_campaign_id','points_per_scan','daily_point_limit_per_member','suspicion_score_threshold'],defaults:[]},
+ loyalty_rewards:{title:'Rewards',category:'QR & Loyalty',resource:'loyalty_rewards',fields:['title','type','points','qr_campaign_id','staff_code_required','allow_multiple_redemptions','max_redemptions_per_member'],defaults:[]},
+ loyalty_rules:{title:'Reward Regeln',category:'QR & Loyalty',resource:'loyalty_reward_rules',fields:['name','trigger','condition','points','multiplier','qr_campaign_id'],defaults:[]},
+ staff_codes:{title:'Mitarbeiter-Bestätigungscode',category:'QR & Loyalty',resource:'staff_codes',fields:['label','code','qr_campaign_id'],defaults:[],special:'staff'},
+ loyalty_segments:{title:'Loyalty Segmente',category:'QR & Loyalty',resource:'loyalty_segments',fields:['name','rule','members'],defaults:[]},
+ smart_loyalty:{title:'Smart Loyalty V2',category:'QR & Loyalty',resource:'loyalty_members',fields:['name','points','tier'],defaults:[]},
+ reviews:{title:'Reviews',category:'Reviews',resource:'reviews',fields:['name','rating','text'],defaults:[]},
+ review_intelligence:{title:'Review Intelligence',category:'Reviews',resource:'review_intelligence',fields:['topic','severity','recommendation'],defaults:[]},
+ review_templates:{title:'Antwortvorlagen',category:'Reviews',resource:'review_response_templates',fields:['label','sentiment','body'],defaults:[]},
+ smart_automation:{title:'Smart Automation',category:'Automation & Marketing',resource:'smart_automations',fields:['name','trigger','action'],defaults:[]},
+ marketing_automation:{title:'Marketing Automation',category:'Automation & Marketing',resource:'marketing_campaigns',fields:['name','audience','reward','status'],defaults:[]},
+ ai_assistant:{title:'AI Business Assistant',category:'Automation & Marketing',resource:'assistant_messages',fields:['title','severity','message'],defaults:[]},
+ customer_health:{title:'Customer Health',category:'Analytics & Billing',resource:'customer_health',fields:['name','score','note'],defaults:[]},
+ customer_intelligence:{title:'Customer Intelligence',category:'Analytics & Billing',resource:'customer_intelligence',fields:['name','score','recommendation'],defaults:[]},
+ dynamic_billing:{title:'Dynamic Billing',category:'Analytics & Billing',resource:'dynamic_billing_usage',fields:['label','quantity','unit'],defaults:[]},
+ revenue_forecasting:{title:'Revenue Forecasting',category:'Analytics & Billing',resource:'revenue_forecasts',fields:['period','expected','confidence'],defaults:[]},
+ revenue_share:{title:'Revenue Share',category:'Analytics & Billing',resource:'revenue_shares',fields:['name','gross','percent'],defaults:[]},
+ package_recommendations:{title:'Package Recommendations',category:'Analytics & Billing',resource:'package_recommendations',fields:['title','uplift','confidence'],defaults:[]},
+ package_matrix:{title:'Paket-Matrix',category:'Analytics & Billing',resource:'package_matrix',fields:['name','tools','price'],defaults:[]},
+ timeline_events:{title:'Timeline Events',category:'CRM & Betrieb',resource:'timeline_events',fields:['type','title','severity'],defaults:[]}
 }
 
 function v33LocalKey(view:string,cid:string){return `v33_${view}_${cid}`}
@@ -2222,10 +2320,10 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
  const [verifyResult,setVerifyResult]=useState<any>(null)
 
  useEffect(()=>{
-  const initial=safeLocalStorageGet(v33LocalKey(view,cid),cfg.defaults.map((x:any)=>({customer_id:cid,...x})))
+  const initial=safeLocalStorageGet(v33LocalKey(view,cid),[])
   setItems(initial)
   const f:any={}
-  cfg.fields.forEach((k:string)=>f[k]=['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','scan_cooldown_minutes'].includes(k)?0:['staff_code_required','allow_multiple_redemptions'].includes(k)?(k==='staff_code_required'):`Neue ${cfg.title}`)
+  cfg.fields.forEach((k:string)=>f[k]=defaultFormValue(view,k,cfg.title))
   setForm(f)
   setLoading(true)
   v33FunctionalClient.listRecords(cfg.resource,cid)
@@ -2242,18 +2340,18 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
   const row={id:uid(),customer_id:cid,...form,active:true}
   const next=[row,...items]
   persist(next)
-  setMsg('Lokal gespeichert – sende an Backend...')
-  store?.create?.(cfg.resource,row).catch(()=>null);v33FunctionalClient.createRecord(cfg.resource,row).then(()=>setMsg('In Supabase/Backend gespeichert')).catch((e:any)=>setMsg(`Lokal gespeichert · Backend: ${e.message}`))
+  setMsg('Speichere im Backend...')
+  store?.create?.(cfg.resource,row).catch(()=>null);v33FunctionalClient.createRecord(cfg.resource,row).then(()=>setMsg('Im Backend gespeichert')).catch((e:any)=>setMsg(`Backend-Speicherung fehlgeschlagen: ${e.message}`))
  }
  function patch(id:string,patch:any){
   const row=items.find((x:any)=>x.id===id)||{}
   const nextRow={...row,...patch}
   persist(items.map((x:any)=>x.id===id?nextRow:x))
-  v33FunctionalClient.updateRecord(cfg.resource,id,nextRow).then(()=>setMsg('Backend aktualisiert')).catch((e:any)=>setMsg(`Lokal aktualisiert · Backend: ${e.message}`))
+  v33FunctionalClient.updateRecord(cfg.resource,id,nextRow).then(()=>setMsg('Backend aktualisiert')).catch((e:any)=>setMsg(`Backend-Aktualisierung fehlgeschlagen: ${e.message}`))
  }
  function remove(id:string){
   persist(items.filter((x:any)=>x.id!==id))
-  v33FunctionalClient.deleteRecord(cfg.resource,id,cid).then(()=>setMsg('Backend gelöscht')).catch((e:any)=>setMsg(`Lokal gelöscht · Backend: ${e.message}`))
+  v33FunctionalClient.deleteRecord(cfg.resource,id,cid).then(()=>setMsg('Backend gelöscht')).catch((e:any)=>setMsg(`Backend-Löschung fehlgeschlagen: ${e.message}`))
  }
  function testStaff(){
   v33FunctionalClient.verifyStaffCode({customer_id:cid,code:verify}).then(()=>setVerifyResult(true)).catch(()=>setVerifyResult(false))
@@ -2262,7 +2360,7 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
   // v35_engine_action_patch
   if(view==='staff_codes')return testStaff()
   if(view==='reviews')return v33FunctionalClient.engineReview(cid,{rating:row.rating,text:row.text||row.feedback_text,name:row.name}).then(()=>setMsg('Review Engine: gespeichert, analysiert und ggf. eskaliert')).catch((e:any)=>setMsg(e.message))
-  if(view==='loyalty_rewards')return v33FunctionalClient.redeemRewardEngine(cid,row.id,{staff_code:verify,member_name:'Demo Member'}).then(()=>setMsg('Reward Engine: Einlösung, Codeprüfung, Timeline und Scores berechnet')).catch((e:any)=>setMsg(e.message))
+  if(view==='loyalty_rewards')return v33FunctionalClient.redeemRewardEngine(cid,row.id,{staff_code:verify,member_name:'Endkunde'}).then(()=>setMsg('Reward Engine: Einlösung, Codeprüfung, Timeline und Scores berechnet')).catch((e:any)=>setMsg(e.message))
   if(view==='smart_automation')return v33FunctionalClient.runAutomation(cid,row).then((r:any)=>{patch(row.id,{runs:Number(row.runs||0)+1,last_run_at:new Date().toISOString()});setMsg(`Automation Engine: ${r.actions?.length||0} Aktionen erzeugt`)}).catch((e:any)=>setMsg(e.message))
   if(view==='marketing_automation')return v33FunctionalClient.runMarketing(cid,row).then(()=>{patch(row.id,{status:'Gestartet'});setMsg('Marketing Engine: Kampagne gestartet und Timeline erzeugt')}).catch((e:any)=>setMsg(e.message))
   if(view==='dynamic_billing')return v33FunctionalClient.calculateBilling(cid).then((r:any)=>setMsg(`Billing Engine: ${r.total} € Usage berechnet`)).catch((e:any)=>setMsg(e.message))
@@ -2271,13 +2369,17 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
   return patch(row.id,{active:!row.active})
  }
  function renderField(k:string){
-  if(k==='qr_campaign_id')return <select key={k} className="input" value={form[k]??''} onChange={e=>setForm({...form,[k]:e.target.value})}><option value="">QR-Kampagne des Kunden auswählen</option>{campaignOptionsForCustomer(store,cid).map((q:any)=><option key={q.id} value={q.id}>{q.title||q.name||q.slug}</option>)}</select>
-  if(['staff_code_required','allow_multiple_redemptions'].includes(k))return <select key={k} className="input" value={String(form[k] ?? (k==='staff_code_required'?'true':'false'))} onChange={e=>setForm({...form,[k]:e.target.value==='true'})}><option value="true">{k==='staff_code_required'?'Mitarbeitercode erforderlich':'Mehrfach einlösbar: Ja'}</option><option value="false">{k==='staff_code_required'?'Mitarbeitercode nicht erforderlich':'Mehrfach einlösbar: Nein'}</option></select>
-  return <input key={k} className="input" placeholder={k==='title'?'Titel / Bezeichnung':k==='name'?'Name / Regelbezeichnung':k==='points'?'Benötigte Punkte für diesen Reward':k==='max_redemptions_per_member'?'Max. Einlösungen pro Endkunde, 0 = unbegrenzt':k==='max_scans_per_member'?'Max. QR-Einlösungen pro Endkunde, 0 = unbegrenzt':k==='scan_cooldown_minutes'?'Cooldown in Minuten zwischen gültigen QR-Scans':k==='type'?'Typ / Kategorie':k==='condition'?'Bedingung, z. B. 08:00-12:00':k==='trigger'?'Auslöser, z. B. QR Scan':k} value={form[k]??''} onChange={e=>setForm({...form,[k]:['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','scan_cooldown_minutes'].includes(k)?Number(e.target.value):e.target.value})}/>
+  const meta=formFieldMeta(view,k)
+  const numericFields=['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold','points_per_scan','multiplier','members','rating'].includes(k)
+  const setValue=(value:any)=>setForm({...form,[k]:numericFields?Number(value):value})
+  const label=<label className="fieldLabel" htmlFor={`${view}-${k}`}><span>{meta.label}</span><InfoI text={meta.help}/></label>
+  if(k==='qr_campaign_id')return <div key={k} className="formField">{label}<select id={`${view}-${k}`} className="input" value={form[k]??''} onChange={e=>setForm({...form,[k]:e.target.value})}><option value="">Keine feste QR-Kampagne / allgemein gültig</option>{campaignOptionsForCustomer(store,cid).map((q:any)=><option key={q.id} value={q.id}>{q.title||q.name||q.slug}</option>)}</select><div className="fieldHelp">{meta.example}</div></div>
+  if(['staff_code_required','allow_multiple_redemptions'].includes(k))return <div key={k} className="formField">{label}<select id={`${view}-${k}`} className="input" value={String(form[k] ?? (k==='staff_code_required'?'true':'false'))} onChange={e=>setForm({...form,[k]:e.target.value==='true'})}>{k==='staff_code_required'?<><option value="true">Ja, Mitarbeitercode/PIN erforderlich</option><option value="false">Nein, ohne Mitarbeitercode einlösbar</option></>:<><option value="false">Nein, nur einmal pro Endkunde</option><option value="true">Ja, mehrfach einlösbar</option></>}</select><div className="fieldHelp">{meta.example}</div></div>
+  return <div key={k} className="formField">{label}<input id={`${view}-${k}`} className="input" type={numericFields?'number':'text'} value={form[k]??''} aria-label={meta.label} onChange={e=>setValue(e.target.value)}/>{meta.example&&<div className="fieldHelp">{meta.example}</div>}</div>
  }
  const active=items.filter((x:any)=>x.active!==false).length
  const numericSum=items.reduce((s:number,x:any)=>s+Number(x.points||x.score||x.quantity||x.expected||x.gross||x.uplift||0),0)
- return <><Head title={cfg.title} sub={`${cfg.category} · echte Backend/Supabase-Anbindung mit Demo-Fallback`}/>{role==='admin'&&['loyalty_rewards','loyalty_rules','staff_codes','loyalty','public_landing','smart_loyalty','loyalty_segments'].includes(view)&&<CentralCustomerSelector store={store} cid={cid} setCid={setCid} title={`${cfg.title} · Kunde`} sub='QR & Loyalty zeigt nur Kampagnen und Daten des ausgewählten Kunden.'/>}<div className="grid4"><Metric label="Einträge" value={items.length}/><Metric label="Aktiv" value={active}/><Metric label="Summe/KPI" value={numericSum}/><Metric label="Sync" value={loading?'lädt':'bereit'}/></div><div className="grid2"><Card title={`${cfg.title} verwalten`} action={<Badge type="green">{cfg.category}</Badge>}>{items.map((x:any)=><div className="item" key={x.id}><div><b>{x.title||x.name||x.label||x.period||x.type||cfg.title}</b><div className="sub">{cfg.fields.map((k:string)=>x[k]!==undefined?`${k}: ${x[k]}`:null).filter(Boolean).join(' · ')}</div></div><Badge type={x.active!==false?'green':'gray'}>{x.status||x.severity||x.sentiment||(x.active!==false?'aktiv':'inaktiv')}</Badge><button onClick={()=>runAction(x)}>{view==='smart_automation'?'Testlauf':view==='marketing_automation'?'Starten':view==='loyalty_rewards'?'Einlösen':'Umschalten'}</button><button onClick={()=>remove(x.id)}>Löschen</button></div>)}</Card><Card title="Neu anlegen / Backend Sync">{cfg.fields.map((k:string)=>renderField(k))}<button className="btn" onClick={add}>Speichern</button>{(view==='staff_codes'||view==='loyalty_rewards')&&<><hr/><input className="input" placeholder="Mitarbeitercode testen / einlösen" value={verify} onChange={e=>setVerify(e.target.value)}/><button className="btn secondary" onClick={testStaff}>Code gegen Backend prüfen</button>{verifyResult!==null&&<Badge type={verifyResult?'green':'red'}>{verifyResult?'Code gültig':'Code ungültig'}</Badge>}</>}<div className="sub">{msg||'Aktionen speichern lokal und senden zusätzlich an /api/v33-functional.'}</div></Card></div></>
+ return <><Head title={cfg.title} sub={`${cfg.category} · Live-Daten, Backend-Sync und klar beschriftete Felder`}/>{role==='admin'&&['loyalty_rewards','loyalty_rules','staff_codes','loyalty','public_landing','smart_loyalty','loyalty_segments'].includes(view)&&<CentralCustomerSelector store={store} cid={cid} setCid={setCid} title={`${cfg.title} · Kunde`} sub='QR & Loyalty zeigt nur Kampagnen und Daten des ausgewählten Kunden.'/>}<div className="grid4"><Metric label="Einträge" value={items.length}/><Metric label="Aktiv" value={active}/><Metric label="Summe/KPI" value={numericSum}/><Metric label="Sync" value={loading?'lädt':'bereit'}/></div><div className="grid2"><Card title={`${cfg.title} verwalten`} action={<Badge type="green">{cfg.category}</Badge>}>{items.map((x:any)=><div className="item" key={x.id}><div><b>{x.title||x.name||x.label||x.period||x.type||cfg.title}</b><div className="sub">{cfg.fields.map((k:string)=>x[k]!==undefined?`${formFieldMeta(view,k).label}: ${formatFieldDisplay(view,k,x[k])}`:null).filter(Boolean).join(' · ')}</div></div><Badge type={x.active!==false?'green':'gray'}>{x.status||x.severity||x.sentiment||(x.active!==false?'aktiv':'inaktiv')}</Badge><button onClick={()=>runAction(x)}>{view==='smart_automation'?'Testlauf':view==='marketing_automation'?'Starten':view==='loyalty_rewards'?'Einlösen':'Umschalten'}</button><button onClick={()=>remove(x.id)}>Löschen</button></div>)}</Card><Card title="Neu anlegen / Backend Sync">{cfg.fields.map((k:string)=>renderField(k))}<button className="btn" onClick={add}>Speichern</button>{(view==='staff_codes'||view==='loyalty_rewards')&&<><hr/><input className="input" placeholder="Mitarbeitercode/PIN zur Prüfung eingeben" value={verify} onChange={e=>setVerify(e.target.value)}/><button className="btn secondary" onClick={testStaff}>Code gegen Backend prüfen</button>{verifyResult!==null&&<Badge type={verifyResult?'green':'red'}>{verifyResult?'Code gültig':'Code ungültig'}</Badge>}</>}<div className="sub">{msg||'Aktionen werden über Backend/Supabase synchronisiert. Bei fehlender Verbindung wird kein Beispieldatensatz erzeugt.'}</div></Card></div></>
 }
 
 function CustomerPackages({store,cid}:any){

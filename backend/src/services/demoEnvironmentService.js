@@ -81,8 +81,8 @@ class DemoEnvironmentService {
       await this.supabase.from('customer_timeline_events').insert({
         customer_id: this.demoCustomerId,
         event_type: 'demo_sync_checked',
-        title: 'Demo Umgebung geprüft',
-        description: 'Demo Daten sind auf aktuellem V28 Stand verfügbar.',
+        title: 'Interne Testumgebung geprüft',
+        description: 'Testdaten sind auf aktuellem V28 Stand verfügbar.',
         source_module: 'demo_environment',
         severity: 'info',
         actor_name: 'System',

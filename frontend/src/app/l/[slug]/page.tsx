@@ -76,7 +76,7 @@ export default function PublicLoyaltyPage() {
   const reviewCta = campaignTexts.review_cta_label || 'Bewertung absenden'
   const successTitle = campaignTexts.success_title || 'Deine Punkte wurden gespeichert.'
   const successMessage = campaignTexts.success_message || 'Danke für deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.'
-  const fineprint = campaignTexts.fineprint || 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Demo- und Testdaten werden dem jeweiligen Anbieter zugeordnet.'
+  const fineprint = campaignTexts.fineprint || 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Deine Angaben werden dem jeweiligen Anbieter zugeordnet.'
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return `/l/${slug}`

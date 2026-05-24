@@ -18,7 +18,7 @@ export default function UpdatePasswordPage() {
     <main className="authShell">
       <section className="authCard">
         <h1>Neues Passwort setzen</h1>
-        <input className="input" type="password" placeholder="Neues Passwort" value={password} onChange={e=>setPassword(e.target.value)} />
+        <input className="input" type="password" placeholder="Neues Passwort eingeben" title="Mindestens 10 Zeichen und idealerweise ein Sonderzeichen verwenden." value={password} onChange={e=>setPassword(e.target.value)} />
         <button className="btn" onClick={update}>Passwort speichern</button>
         {message && <p className="sub">{message}</p>}
       </section>
