@@ -460,7 +460,52 @@ function Toast({m}:any){return m?<div className="toast green" role="status" aria
 function Badge({children,type='purple'}:any){return <span className={`badge ${type}`}>{children}</span>}
 function Card({title,children,action}:any){return <section className="card"><div className="row between"><h2>{title}</h2>{action}</div>{children}</section>}
 function Head({title,sub,action}:any){return <div className="head"><div><h1>{title}</h1>{sub&&<div className="sub">{sub}</div>}</div>{action}</div>}
-function NoLiveCustomerPanel({setView}:any){return <><Head title="Kein Live-Kunde ausgewählt" sub="Für dieses Modul muss zuerst ein echter Kunde angelegt oder ausgewählt werden." action={<LiveModeBadge/>}/><Card title="Live-Bereich ohne Beispieldaten"><p className="sub">Dieses Live-System zeigt keine Beispiel- oder Testdatensätze mehr an. Lege im CRM einen echten Kunden an und öffne danach das gewünschte Modul.</p><div className="toolbarActions"><button className="btn" onClick={()=>setView?.('crm')}>Live-Kunden anlegen</button>{isDemoFeatureEnabled()&&<button className="btn secondary" onClick={()=>setView?.('demo_environment')}>Interne Testumgebung öffnen</button>}</div></Card></>}
+function NoLiveCustomerPanel({store,setView,setCid}:any){
+ const [open,setOpen]=useState(false)
+ const [busy,setBusy]=useState(false)
+ const [msg,setMsg]=useState('')
+ const [f,setF]=useState<any>({
+  name:'',
+  branch:'',
+  email:'',
+  phone:'',
+  address:'',
+  contact_person:'',
+  package_name:'Starter',
+  status:'active'
+ })
+ async function createLiveCustomer(){
+  setMsg('')
+  const name=String(f.name||'').trim()
+  if(!name){setMsg('Bitte mindestens den Firmen-/Kundennamen eintragen.');setOpen(true);return}
+  const id=uid()
+  const row={
+   id,
+   name,
+   branch:String(f.branch||'').trim(),
+   email:String(f.email||'').trim(),
+   phone:String(f.phone||'').trim(),
+   address:String(f.address||'').trim(),
+   contact_person:String(f.contact_person||'').trim(),
+   package_name:f.package_name||'Starter',
+   status:f.status||'active',
+   is_demo:false,
+   metadata:{source:'manual_live_create',created_from:'no_live_customer_panel'}
+  }
+  setBusy(true)
+  try{
+   await store.create('customers',row)
+   setCid?.(id)
+   setView?.('crm')
+   setMsg('Live-Kunde wurde angelegt und geöffnet.')
+   setF({name:'',branch:'',email:'',phone:'',address:'',contact_person:'',package_name:'Starter',status:'active'})
+   setOpen(false)
+  }catch(e:any){
+   setMsg(e?.message||'Live-Kunde konnte nicht gespeichert werden. Bitte Supabase/Backend prüfen.')
+  }finally{setBusy(false)}
+ }
+ return <><Head title="Kein Live-Kunde ausgewählt" sub="Für dieses Modul muss zuerst ein echter Kunde angelegt oder ausgewählt werden." action={<LiveModeBadge/>}/><Card title="Live-Bereich ohne Beispieldaten"><p className="sub">Dieses Live-System zeigt keine Beispiel- oder Testdatensätze mehr an. Lege hier direkt einen echten Kunden an und öffne danach das gewünschte Modul.</p><div className="toolbarActions"><button className="btn" onClick={()=>{setView?.('crm');setOpen(true)}}>Live-Kunden anlegen</button>{isDemoFeatureEnabled()&&<button className="btn secondary" onClick={()=>setView?.('demo_environment')}>Interne Testumgebung öffnen</button>}</div>{open&&<div className="card inlineForm"><div className="row between"><div><b>Neuen Live-Kunden anlegen</b><div className="sub">Diese Daten werden als echter Live-Kunde mit <code>is_demo=false</code> gespeichert und anschließend im CRM geöffnet.</div></div><button className="btn secondary" onClick={()=>setOpen(false)}>Schließen</button></div><div className="grid2"><input className="input" value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Firmen-/Kundenname, z. B. Salon Musterstadt" title="Pflichtfeld: offizieller Firmen- oder Kundenname"/><input className="input" value={f.branch} onChange={e=>setF({...f,branch:e.target.value})} placeholder="Branche, z. B. Friseur, Restaurant, Handwerk" title="Branche für spätere Filter, Pakete und Auswertungen"/><input className="input" type="email" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="Allgemeine E-Mail-Adresse des Kunden" title="Kontaktadresse des Unternehmens oder der Hauptansprechperson"/><input className="input" value={f.phone} onChange={e=>setF({...f,phone:e.target.value})} placeholder="Telefonnummer mit Vorwahl" title="Telefonnummer für Kontakt, CRM und Kundenakte"/><input className="input" value={f.contact_person} onChange={e=>setF({...f,contact_person:e.target.value})} placeholder="Hauptansprechpartner, z. B. Max Mustermann" title="Person, mit der du hauptsächlich kommunizierst"/><input className="input" value={f.address} onChange={e=>setF({...f,address:e.target.value})} placeholder="Straße, Hausnummer, PLZ und Ort" title="Adresse für Kundenakte, Angebote und Rechnungen"/><select className="input" value={f.package_name} onChange={e=>setF({...f,package_name:e.target.value})} title="Startpaket des Kunden"><option>Starter</option><option>Growth</option><option>Premium</option></select><select className="input" value={f.status} onChange={e=>setF({...f,status:e.target.value})} title="Aktueller Kundenstatus"><option value="active">Aktiv</option><option value="pending">In Vorbereitung</option><option value="lead">Lead</option></select></div><div className="toolbarActions"><button className="btn" onClick={createLiveCustomer} disabled={busy}>{busy?'Speichert...':'Live-Kunde speichern & CRM öffnen'}</button><button className="btn secondary" onClick={()=>setOpen(false)} disabled={busy}>Abbrechen</button></div>{msg&&<div className="sub">{msg}</div>}</div>}{!open&&msg&&<div className="sub">{msg}</div>}</Card></>}
+
 function Metric({label,value,sub}:any){return <div className="metric"><div className="metricLabel">{label}</div><div className="metricValue">{value}</div>{sub&&<div className="delta">{sub}</div>}</div>}
 function Search({items,value,onChange,placeholder}:any){const [q,setQ]=useState('');const s=items.find((x:any)=>x.id===value);const list=items.filter((x:any)=>(x.name+x.branch+x.email).toLowerCase().includes(q.toLowerCase()));return <div style={{position:'relative'}}><input className="input" placeholder={placeholder} value={s&&!q?s.name:q} onChange={e=>{setQ(e.target.value);if(s)onChange('')}}/>{q&&<div className="card floating">{list.map((x:any)=><button className="nav" key={x.id} onClick={()=>{onChange(x.id);setQ('')}}>{x.name}<div className="sub">{x.branch} · {x.package_name}</div></button>)}</div>}</div>}
 
@@ -1074,7 +1119,7 @@ export default function App(){
  const blockCustomerScopedRender=liveOnlyMode(role,view)&&customerScopedView(view)&&!liveCidAvailable
  return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions"><NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><FieldHelpEnhancer/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
- {blockCustomerScopedRender?<NoLiveCustomerPanel setView={setView}/>:<>
+ {blockCustomerScopedRender?<NoLiveCustomerPanel store={store} setView={setView} setCid={setCid}/>:<>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
  {view==='dashboard'&&<Dashboard store={store} cid={cid} role={role} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>}
  {view==='main_landing'&&role==='admin'&&<MainLandingPageEditor store={store}/>}
