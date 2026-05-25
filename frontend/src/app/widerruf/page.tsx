@@ -6,7 +6,6 @@ export default function LegalPage() {
       <section className="legalCard">
         <a className="legalBack" href="/">← Zur Startseite</a>
         <h1>Widerrufsbelehrung</h1>
-        <p className="legalNotice">Diese Seite ist vorsorglich eingebaut. Ob ein Widerrufsrecht besteht, hängt davon ab, ob du mit Verbrauchern oder ausschließlich mit Unternehmen arbeitest.</p>
         <h2>Widerrufsrecht</h2>
         <p>Sofern ein gesetzliches Widerrufsrecht besteht, haben Verbraucher grundsätzlich das Recht, einen Vertrag binnen vierzehn Tagen ohne Angabe von Gründen zu widerrufen.</p>
         <h2>Beginn der Frist</h2>
