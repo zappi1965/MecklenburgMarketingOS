@@ -50,7 +50,7 @@ export default function PublicLoyaltyPage() {
   const showReview = mode === 'review' || mode === 'both'
 
   const points = Number(result?.points_balance || result?.member?.points_balance || 0)
-  const pointsAdded = Number(result?.points_added || status?.program?.points_per_scan || 10)
+  const pointsAdded = Number(result?.points_added || status?.qr_campaign?.points_per_scan || status?.qr_campaign?.metadata?.points_per_scan || status?.program?.points_per_scan || 10)
   const progress = Math.min(100, Math.round((points / 100) * 100))
 
   const brandName =

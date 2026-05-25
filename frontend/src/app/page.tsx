@@ -292,8 +292,7 @@ const seed:any={
 }
 
 const demoScopedTables=new Set([
- 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','competitor_benchmarks','google_business_audits','mini_audits','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_member_security_scores','security_events','dsar_requests',
- 'loyalty_segments','loyalty_members','reviews','review_intelligence','review_response_templates','smart_automations','marketing_campaigns','assistant_messages','customer_health','customer_intelligence','dynamic_billing_usage','revenue_forecasts','revenue_shares','package_matrix','timeline_events'
+ 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','competitor_benchmarks','google_business_audits','mini_audits','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_member_security_scores','security_events','dsar_requests'
 ])
 function withModeScope(table:string,payload:any){
  const scoped={...payload}
@@ -304,55 +303,10 @@ function withModeScope(table:string,payload:any){
  return scoped
 }
 
-const liveBackendWritableTables=new Set([
- 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages',
- 'appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations',
- 'seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics',
- 'review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks',
- 'google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases',
- 'customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests',
- 'output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs',
- 'loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions',
- 'loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests',
- 'landing_page_settings','v33_public_leads','v33_functional_records','v35_engine_runs','v37_loyalty_settings',
- 'loyalty_segments','loyalty_members','reviews','review_intelligence','review_response_templates','smart_automations','marketing_campaigns','assistant_messages','customer_health','customer_intelligence','dynamic_billing_usage','revenue_forecasts','revenue_shares','package_matrix','timeline_events'
-])
-
-async function liveBackendAuthHeaders(){
- const {data}=await supabaseAuth.auth.getSession()
- const token=data?.session?.access_token
- return token?{Authorization:`Bearer ${token}`}:{}
-}
-
-function liveRecordPayload(result:any){
- return result?.record||result?.data||result?.item||result?.row||result
-}
-
-async function liveRecordCreate(table:string,row:any){
- if(!liveBackendWritableTables.has(table)) throw new Error(`Live-Backend-Speicherung ist für ${table} nicht freigegeben.`)
- const headers=await liveBackendAuthHeaders()
- const result:any=await apiRequest(`${API_BASE}/api/ops/live-records/${encodeURIComponent(table)}`,{method:'POST',headers,body:JSON.stringify(row),timeoutMs:20000})
- return liveRecordPayload(result)
-}
-
-async function liveRecordUpdate(table:string,id:string,row:any){
- if(!liveBackendWritableTables.has(table)) throw new Error(`Live-Backend-Aktualisierung ist für ${table} nicht freigegeben.`)
- const headers=await liveBackendAuthHeaders()
- const result:any=await apiRequest(`${API_BASE}/api/ops/live-records/${encodeURIComponent(table)}/${encodeURIComponent(id)}`,{method:'PATCH',headers,body:JSON.stringify(row),timeoutMs:20000})
- return liveRecordPayload(result)
-}
-
-async function liveRecordRemove(table:string,id:string){
- if(!liveBackendWritableTables.has(table)) throw new Error(`Live-Backend-Löschung ist für ${table} nicht freigegeben.`)
- const headers=await liveBackendAuthHeaders()
- await apiRequest(`${API_BASE}/api/ops/live-records/${encodeURIComponent(table)}/${encodeURIComponent(id)}`,{method:'DELETE',headers,timeoutMs:20000})
- return true
-}
-
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
- const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_segments','loyalty_members','reviews','review_intelligence','review_response_templates','smart_automations','marketing_campaigns','assistant_messages','customer_health','customer_intelligence','dynamic_billing_usage','revenue_forecasts','revenue_shares','package_matrix','timeline_events']
+ const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes']
  function notify(m:string){setToast(m);setTimeout(()=>setToast(''),3200)}
  useEffect(()=>{
   function onGlobalToast(e:any){notify(String(e?.detail||''))}
@@ -386,71 +340,40 @@ function useStore(){
  async function create(table:string,row:any){
   const payload=withModeScope(table,{id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()})
   try{
-   let saved:any=payload
-   if(!isDemoMode()&&liveBackendWritableTables.has(table)){
-    saved=await liveRecordCreate(table,payload)
-    await load()
-   }else if(hasSupabase&&supabase){
-    const {data,error}=await supabase.from(table).insert(payload).select('*').maybeSingle()
-    if(error)throw error
-    saved=data||payload
-    await load()
-   }else{
-    setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
-   }
-   addActivity('create',table,saved?.id||payload.id,{live:!isDemoMode()})
-   notify('Live gespeichert')
-   return saved||payload
+   if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
+   else setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+   addActivity('create',table,payload.id,{live:hasSupabase})
+   notify('Gespeichert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote create failed`,e)
-   const message=e?.message||String(e||'Unbekannter Fehler')
-   notify(`Live-Speicherung fehlgeschlagen: ${message}`)
+   notify('Live-Speicherung fehlgeschlagen – es wurde kein lokaler Beispieldatensatz angelegt.')
    throw e
   }
+  return payload
  }
  async function update(table:string,id:string,row:any){
   const normalized=withModeScope(table,{...row,updated_at:row.updated_at||new Date().toISOString()})
   try{
-   let saved:any={id,...normalized}
-   if(!isDemoMode()&&liveBackendWritableTables.has(table)){
-    saved=await liveRecordUpdate(table,id,normalized)
-    await load()
-   }else if(hasSupabase&&supabase){
-    const {data,error}=await supabase.from(table).update(normalized).eq('id',id).select('*').maybeSingle()
-    if(error)throw error
-    saved=data||saved
-    await load()
-   }else{
-    setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
-   }
-   addActivity('update',table,id,{patch:Object.keys(row||{}),live:!isDemoMode()})
-   notify('Live aktualisiert')
-   return saved
+   if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
+   else setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
+   addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
+   notify('Aktualisiert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote update failed`,e)
-   const message=e?.message||String(e||'Unbekannter Fehler')
-   notify(`Live-Aktualisierung fehlgeschlagen: ${message}`)
+   notify('Live-Aktualisierung fehlgeschlagen – lokale Änderung wurde nicht gespeichert.')
    throw e
   }
+  return {id,...normalized}
  }
  async function remove(table:string,id:string){
   try{
-   if(!isDemoMode()&&liveBackendWritableTables.has(table)){
-    await liveRecordRemove(table,id)
-    await load()
-   }else if(hasSupabase&&supabase){
-    const {error}=await supabase.from(table).delete().eq('id',id)
-    if(error)throw error
-    await load()
-   }else{
-    setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
-   }
-   addActivity('delete',table,id,{live:!isDemoMode()})
-   notify('Live gelöscht')
+   if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
+   else setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
+   addActivity('delete',table,id,{live:hasSupabase})
+   notify('Gelöscht')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote delete failed`,e)
-   const message=e?.message||String(e||'Unbekannter Fehler')
-   notify(`Live-Löschung fehlgeschlagen: ${message}`)
+   notify('Live-Löschung fehlgeschlagen – lokale Löschung wurde nicht gespeichert.')
    throw e
   }
   return true
@@ -643,6 +566,7 @@ const sharedFieldMeta:any={
  points_per_scan:{label:'Punkte pro Scan',help:'Anzahl der Punkte, die ein Endkunde bei einem gültigen QR-Scan erhält.',example:'Beispiel: 10'},
  max_scans_per_member:{label:'Max. QR-Einlösungen pro Endkunde',help:'Wie oft ein Endkunde diesen QR-Code insgesamt gültig einlösen darf. 0 bedeutet unbegrenzt.',example:'1 = nur einmal, 5 = maximal fünfmal, 0 = unbegrenzt.'},
  scan_cooldown_minutes:{label:'QR-Cooldown in Minuten',help:'Mindestabstand zwischen zwei gültigen QR-Einlösungen desselben Endkunden.',example:'1440 = einmal pro Tag, 360 = alle 6 Stunden, 0 = kein Cooldown.'},
+ daily_scan_limit_per_member:{label:'Max. Einlösungen pro Tag',help:'Wie oft ein Endkunde diesen QR-Code pro Tag gültig einlösen darf. 0 bedeutet unbegrenzt.',example:'1 = einmal täglich, 3 = dreimal täglich, 0 = unbegrenzt.'},
  daily_point_limit_per_member:{label:'Punkte-Tageslimit pro Endkunde',help:'Maximale Punkte, die ein Endkunde pro Tag sammeln darf. 0 bedeutet unbegrenzt.',example:'Beispiel: 50'},
  suspicion_score_threshold:{label:'Verdachts-Score Warnschwelle',help:'Ab diesem Score wird ein Endkunde im Security Center als auffällig markiert.',example:'Empfohlen: 70'},
  trigger:{label:'Auslöser',help:'Ereignis, das eine Regel startet.',example:'Beispiel: QR Scan'},
@@ -668,7 +592,7 @@ function defaultFormValue(view:string,k:string,title:string){
   if(k==='points')return 0
   return ''
  }
- if(['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold'].includes(k))return 0
+ if(['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','daily_scan_limit_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold'].includes(k))return 0
  if(['staff_code_required','allow_multiple_redemptions'].includes(k))return k==='staff_code_required'
  return ''
 }
@@ -754,18 +678,18 @@ function GlobalCustomerSearch({store,role,setCid,setView}:any){
 }
 function QRCodes({store,cid,setCid,role='admin'}:any){
  const [customer,setCustomer]=useState(cid)
- const [f,setF]=useState<any>({title:'Bewertungs QR',purpose:'both',points_per_scan:10,max_scans_per_member:1,scan_cooldown_minutes:0,internal_email:'',internal_from:1,internal_to:3,google_from:4,google_to:5,google_review_url:''})
+ const [f,setF]=useState<any>({title:'Bewertungs QR',purpose:'both',points_per_scan:1,max_scans_per_member:1,daily_scan_limit_per_member:1,scan_cooldown_minutes:0,daily_point_limit_per_member:1,suspicion_score_threshold:70,internal_email:'',internal_from:1,internal_to:3,google_from:4,google_to:5,google_review_url:''})
  const rows=(store.data.qr_campaigns||[]).filter((q:any)=>q.customer_id===customer)
  async function createLocalQr(seedData:any={}){
   const slug=seedData.slug||slugifyLocal(`${cname(store.data,customer)}-${f.title||seedData.title||'qr'}`)
-  const row={id:seedData.id||uid(),customer_id:customer,title:f.title||seedData.title||'QR Kampagne',name:f.title||seedData.name||'QR Kampagne',slug,public_url:publicSlugUrl(slug),target_url:`/l/${slug}`,...f,points_per_scan:Number(f.points_per_scan||10),metadata:{...(seedData.metadata||{}),purpose:f.purpose,google_review_url:f.google_review_url,max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0)},status:'Aktiv',active:true,scans:0,conversions:0,created_at:new Date().toISOString()}
+  const row={id:seedData.id||uid(),customer_id:customer,title:f.title||seedData.title||'QR Kampagne',name:f.title||seedData.name||'QR Kampagne',slug,public_url:publicSlugUrl(slug),target_url:`/l/${slug}`,purpose:f.purpose,internal_email:f.internal_email,internal_from:f.internal_from,internal_to:f.internal_to,google_from:f.google_from,google_to:f.google_to,google_review_url:f.google_review_url,points_per_scan:Number(f.points_per_scan||1),metadata:{...(seedData.metadata||{}),purpose:f.purpose,google_review_url:f.google_review_url,points_per_scan:Number(f.points_per_scan||1),max_scans_per_member:Number(f.max_scans_per_member||0),daily_scan_limit_per_member:Number(f.daily_scan_limit_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70),final_slug_rules_source:'qr_campaigns'},status:'Aktiv',active:true,scans:0,conversions:0,created_at:new Date().toISOString()}
   await store.create('qr_campaigns',row)
   await store.create('notifications',{customer_id:customer,title:'QR Kampagne erstellt',message:`Für ${cname(store.data,customer)} wurde ${row.title} erstellt.`,type:'admin_change',actor_name:'DominiqueMM'})
   store.notify?.('QR Kampagne erstellt')
  }
  async function v34CreateQrCampaign(){
   try{
-   const r=await v33FunctionalClient.createQrCampaign(customer,{title:f.title||'Neue QR Kampagne',purpose:f.purpose,mode:f.purpose,points_per_scan:Number(f.points_per_scan||10),max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70),google_review_url:f.google_review_url,create_loyalty:f.purpose!=='review'})
+   const r=await v33FunctionalClient.createQrCampaign(customer,{title:f.title||'Neue QR Kampagne',purpose:f.purpose,mode:f.purpose,points_per_scan:Number(f.points_per_scan||10),max_scans_per_member:Number(f.max_scans_per_member||0),daily_scan_limit_per_member:Number(f.daily_scan_limit_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70),google_review_url:f.google_review_url,create_loyalty:f.purpose!=='review'})
    await createLocalQr({...r.qr_campaign,public_url:r.public_url_path?`${appOrigin()}${r.public_url_path}`:undefined})
    store.notify?.(`QR Kampagne erstellt: ${r.public_url_path}`)
    setF({...f,title:''})
@@ -775,7 +699,7 @@ function QRCodes({store,cid,setCid,role='admin'}:any){
    store.notify?.(`Backend nicht erreichbar, QR lokal erstellt`)
   }
  }
- return <><Head title="QR Codes" sub="Kampagnentyp, Google-Bewertungen, Loyalty-Punkte und öffentliche Slug-Seite." action={<button className="btn" onClick={v34CreateQrCampaign}>QR Kampagne erstellen</button>}/><div className="grid2"><Card title="Kunde & Ziel">{role==='admin'?<Search items={allCustomers(store.data)} value={customer} onChange={(id:string)=>{setCustomer(id);setCid?.(id)}} placeholder="Kunde für QR-Kampagne suchen"/>:<div className="item"><b>Kunde</b><span>{cname(store.data,cid)}</span></div>}<input className="input" placeholder="Kampagnentitel, z. B. Google Bewertung & Bonuspunkte" value={f.title} onChange={e=>setF({...f,title:e.target.value})}/><select className="input" value={f.purpose} onChange={e=>setF({...f,purpose:e.target.value})}><option value="review">Nur Google Bewertungen</option><option value="loyalty">Nur Loyalty / Punkte</option><option value="both">Google Bewertungen + Loyalty</option></select><input className="input" type="number" min="0" placeholder="Punkte pro Scan für diesen QR-Code" value={f.points_per_scan} onChange={e=>setF({...f,points_per_scan:Number(e.target.value)})}/><div className="grid2 mini"><input className="input" type="number" min="0" placeholder="Max. Einlösungen pro Endkunde, 0 = unbegrenzt" value={f.max_scans_per_member} onChange={e=>setF({...f,max_scans_per_member:Number(e.target.value)})}/><input className="input" type="number" min="0" placeholder="Cooldown in Minuten zwischen Scans, 0 = keiner" value={f.scan_cooldown_minutes} onChange={e=>setF({...f,scan_cooldown_minutes:Number(e.target.value)})}/></div><div className="grid2 mini"><input className="input" type="number" min="0" placeholder="Punkte-Tageslimit pro Endkunde, 0 = unbegrenzt" value={f.daily_point_limit_per_member||0} onChange={e=>setF({...f,daily_point_limit_per_member:Number(e.target.value)})}/><input className="input" type="number" min="0" max="100" placeholder="Verdachts-Score Warnschwelle, z. B. 70" value={f.suspicion_score_threshold||70} onChange={e=>setF({...f,suspicion_score_threshold:Number(e.target.value)})}/></div><div className="sub">Missbrauchsschutz: begrenzt pro Bonuskonto, wie oft dieser QR-Code Punkte geben darf, nach wie vielen Minuten erneut Punkte möglich sind und ab welchem Score der Endkunde auffällig ist.</div><input className="input" placeholder="Interne Feedback-E-Mail für kritische Bewertungen" value={f.internal_email} onChange={e=>setF({...f,internal_email:e.target.value})}/><input className="input" placeholder="Google Bewertungslink des Kunden" value={f.google_review_url} onChange={e=>setF({...f,google_review_url:e.target.value})}/></Card><Card title="Sterne-Regeln"><div className="row"><input className="input" type="number" min="1" max="5" value={f.internal_from} onChange={e=>setF({...f,internal_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.internal_to} onChange={e=>setF({...f,internal_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für internes Feedback</div><div className="row"><input className="input" type="number" min="1" max="5" value={f.google_from} onChange={e=>setF({...f,google_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.google_to} onChange={e=>setF({...f,google_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für Google Weiterleitung</div></Card></div><Card title="QR Kampagnen">{rows.length===0&&<div className="sub">Noch keine Kampagne für diesen Kunden.</div>}{rows.map((q:any)=>{const slug=q.slug||slugifyLocal(q.title||q.name||q.id);const url=q.public_url||publicSlugUrl(slug);const mode=q.purpose||q.mode||q.metadata?.purpose||'loyalty';return <div className="item" key={q.id}><V424QrImage value={url}/><div><b>{q.title||q.name}</b><div className="sub">{slug} · Typ: {mode==='both'?'Bewertung + Loyalty':mode==='review'?'Google Bewertung':'Loyalty'} · {q.points_per_scan||q.metadata?.points_per_scan||10} Punkte</div><div className="sub">Limit: {Number(q.max_scans_per_member ?? q.metadata?.max_scans_per_member ?? 0) || '∞'}x pro Endkunde · Cooldown: {Number(q.scan_cooldown_minutes ?? q.metadata?.scan_cooldown_minutes ?? 0) || 0} Min. · Punkte/Tag: {Number(q.daily_point_limit_per_member ?? q.metadata?.daily_point_limit_per_member ?? 0) || '∞'} · Score-Warnung: {Number(q.suspicion_score_threshold ?? q.metadata?.suspicion_score_threshold ?? 70)}</div><div className="sub">{q.active===false?'Inaktiv':'Aktiv'} · {q.internal_from||1}-{q.internal_to||3} intern · {q.google_from||4}-{q.google_to||5} Google</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button>{(q.google_review_url||q.metadata?.google_review_url)&&<button className="btn secondary" onClick={()=>window.open(q.google_review_url||q.metadata?.google_review_url,'_blank')}>Bewertungsseite öffnen</button>}<button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>store.update('qr_campaigns',q.id,{active:q.active===false,status:q.active===false?'Aktiv':'Inaktiv'})}>{q.active===false?'Aktivieren':'Deaktivieren'}</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div></div></div>})}</Card><V42PublicLandingPreview campaigns={rows} customer={cobj(store.data,customer)}/></>
+ return <><Head title="QR Codes" sub="Kampagnentyp, Google-Bewertungen, Loyalty-Punkte und öffentliche Slug-Seite." action={<button className="btn" onClick={v34CreateQrCampaign}>QR Kampagne erstellen</button>}/><div className="grid2"><Card title="Kunde & Ziel">{role==='admin'?<Search items={allCustomers(store.data)} value={customer} onChange={(id:string)=>{setCustomer(id);setCid?.(id)}} placeholder="Kunde für QR-Kampagne suchen"/>:<div className="item"><b>Kunde</b><span>{cname(store.data,cid)}</span></div>}<input className="input" placeholder="Kampagnentitel, z. B. Google Bewertung & Bonuspunkte" value={f.title} onChange={e=>setF({...f,title:e.target.value})}/><select className="input" value={f.purpose} onChange={e=>setF({...f,purpose:e.target.value})}><option value="review">Nur Google Bewertungen</option><option value="loyalty">Nur Loyalty / Punkte</option><option value="both">Google Bewertungen + Loyalty</option></select><input className="input" type="number" min="0" placeholder="Punkte pro Scan für diesen QR-Code" value={f.points_per_scan} onChange={e=>setF({...f,points_per_scan:Number(e.target.value)})}/><div className="grid2 mini"><input className="input" type="number" min="0" placeholder="Max. Einlösungen pro Endkunde, 0 = unbegrenzt" value={f.max_scans_per_member} onChange={e=>setF({...f,max_scans_per_member:Number(e.target.value)})}/><input className="input" type="number" min="0" placeholder="Cooldown in Minuten zwischen Scans, 0 = keiner" value={f.scan_cooldown_minutes} onChange={e=>setF({...f,scan_cooldown_minutes:Number(e.target.value)})}/></div><div className="grid2 mini"><input className="input" type="number" min="0" placeholder="Punkte-Tageslimit pro Endkunde, 0 = unbegrenzt" value={f.daily_point_limit_per_member||0} onChange={e=>setF({...f,daily_point_limit_per_member:Number(e.target.value)})}/><input className="input" type="number" min="0" max="100" placeholder="Verdachts-Score Warnschwelle, z. B. 70" value={f.suspicion_score_threshold||70} onChange={e=>setF({...f,suspicion_score_threshold:Number(e.target.value)})}/></div><div className="sub">Startwerte für neue QR-Kampagnen. Final maßgeblich sind anschließend die Werte unter „Öffentliche /l/[slug] Seite“ → „Finale Slug-Seiten-Regeln & Texte bearbeiten“.</div><input className="input" placeholder="Interne Feedback-E-Mail für kritische Bewertungen" value={f.internal_email} onChange={e=>setF({...f,internal_email:e.target.value})}/><input className="input" placeholder="Google Bewertungslink des Kunden" value={f.google_review_url} onChange={e=>setF({...f,google_review_url:e.target.value})}/></Card><Card title="Sterne-Regeln"><div className="row"><input className="input" type="number" min="1" max="5" value={f.internal_from} onChange={e=>setF({...f,internal_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.internal_to} onChange={e=>setF({...f,internal_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für internes Feedback</div><div className="row"><input className="input" type="number" min="1" max="5" value={f.google_from} onChange={e=>setF({...f,google_from:Number(e.target.value)})}/><input className="input" type="number" min="1" max="5" value={f.google_to} onChange={e=>setF({...f,google_to:Number(e.target.value)})}/></div><div className="sub">Sternebereich für Google Weiterleitung</div></Card></div><Card title="QR Kampagnen">{rows.length===0&&<div className="sub">Noch keine Kampagne für diesen Kunden.</div>}{rows.map((q:any)=>{const slug=q.slug||slugifyLocal(q.title||q.name||q.id);const url=q.public_url||publicSlugUrl(slug);const mode=q.purpose||q.mode||q.metadata?.purpose||'loyalty';return <div className="item" key={q.id}><V424QrImage value={url}/><div><b>{q.title||q.name}</b><div className="sub">{slug} · Typ: {mode==='both'?'Bewertung + Loyalty':mode==='review'?'Google Bewertung':'Loyalty'} · {q.points_per_scan||q.metadata?.points_per_scan||10} Punkte</div><div className="sub">Gesamtlimit: {Number(q.max_scans_per_member ?? q.metadata?.max_scans_per_member ?? 0) || '∞'}x · Tageslimit: {Number(q.daily_scan_limit_per_member ?? q.metadata?.daily_scan_limit_per_member ?? 0) || '∞'}x · Cooldown: {Number(q.scan_cooldown_minutes ?? q.metadata?.scan_cooldown_minutes ?? 0) || 0} Min. · Punkte/Tag: {Number(q.daily_point_limit_per_member ?? q.metadata?.daily_point_limit_per_member ?? 0) || '∞'} · Score-Warnung: {Number(q.suspicion_score_threshold ?? q.metadata?.suspicion_score_threshold ?? 70)}</div><div className="sub">{q.active===false?'Inaktiv':'Aktiv'} · {q.internal_from||1}-{q.internal_to||3} intern · {q.google_from||4}-{q.google_to||5} Google</div><div className="toolbarActions"><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button>{(q.google_review_url||q.metadata?.google_review_url)&&<button className="btn secondary" onClick={()=>window.open(q.google_review_url||q.metadata?.google_review_url,'_blank')}>Bewertungsseite öffnen</button>}<button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>store.update('qr_campaigns',q.id,{active:q.active===false,status:q.active===false?'Aktiv':'Inaktiv'})}>{q.active===false?'Aktivieren':'Deaktivieren'}</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div></div></div>})}</Card><V42PublicLandingPreview campaigns={rows} customer={cobj(store.data,customer)}/></>
 }
 
 
@@ -812,6 +736,8 @@ function MainLandingPageEditor({store}:any){
 
 function LandingTextEditor({store,q}:any){
  const md=q.metadata||{}
+ const [msg,setMsg]=useState('')
+ const [busy,setBusy]=useState(false)
  const [f,setF]=useState({
   title:q.title||q.name||'',
   headline:md.hero_headline||q.headline||'Willkommen im Bonusclub',
@@ -821,29 +747,65 @@ function LandingTextEditor({store,q}:any){
   success_title:md.success_title||'Deine Punkte wurden gespeichert.',
   success_message:md.success_message||'Danke für deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.',
   fineprint:md.fineprint||'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil.',
+  points_per_scan:Number(q.points_per_scan ?? md.points_per_scan ?? 10),
   max_scans_per_member:Number(q.max_scans_per_member ?? md.max_scans_per_member ?? 0),
+  daily_scan_limit_per_member:Number(q.daily_scan_limit_per_member ?? md.daily_scan_limit_per_member ?? md.daily_scan_limit ?? 0),
   scan_cooldown_minutes:Number(q.scan_cooldown_minutes ?? md.scan_cooldown_minutes ?? 0),
   daily_point_limit_per_member:Number(q.daily_point_limit_per_member ?? md.daily_point_limit_per_member ?? 0),
   suspicion_score_threshold:Number(q.suspicion_score_threshold ?? md.suspicion_score_threshold ?? 70)
  })
- async function save(){
-  await store.update('qr_campaigns',q.id,{title:f.title,name:f.title,headline:f.headline,metadata:{...md,hero_headline:f.headline,hero_subline:f.subline,cta_label:f.cta_label,review_cta_label:f.review_cta_label,success_title:f.success_title,success_message:f.success_message,fineprint:f.fineprint,max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70)},max_scans_per_member:Number(f.max_scans_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70)})
+ function patch(k:string,v:any){setF((p:any)=>({...p,[k]:v}))}
+ function normalizedPayload(){
+  const toNumber=(v:any,fb=0,max?:number)=>{let n=Math.max(0,Math.floor(Number(v||fb))); if(max!==undefined)n=Math.min(max,n); return n}
+  return {
+   title:f.title,
+   headline:f.headline,
+   subline:f.subline,
+   cta_label:f.cta_label,
+   review_cta_label:f.review_cta_label,
+   success_title:f.success_title,
+   success_message:f.success_message,
+   fineprint:f.fineprint,
+   points_per_scan:toNumber(f.points_per_scan,10),
+   max_scans_per_member:toNumber(f.max_scans_per_member,0),
+   daily_scan_limit_per_member:toNumber(f.daily_scan_limit_per_member,0),
+   scan_cooldown_minutes:toNumber(f.scan_cooldown_minutes,0),
+   daily_point_limit_per_member:toNumber(f.daily_point_limit_per_member,0),
+   suspicion_score_threshold:toNumber(f.suspicion_score_threshold,70,100),
+   mode:q.mode||q.purpose||md.purpose||'loyalty',
+   slug:q.slug
+  }
  }
- return <div className="v42PackageEdit"><input className="input" value={f.title} onChange={e=>setF({...f,title:e.target.value})} placeholder="Interner Seitentitel"/><input className="input" value={f.headline} onChange={e=>setF({...f,headline:e.target.value})} placeholder="Öffentliche Headline auf der Slug-Seite"/><textarea className="input textarea" value={f.subline} onChange={e=>setF({...f,subline:e.target.value})} placeholder="Unterzeile / Erklärung auf der Slug-Seite"/><div className="grid2"><input className="input" value={f.cta_label} onChange={e=>setF({...f,cta_label:e.target.value})} placeholder="Button-Text für Loyalty"/><input className="input" value={f.review_cta_label} onChange={e=>setF({...f,review_cta_label:e.target.value})} placeholder="Button-Text für Review"/></div><input className="input" value={f.success_title} onChange={e=>setF({...f,success_title:e.target.value})} placeholder="Erfolgsüberschrift nach Scan/Absenden"/><textarea className="input textarea" value={f.success_message} onChange={e=>setF({...f,success_message:e.target.value})} placeholder="Erfolgstext nach Scan/Absenden"/><textarea className="input textarea" value={f.fineprint} onChange={e=>setF({...f,fineprint:e.target.value})} placeholder="Rechtlicher Hinweis / Kleingedrucktes"/><div className="grid2 mini"><input className="input" type="number" min="0" value={f.max_scans_per_member} onChange={e=>setF({...f,max_scans_per_member:Number(e.target.value)})} placeholder="Max. QR-Einlösungen pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" min="0" value={f.scan_cooldown_minutes} onChange={e=>setF({...f,scan_cooldown_minutes:Number(e.target.value)})} placeholder="Cooldown Minuten zwischen gültigen Scans"/></div><div className="grid2 mini"><input className="input" type="number" min="0" value={f.daily_point_limit_per_member||0} onChange={e=>setF({...f,daily_point_limit_per_member:Number(e.target.value)})} placeholder="Punkte-Tageslimit pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" min="0" max="100" value={f.suspicion_score_threshold||70} onChange={e=>setF({...f,suspicion_score_threshold:Number(e.target.value)})} placeholder="Verdachts-Score Warnschwelle, z. B. 70"/></div><div className="sub">Diese Werte begrenzen, wie oft ein Endkunde diesen QR-Code Punkte sammeln/einlösen kann und wie lange er zwischen zwei gültigen Scans warten muss.</div><div className="toolbarActions"><button className="btn" onClick={save}>Slug-Seiten-Texte speichern</button><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Live ansehen</button></div></div>
+ async function save(){
+  setBusy(true); setMsg('')
+  const payload=normalizedPayload()
+  const nextMetadata={...md,hero_headline:payload.headline,hero_subline:payload.subline,cta_label:payload.cta_label,review_cta_label:payload.review_cta_label,success_title:payload.success_title,success_message:payload.success_message,fineprint:payload.fineprint,points_per_scan:payload.points_per_scan,max_scans_per_member:payload.max_scans_per_member,daily_scan_limit_per_member:payload.daily_scan_limit_per_member,scan_cooldown_minutes:payload.scan_cooldown_minutes,daily_point_limit_per_member:payload.daily_point_limit_per_member,suspicion_score_threshold:payload.suspicion_score_threshold,final_slug_rules_source:'qr_campaigns'}
+  try{
+   await v33FunctionalClient.saveFinalSlugSettings(q.id,payload)
+   await store.load?.()
+   setMsg('Finale Slug-Seiten-Regeln wurden im Backend gespeichert. Die öffentliche /l/-Seite nutzt diese Werte sofort beim nächsten Scan.')
+  }catch(e:any){
+   try{
+    await store.update('qr_campaigns',q.id,{title:payload.title,name:payload.title,headline:payload.headline,metadata:nextMetadata})
+    setMsg('Finale Regeln wurden direkt in qr_campaigns gespeichert. Backend-Sync war nicht erreichbar, die Slug-Seite liest die Werte aus der Kampagne/Metadata.')
+   }catch(err:any){setMsg(err?.message||e?.message||'Speichern fehlgeschlagen. Bitte Backend-ENV und Supabase-Schema prüfen.')}
+  }finally{setBusy(false)}
+ }
+ const help=(title:string,text:string)=><div className="fieldHelp"><b>{title}</b> · {text}</div>
+ return <div className="v42PackageEdit finalSlugRules"><div className="item"><div><b>Finale Einstellungen für diese öffentliche Slug-Seite</b><div className="sub">Diese Werte werden an <code>qr_campaigns</code> gespeichert und sind die maßgebliche Quelle für <code>/l/{q.slug}</code>. Andere Loyalty-/Security-Felder dienen nur noch als Fallback, wenn hier kein Kampagnenwert vorhanden ist.</div></div><Badge type="green">final</Badge></div><input className="input" value={f.title} onChange={e=>patch('title',e.target.value)} placeholder="Interner Seitentitel" title="Interner Name der Slug-/QR-Kampagne im Adminbereich"/><input className="input" value={f.headline} onChange={e=>patch('headline',e.target.value)} placeholder="Öffentliche Headline auf der Slug-Seite" title="Diese Überschrift sieht der Endkunde oben auf der öffentlichen Slug-Seite"/><textarea className="input textarea" value={f.subline} onChange={e=>patch('subline',e.target.value)} placeholder="Unterzeile / Erklärung auf der Slug-Seite" title="Kurz erklären, warum der Endkunde Punkte sammelt oder eine Bewertung abgibt"/><div className="grid2"><input className="input" value={f.cta_label} onChange={e=>patch('cta_label',e.target.value)} placeholder="Button-Text für Loyalty, z. B. Punkte sammeln" title="Text auf dem Sammeln-Button"/><input className="input" value={f.review_cta_label} onChange={e=>patch('review_cta_label',e.target.value)} placeholder="Button-Text für Review, z. B. Bewertung absenden" title="Text auf dem Bewertungs-Button"/></div><input className="input" value={f.success_title} onChange={e=>patch('success_title',e.target.value)} placeholder="Erfolgsüberschrift nach Scan/Absenden" title="Überschrift nach erfolgreichem Speichern"/><textarea className="input textarea" value={f.success_message} onChange={e=>patch('success_message',e.target.value)} placeholder="Erfolgstext nach Scan/Absenden" title="Text nach erfolgreicher Punktevergabe oder Bewertung"/><textarea className="input textarea" value={f.fineprint} onChange={e=>patch('fineprint',e.target.value)} placeholder="Rechtlicher Hinweis / Kleingedrucktes" title="Hinweis unter dem Formular der öffentlichen Slug-Seite"/><div className="ruleBox"><b>Finale Punkte- und Einlöse-Regeln</b><div className="sub">0 bedeutet bei Limits: kein Limit / unbegrenzt. Diese Felder ändern die echte Scan-Logik der öffentlichen Slug-Seite.</div><div className="grid2 mini"><label className="formField"><span>Punkte pro gültigem Scan</span><input className="input" type="number" min="0" value={f.points_per_scan} onChange={e=>patch('points_per_scan',Number(e.target.value))} title="Wie viele Punkte nach einem gültigen Scan oder einer erfolgreichen Aktion vergeben werden"/>{help('Beispiel','1 = ein Punkt pro gültiger Aktion')}</label><label className="formField"><span>Max. Einlösungen insgesamt pro Endkunde</span><input className="input" type="number" min="0" value={f.max_scans_per_member} onChange={e=>patch('max_scans_per_member',Number(e.target.value))} title="Gesamtlimit pro Bonuskonto für diesen QR-Code. 0 bedeutet unbegrenzt."/>{help('Beispiel','1 = nur einmal insgesamt, 0 = kein Gesamtlimit')}</label></div><div className="grid2 mini"><label className="formField"><span>Max. Einlösungen pro Tag</span><input className="input" type="number" min="0" value={f.daily_scan_limit_per_member} onChange={e=>patch('daily_scan_limit_per_member',Number(e.target.value))} title="Tageslimit gültiger QR-Einlösungen pro Bonuskonto für genau diese Slug-Seite. 0 bedeutet kein Tageslimit."/>{help('Beispiel','1 = einmal täglich, 3 = dreimal täglich, 0 = unbegrenzt')}</label><label className="formField"><span>Wartezeit zwischen Scans in Minuten</span><input className="input" type="number" min="0" value={f.scan_cooldown_minutes} onChange={e=>patch('scan_cooldown_minutes',Number(e.target.value))} title="Mindestabstand zwischen zwei gültigen Scans desselben Endkunden. 1440 = 24 Stunden."/>{help('Beispiel','1440 = erst nach 24 Stunden wieder gültig')}</label></div><div className="grid2 mini"><label className="formField"><span>Punkte-Tageslimit pro Endkunde</span><input className="input" type="number" min="0" value={f.daily_point_limit_per_member} onChange={e=>patch('daily_point_limit_per_member',Number(e.target.value))} title="Maximale Punkte pro Tag für diesen Endkunden. 0 bedeutet kein Punktelimit."/>{help('Beispiel','1 = maximal ein Punkt pro Tag')}</label><label className="formField"><span>Auffällig ab Verdachts-Score</span><input className="input" type="number" min="0" max="100" value={f.suspicion_score_threshold} onChange={e=>patch('suspicion_score_threshold',Number(e.target.value))} title="Ab diesem Score erscheint der Endkunde im Security Center als auffällig."/>{help('Empfohlen','70 auf einer Skala von 0 bis 100')}</label></div></div><div className="toolbarActions"><button className="btn" onClick={save} disabled={busy}>{busy?'Speichert...':'Finale Slug-Regeln speichern'}</button><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Live ansehen</button></div>{msg&&<div className="sub">{msg}</div>}</div>
 }
 
 function V42PublicLandingManager({store,cid}:any){
  const customer=cobj(store.data,cid)
- const [form,setForm]=useState({title:`${customer?.name||'Kunde'} Bonusclub`,slug:slugifyLocal(customer?.name||'kunde'),headline:'Willkommen im Bonusclub',subline:'Sammle Punkte, sichere dir Rewards und werde VIP.',mode:'loyalty',max_scans_per_member:1,scan_cooldown_minutes:0})
+ const [form,setForm]=useState({title:`${customer?.name||'Kunde'} Bonusclub`,slug:slugifyLocal(customer?.name||'kunde'),headline:'Willkommen im Bonusclub',subline:'Sammle Punkte, sichere dir Rewards und werde VIP.',mode:'loyalty'})
  const campaigns=(store.data.qr_campaigns||[]).filter((q:any)=>q.customer_id===cid)
  async function create(){
   const slug=slugifyLocal(form.slug||form.title)
-  await store.create('qr_campaigns',{customer_id:cid,title:form.title,name:form.title,slug,headline:form.headline,mode:form.mode,metadata:{purpose:form.mode,hero_headline:form.headline,hero_subline:form.subline,cta_label:form.mode==='review'?'Bewertung absenden':'Punkte sammeln',review_cta_label:'Bewertung absenden',max_scans_per_member:Number(form.max_scans_per_member||0),scan_cooldown_minutes:Number(form.scan_cooldown_minutes||0)},max_scans_per_member:Number(form.max_scans_per_member||0),scan_cooldown_minutes:Number(form.scan_cooldown_minutes||0),public_url:publicSlugUrl(slug),target_url:`/l/${slug}`,status:'Aktiv',active:true,created_at:new Date().toISOString()})
-  await store.create('notifications',{customer_id:cid,title:'Öffentliche Slug-Seite erstellt',message:`/l/${slug} wurde erstellt.`,type:'public_landing',actor_name:'DominiqueMM'})
+  await store.create('qr_campaigns',{customer_id:cid,title:form.title,name:form.title,slug,headline:form.headline,mode:form.mode,metadata:{purpose:form.mode,hero_headline:form.headline,hero_subline:form.subline,cta_label:form.mode==='review'?'Bewertung absenden':'Punkte sammeln',review_cta_label:'Bewertung absenden',points_per_scan:1,max_scans_per_member:1,daily_scan_limit_per_member:1,scan_cooldown_minutes:0,daily_point_limit_per_member:1,suspicion_score_threshold:70,final_slug_rules_source:'qr_campaigns'},points_per_scan:1,max_scans_per_member:1,scan_cooldown_minutes:0,daily_point_limit_per_member:1,suspicion_score_threshold:70,public_url:publicSlugUrl(slug),target_url:`/l/${slug}`,status:'Aktiv',active:true,created_at:new Date().toISOString()})
+  await store.create('notifications',{customer_id:cid,title:'Öffentliche Slug-Seite erstellt',message:`/l/${slug} wurde erstellt. Die finalen Einlöse-Regeln bearbeitest du unten im finalen Slug-Regelblock.`,type:'public_landing',actor_name:'DominiqueMM'})
  }
- return <><Head title="Öffentliche /l/[slug] Seite" sub={`Nur Kampagnen von ${customer?.name||'diesem Kunden'} anzeigen, bearbeiten und previewen`}/><div className="grid2"><Card title="Slug-Seite erstellen"><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Seitentitel, z. B. Bonusclub des Kunden"/><input className="input" value={form.slug} onChange={e=>setForm({...form,slug:slugifyLocal(e.target.value)})} placeholder="URL-Slug, z. B. kundenname-bonusclub"/><input className="input" value={form.headline} onChange={e=>setForm({...form,headline:e.target.value})} placeholder="Headline, die öffentlich oben angezeigt wird"/><textarea className="input textarea" value={form.subline} onChange={e=>setForm({...form,subline:e.target.value})} placeholder="Unterzeile der öffentlichen Landingpage"/><select className="input" value={form.mode} onChange={e=>setForm({...form,mode:e.target.value})}><option value="loyalty">Loyalty</option><option value="review">Review</option><option value="both">Bewertung + Loyalty</option><option value="lead">Lead</option></select><div className="grid2 mini"><input className="input" type="number" min="0" value={form.max_scans_per_member} onChange={e=>setForm({...form,max_scans_per_member:Number(e.target.value)})} placeholder="Max. QR-Einlösungen pro Endkunde"/><input className="input" type="number" min="0" value={form.scan_cooldown_minutes} onChange={e=>setForm({...form,scan_cooldown_minutes:Number(e.target.value)})} placeholder="Cooldown Minuten"/></div><button className="btn" onClick={create}>Slug-Seite erstellen</button></Card><V42PublicLandingPreview campaigns={campaigns} customer={customer}/></div><Card title="Bestehende Slug-Seiten">{campaigns.map((q:any)=><div className="item" key={q.id}><b>/l/{q.slug}</b><span>{q.title||q.name}</span><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Öffnen</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div>)}</Card><Card title="Slug-Seiten-Texte bearbeiten">{campaigns.length===0&&<div className="sub">Erstelle zuerst eine Slug-Seite. Danach kannst du die öffentlichen Texte ändern.</div>}{campaigns.map((q:any)=><LandingTextEditor key={q.id} store={store} q={q}/>)}</Card></>
+ return <><Head title="Öffentliche /l/[slug] Seite" sub={`Nur Kampagnen von ${customer?.name||'diesem Kunden'} anzeigen, bearbeiten und previewen`}/><div className="grid2"><Card title="Slug-Seite erstellen"><div className="sub">Hier legst du die Seite nur an. Die endgültigen Regeln für Scans, Tageslimit, Cooldown und Punkte werden danach ausschließlich im Block <b>Finale Einstellungen für diese öffentliche Slug-Seite</b> gespeichert.</div><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Seitentitel, z. B. Bonusclub des Kunden" title="Interner Name der neuen Slug-Seite"/><input className="input" value={form.slug} onChange={e=>setForm({...form,slug:slugifyLocal(e.target.value)})} placeholder="URL-Slug, z. B. kundenname-bonusclub" title="Öffentlicher Kurzname in der URL"/><input className="input" value={form.headline} onChange={e=>setForm({...form,headline:e.target.value})} placeholder="Headline, die öffentlich oben angezeigt wird" title="Öffentliche Überschrift der Slug-Seite"/><textarea className="input textarea" value={form.subline} onChange={e=>setForm({...form,subline:e.target.value})} placeholder="Unterzeile der öffentlichen Landingpage" title="Erklärungstext für Endkunden"/><select className="input" value={form.mode} onChange={e=>setForm({...form,mode:e.target.value})} title="Legt fest, ob die Seite Loyalty, Reviews oder beides kombiniert"><option value="loyalty">Loyalty</option><option value="review">Review</option><option value="both">Bewertung + Loyalty</option><option value="lead">Lead</option></select><button className="btn" onClick={create}>Slug-Seite erstellen</button></Card><V42PublicLandingPreview campaigns={campaigns} customer={customer}/></div><Card title="Bestehende Slug-Seiten">{campaigns.length===0&&<div className="sub">Noch keine Slug-Seite für diesen Kunden.</div>}{campaigns.map((q:any)=><div className="item" key={q.id}><b>/l/{q.slug}</b><span>{q.title||q.name}</span><button className="btn secondary" onClick={()=>window.open(`/l/${q.slug}`,'_blank')}>Öffnen</button><button className="btn secondary" onClick={()=>store.remove('qr_campaigns',q.id)}>Löschen</button></div>)}</Card><Card title="Finale Slug-Seiten-Regeln & Texte bearbeiten">{campaigns.length===0&&<div className="sub">Erstelle zuerst eine Slug-Seite. Danach kannst du die finalen Regeln und öffentlichen Texte ändern.</div>}{campaigns.map((q:any)=><LandingTextEditor key={q.id} store={store} q={q}/>)}</Card></>
 }
-
 
 
 function ProductionStatusCard(){
@@ -854,7 +816,7 @@ function ProductionStatusCard(){
 
 
 function applyDemoSandboxStorePatch(store:any){
- if(!isDemoFeatureEnabled()&&!isDemoMode()) return store
+ if(!isDemoFeatureEnabled()) return store
  if(!store || store.__demoSandboxPatched) return store
  store.__demoSandboxPatched=true
  const persist=()=>{try{localStorage.setItem(DEMO_SANDBOX_KEY,JSON.stringify(store.data))}catch{}}
@@ -878,17 +840,17 @@ function applyDemoSandboxStorePatch(store:any){
  store.create=async(table:string,row:any)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localCreate(table,row)
-   return oldCreate?await oldCreate(table,row):await localCreate(table,row)
+   try{return oldCreate?await oldCreate(table,row):await localCreate(table,row)}catch(e){return localCreate(table,row)}
  }
  store.update=async(table:string,rowId:string,patch:any)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localUpdate(table,rowId,patch)
-   return oldUpdate?await oldUpdate(table,rowId,patch):await localUpdate(table,rowId,patch)
+   try{return oldUpdate?await oldUpdate(table,rowId,patch):await localUpdate(table,rowId,patch)}catch(e){return localUpdate(table,rowId,patch)}
  }
  store.remove=async(table:string,rowId:string)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localRemove(table,rowId)
-   return oldRemove?await oldRemove(table,rowId):await localRemove(table,rowId)
+   try{return oldRemove?await oldRemove(table,rowId):await localRemove(table,rowId)}catch(e){return localRemove(table,rowId)}
  }
  store.delete=store.remove
  return store
@@ -1194,8 +1156,8 @@ export default function App(){
  const nav=role==='admin'?admin:customer
  const mobileBottomKeys=(role==='admin'?['dashboard','lead_scraper','acquisition_campaigns','crm','security_center']:['dashboard','seo','reviews','reports','finance']).filter((k:string)=>visibleNavKeys.includes(k))
  const blockCustomerScopedRender=liveOnlyMode(role,view)&&customerScopedView(view)&&!liveCidAvailable
- const demoAdminSwitchEnabled=role==='admin'&&!isDemoMode()
- const liveAdminSwitchEnabled=role==='admin'&&isDemoMode()
+ const demoAdminSwitchEnabled=role==='admin'&&isDemoFeatureEnabled()&&!isDemoMode()
+ const liveAdminSwitchEnabled=role==='admin'&&isDemoFeatureEnabled()&&isDemoMode()
  function openDemoAdminEnvironment(){
   if(typeof window==='undefined')return
   markDemoMode()
@@ -1215,7 +1177,7 @@ export default function App(){
   url.searchParams.set('app','1')
   window.location.assign(url.toString())
  }
- return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{(isDemoFeatureEnabled()||isDemoMode())&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><FieldHelpEnhancer/>
+ return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><FieldHelpEnhancer/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  {blockCustomerScopedRender?<NoLiveCustomerPanel store={store} setView={setView} setCid={setCid}/>:<>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
@@ -2412,7 +2374,7 @@ function ApprovalCenter({store,cid,role}:any){
 
 
 const v33ToolConfigs:any={
- qr:{title:'QR Kampagnen',category:'QR & Loyalty',resource:'qr_campaigns',fields:['title','purpose','points_per_scan','max_scans_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold'],defaults:[],special:'qr'},
+ qr:{title:'QR Kampagnen',category:'QR & Loyalty',resource:'qr_campaigns',fields:['title','purpose','points_per_scan','max_scans_per_member','daily_scan_limit_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold'],defaults:[],special:'qr'},
  public_landing:{title:'Öffentliche /l/[slug] Seite',category:'QR & Loyalty',resource:'public_landing_pages',fields:['title','slug','headline','mode'],defaults:[]},
  loyalty:{title:'Loyalty Programm',category:'QR & Loyalty',resource:'loyalty_programs',fields:['name','qr_campaign_id','points_per_scan','daily_point_limit_per_member','suspicion_score_threshold'],defaults:[]},
  loyalty_rewards:{title:'Rewards',category:'QR & Loyalty',resource:'loyalty_rewards',fields:['title','type','points','qr_campaign_id','staff_code_required','allow_multiple_redemptions','max_redemptions_per_member'],defaults:[]},
@@ -2515,7 +2477,7 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
  }
  function renderField(k:string){
   const meta=formFieldMeta(view,k)
-  const numericFields=['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold','points_per_scan','multiplier','members','rating'].includes(k)
+  const numericFields=['points','score','quantity','unit','expected','confidence','gross','percent','tools','price','max_redemptions_per_member','max_scans_per_member','daily_scan_limit_per_member','scan_cooldown_minutes','daily_point_limit_per_member','suspicion_score_threshold','points_per_scan','multiplier','members','rating'].includes(k)
   const setValue=(value:any)=>setForm({...form,[k]:numericFields?Number(value):value})
   const label=<label className="fieldLabel" htmlFor={`${view}-${k}`}><span>{meta.label}</span><InfoI text={meta.help}/></label>
   if(k==='qr_campaign_id')return <div key={k} className="formField">{label}<select id={`${view}-${k}`} className="input" value={form[k]??''} onChange={e=>setForm({...form,[k]:e.target.value})}><option value="">Keine feste QR-Kampagne / allgemein gültig</option>{campaignOptionsForCustomer(store,cid).map((q:any)=><option key={q.id} value={q.id}>{q.title||q.name||q.slug}</option>)}</select><div className="fieldHelp">{meta.example}</div></div>

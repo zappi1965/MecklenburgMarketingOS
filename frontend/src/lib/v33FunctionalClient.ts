@@ -242,6 +242,8 @@ export const v33FunctionalClient = {
   securityCenter: (customerId: string) => request(`/v42/${customerId}/security-center`),
   saveSecuritySettings: (customerId: string, payload: any) =>
     request(`/v42/${customerId}/security-settings`, { method: 'POST', body: JSON.stringify(payload) }),
+  saveFinalSlugSettings: (qrCampaignId: string, payload: any) =>
+    request(`/v42/qr-campaigns/${qrCampaignId}/final-slug-settings`, { method: 'POST', body: JSON.stringify(payload) }),
   savePackageMatrix: (customerId: string, payload: any) =>
     request(`/v42/${customerId}/package-matrix`, { method: 'POST', body: JSON.stringify(payload) }),
   getPackageMatrix: (customerId: string) => request(`/v42/${customerId}/package-matrix`),

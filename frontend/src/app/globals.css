@@ -3038,3 +3038,6 @@ button,.btn,.nav,input,select,textarea{touch-action:manipulation}
 
 /* V42.24.1 Reward clarity */
 .formField{display:grid;gap:6px;margin-bottom:12px}.fieldLabel{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:var(--text)}.fieldLabel span{letter-spacing:.01em}.fieldHelp{font-size:12px;line-height:1.45;color:var(--muted);padding:0 2px 2px}.formField .input{margin-bottom:0}
+
+/* V42.24.9 Final Slug rules clarity */
+.finalSlugRules{display:grid;gap:14px}.ruleBox{border:1px solid rgba(139,92,246,.28);background:rgba(139,92,246,.08);border-radius:18px;padding:14px;display:grid;gap:10px}.ruleBox .formField span{font-size:13px;font-weight:850;color:var(--text)}

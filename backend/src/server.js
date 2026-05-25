@@ -50,8 +50,7 @@ app.use(generalRateLimit)
 app.use(express.json({ limit: '50mb' }))
 
 const supabaseConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
-const envFlag = (value) => ['true','1','yes','on','enabled'].includes(String(value || '').trim().toLowerCase())
-const demoModeEnabled = envFlag(process.env.ENABLE_DEMO_MODE)
+const demoModeEnabled = process.env.ENABLE_DEMO_MODE === 'true'
 const supabaseAdmin = supabaseConfigured
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   : null

@@ -158,9 +158,20 @@ function v33FunctionalRoutes(supabase) {
     return fallback
   }
 
+  function configuredNumberInfo(sources, keys, fallback = 0) {
+    for (const source of sources || []) {
+      if (!source) continue
+      for (const key of keys) {
+        const value = key.split('.').reduce((acc, part) => acc && acc[part] !== undefined ? acc[part] : undefined, source)
+        if (value !== undefined && value !== null && value !== '') return { configured: true, value: num(value, fallback), source_key: key }
+      }
+    }
+    return { configured: false, value: fallback, source_key: null }
+  }
+
   function qrScanLimitSettings(qrCampaign, program) {
     const sources = [qrCampaign, qrCampaign?.metadata, program, program?.metadata]
-    const maxScansPerMember = firstConfiguredNumber(sources, [
+    const maxScansPerMember = configuredNumberInfo(sources, [
       'max_scans_per_member',
       'max_scans_per_user',
       'scan_limit_per_member',
@@ -168,44 +179,59 @@ function v33FunctionalRoutes(supabase) {
       'max_redemptions_per_member',
       'metadata.max_scans_per_member'
     ], 0)
-    const cooldownMinutes = firstConfiguredNumber(sources, [
+    const dailyScansPerMember = configuredNumberInfo(sources, [
+      'daily_scan_limit_per_member',
+      'daily_scan_limit',
+      'max_daily_scans_per_member',
+      'max_daily_redemptions_per_member',
+      'daily_redemption_limit_per_member',
+      'metadata.daily_scan_limit_per_member',
+      'metadata.daily_scan_limit'
+    ], 0)
+    const cooldownMinutes = configuredNumberInfo(sources, [
       'scan_cooldown_minutes',
       'cooldown_minutes',
       'qr_cooldown_minutes',
       'minutes_between_scans',
       'metadata.scan_cooldown_minutes'
     ], 0)
-    const dailyPointLimit = firstConfiguredNumber(sources, [
+    const dailyPointLimit = configuredNumberInfo(sources, [
       'daily_point_limit_per_member',
       'daily_points_limit_per_member',
       'points_daily_limit',
       'metadata.daily_point_limit_per_member'
     ], 0)
-    const suspicionThreshold = firstConfiguredNumber(sources, [
+    const suspicionThreshold = configuredNumberInfo(sources, [
       'suspicion_score_threshold',
       'abuse_score_threshold',
       'metadata.suspicion_score_threshold'
     ], 70)
     return {
-      max_scans_per_member: Math.max(0, Math.floor(maxScansPerMember)),
-      scan_cooldown_minutes: Math.max(0, Math.floor(cooldownMinutes)),
-      daily_point_limit_per_member: Math.max(0, Math.floor(dailyPointLimit)),
-      suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(suspicionThreshold || 70)))
+      max_scans_per_member: Math.max(0, Math.floor(maxScansPerMember.value)),
+      max_scans_per_member_configured: Boolean(maxScansPerMember.configured),
+      daily_scan_limit_per_member: Math.max(0, Math.floor(dailyScansPerMember.value)),
+      daily_scan_limit_per_member_configured: Boolean(dailyScansPerMember.configured),
+      scan_cooldown_minutes: Math.max(0, Math.floor(cooldownMinutes.value)),
+      scan_cooldown_minutes_configured: Boolean(cooldownMinutes.configured),
+      daily_point_limit_per_member: Math.max(0, Math.floor(dailyPointLimit.value)),
+      daily_point_limit_per_member_configured: Boolean(dailyPointLimit.configured),
+      suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(suspicionThreshold.value || 70)))
     }
   }
 
   async function checkQrScanRedemptionLimits({ customerId, program, qrCampaign, member, slug }) {
     const settings = qrScanLimitSettings(qrCampaign, program)
-    if (!member?.id) return { ok: true, settings, previous_scans: 0 }
-    if (!settings.max_scans_per_member && !settings.scan_cooldown_minutes) return { ok: true, settings, previous_scans: 0 }
+    if (!member?.id) return { ok: true, settings, previous_scans: 0, scans_today: 0 }
+    if (!settings.max_scans_per_member && !settings.daily_scan_limit_per_member && !settings.scan_cooldown_minutes) return { ok: true, settings, previous_scans: 0, scans_today: 0 }
 
     try {
+      const selectLimit = Math.max(settings.max_scans_per_member || settings.daily_scan_limit_per_member || 10, 10) + 50
       let q = supabase.from('loyalty_transactions')
         .select('id,created_at,qr_campaign_id,metadata')
         .eq('loyalty_customer_id', member.id)
         .eq('action', 'qr_scan')
         .order('created_at', { ascending: false })
-        .limit(Math.max(settings.max_scans_per_member || 10, 10) + 5)
+        .limit(selectLimit)
 
       if (program?.qr_campaign_id) q = q.eq('qr_campaign_id', program.qr_campaign_id)
       else if (customerId) q = q.eq('customer_id', customerId)
@@ -224,7 +250,22 @@ function v33FunctionalRoutes(supabase) {
           status: 429,
           error: `Dieser QR-Code kann pro Bonuskonto maximal ${settings.max_scans_per_member}x eingelöst werden.`,
           settings,
-          previous_scans: filtered.length
+          previous_scans: filtered.length,
+          scans_today: filtered.filter((x) => new Date(x.created_at).getTime() >= new Date().setHours(0,0,0,0)).length
+        }
+      }
+
+      const todayStart = new Date(); todayStart.setHours(0,0,0,0)
+      const scansToday = filtered.filter((x) => new Date(x.created_at).getTime() >= todayStart.getTime()).length
+      if (settings.daily_scan_limit_per_member > 0 && scansToday >= settings.daily_scan_limit_per_member) {
+        return {
+          ok: false,
+          code: 'QR_DAILY_SCAN_LIMIT_REACHED',
+          status: 429,
+          error: `Tageslimit erreicht. Dieser QR-Code kann pro Bonuskonto maximal ${settings.daily_scan_limit_per_member}x pro Tag eingelöst werden.`,
+          settings,
+          previous_scans: filtered.length,
+          scans_today: scansToday
         }
       }
 
@@ -245,7 +286,7 @@ function v33FunctionalRoutes(supabase) {
           }
         }
       }
-      return { ok: true, settings, previous_scans: filtered.length }
+      return { ok: true, settings, previous_scans: filtered.length, scans_today: filtered.filter((x) => new Date(x.created_at).getTime() >= new Date().setHours(0,0,0,0)).length }
     } catch (e) {
       return { ok: true, settings, previous_scans: 0, warning: e.message }
     }
@@ -264,7 +305,8 @@ function v33FunctionalRoutes(supabase) {
   async function checkDailyPointLimit({ customerId, member, pointsToAdd, program, qrCampaign }) {
     const qrSettings = qrScanLimitSettings(qrCampaign, program)
     const security = await getLoyaltySecuritySettings(customerId)
-    const limit = Math.max(0, Math.floor(num(qrSettings.daily_point_limit_per_member || security.daily_point_limit_per_member, 0)))
+    const finalDailyPointLimit = qrSettings.daily_point_limit_per_member_configured ? qrSettings.daily_point_limit_per_member : security.daily_point_limit_per_member
+    const limit = Math.max(0, Math.floor(num(finalDailyPointLimit, 0)))
     if (!limit || !member?.id || !pointsToAdd) return { ok: true, limit, points_today: 0 }
     const today = new Date(); today.setHours(0,0,0,0)
     const q = await supabase.from('loyalty_transactions')
@@ -723,6 +765,7 @@ function v33FunctionalRoutes(supabase) {
     const pointsPerScan = num(payload.points_per_scan, 10)
     const maxScansPerMember = Math.max(0, Math.floor(num(payload.max_scans_per_member ?? payload.maxScansPerMember ?? payload.scan_limit_per_member, 0)))
     const scanCooldownMinutes = Math.max(0, Math.floor(num(payload.scan_cooldown_minutes ?? payload.scanCooldownMinutes ?? payload.cooldown_minutes, 0)))
+    const dailyScanLimitPerMember = Math.max(0, Math.floor(num(payload.daily_scan_limit_per_member ?? payload.dailyScanLimitPerMember ?? payload.daily_scan_limit ?? payload.max_daily_redemptions_per_member, 0)))
     const dailyPointLimitPerMember = Math.max(0, Math.floor(num(payload.daily_point_limit_per_member ?? payload.dailyPointLimitPerMember ?? payload.points_daily_limit, 0)))
     const suspicionScoreThreshold = Math.max(0, Math.min(100, Math.floor(num(payload.suspicion_score_threshold ?? payload.suspicionScoreThreshold ?? payload.abuse_score_threshold, 70))))
 
@@ -740,7 +783,7 @@ function v33FunctionalRoutes(supabase) {
       scan_cooldown_minutes: scanCooldownMinutes,
       daily_point_limit_per_member: dailyPointLimitPerMember,
       suspicion_score_threshold: suspicionScoreThreshold,
-      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
+      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_scan_limit_per_member: dailyScanLimitPerMember, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
     }).select('*').single()
 
     if (qrError) throw qrError
@@ -758,7 +801,7 @@ function v33FunctionalRoutes(supabase) {
         active: true,
         status: 'active',
         require_staff_code: true,
-        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
+        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_scan_limit_per_member: dailyScanLimitPerMember, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
       }).select('*').single()
 
       if (programError) throw programError
@@ -1066,7 +1109,8 @@ function v33FunctionalRoutes(supabase) {
       const customerId = program.customer_id
       const settings = await v37GetOrCreateLoyaltySettings(customerId)
       const qrCampaign = await getQrCampaignForPublicProgram(program, slug)
-      let points = authOnly ? 0 : num(program.points_per_scan, 10)
+      const qrLimitsForProgram = qrScanLimitSettings(qrCampaign, program)
+      let points = authOnly ? 0 : num(qrCampaign?.points_per_scan ?? qrCampaign?.metadata?.points_per_scan ?? program.points_per_scan ?? program.metadata?.points_per_scan, 10)
       let member = null
       // v37_loyalty_limits_applied
 
@@ -1088,8 +1132,9 @@ function v33FunctionalRoutes(supabase) {
           const sinceWeek = new Date(Date.now() - 7*24*60*60*1000).toISOString()
           const dayTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceDay)
           const weekTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceWeek)
-          if (Number(settings.daily_scan_limit || 0) > 0 && (dayTx.data || []).length >= Number(settings.daily_scan_limit)) {
-            return res.status(429).json({ ok: false, error: 'Tageslimit erreicht', limit: settings.daily_scan_limit })
+          const dailyScanLimit = qrLimitsForProgram.daily_scan_limit_per_member_configured ? Number(qrLimitsForProgram.daily_scan_limit_per_member || 0) : Number(settings.daily_scan_limit || 0)
+          if (dailyScanLimit > 0 && (dayTx.data || []).length >= dailyScanLimit) {
+            return res.status(429).json({ ok: false, error: 'Tageslimit erreicht', code:'QR_DAILY_SCAN_LIMIT_REACHED', limit: dailyScanLimit })
           }
           if (Number(settings.weekly_scan_limit || 0) > 0 && (weekTx.data || []).length >= Number(settings.weekly_scan_limit)) {
             return res.status(429).json({ ok: false, error: 'Wochenlimit erreicht', limit: settings.weekly_scan_limit })
@@ -2209,6 +2254,110 @@ function v33FunctionalRoutes(supabase) {
         loyalty_program: program.data || null,
         warnings
       })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/v42/qr-campaigns/:id/final-slug-settings', async (req, res, next) => {
+    try {
+      const id = String(req.params.id || '').trim()
+      const body = req.body || {}
+      if (!id) return res.status(400).json({ ok:false, error:'QR-Kampagnen-ID fehlt.' })
+
+      const found = await supabase.from('qr_campaigns').select('*').eq('id', id).maybeSingle()
+      if (found.error) throw found.error
+      const current = found.data
+      if (!current) return res.status(404).json({ ok:false, error:'QR-Kampagne wurde nicht gefunden.' })
+
+      const toInt = (value, fallback = 0, max = null) => {
+        let n = Math.max(0, Math.floor(num(value, fallback)))
+        if (max !== null) n = Math.min(max, n)
+        return n
+      }
+      const title = clean(body.title || body.name || current.title || current.name || 'QR Kampagne')
+      const headline = clean(body.headline || body.hero_headline || current.headline || current.metadata?.hero_headline || 'Willkommen im Bonusclub')
+      const mode = clean(body.mode || body.purpose || current.mode || current.purpose || current.metadata?.purpose || 'loyalty')
+      const slugValue = clean(body.slug || current.slug)
+      const metadata = {
+        ...(current.metadata || {}),
+        purpose: mode,
+        hero_headline: headline,
+        hero_subline: body.subline ?? body.hero_subline ?? current.metadata?.hero_subline ?? '',
+        cta_label: body.cta_label ?? current.metadata?.cta_label ?? 'Punkte sammeln',
+        review_cta_label: body.review_cta_label ?? current.metadata?.review_cta_label ?? 'Bewertung absenden',
+        success_title: body.success_title ?? current.metadata?.success_title ?? 'Deine Punkte wurden gespeichert.',
+        success_message: body.success_message ?? current.metadata?.success_message ?? 'Danke für deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.',
+        fineprint: body.fineprint ?? current.metadata?.fineprint ?? 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil.',
+        points_per_scan: toInt(body.points_per_scan ?? current.points_per_scan ?? current.metadata?.points_per_scan ?? 10),
+        max_scans_per_member: toInt(body.max_scans_per_member ?? current.max_scans_per_member ?? current.metadata?.max_scans_per_member ?? 0),
+        daily_scan_limit_per_member: toInt(body.daily_scan_limit_per_member ?? current.metadata?.daily_scan_limit_per_member ?? current.metadata?.daily_scan_limit ?? 0),
+        scan_cooldown_minutes: toInt(body.scan_cooldown_minutes ?? current.scan_cooldown_minutes ?? current.metadata?.scan_cooldown_minutes ?? 0),
+        daily_point_limit_per_member: toInt(body.daily_point_limit_per_member ?? current.daily_point_limit_per_member ?? current.metadata?.daily_point_limit_per_member ?? 0),
+        suspicion_score_threshold: toInt(body.suspicion_score_threshold ?? current.suspicion_score_threshold ?? current.metadata?.suspicion_score_threshold ?? 70, 70, 100),
+        final_slug_rules_source: 'qr_campaigns',
+        final_slug_rules_updated_at: new Date().toISOString()
+      }
+
+      const fullPatch = {
+        title,
+        name: title,
+        headline,
+        mode,
+        purpose: mode,
+        points_per_scan: metadata.points_per_scan,
+        max_scans_per_member: metadata.max_scans_per_member,
+        daily_scan_limit_per_member: metadata.daily_scan_limit_per_member,
+        scan_cooldown_minutes: metadata.scan_cooldown_minutes,
+        daily_point_limit_per_member: metadata.daily_point_limit_per_member,
+        suspicion_score_threshold: metadata.suspicion_score_threshold,
+        metadata,
+        public_url: slugValue ? `/l/${slugValue}` : current.public_url,
+        target_url: slugValue ? `/l/${slugValue}` : current.target_url,
+        active: body.active === undefined ? current.active !== false : body.active !== false,
+        updated_at: new Date().toISOString()
+      }
+      const safePatch = {
+        title: fullPatch.title,
+        name: fullPatch.name,
+        headline: fullPatch.headline,
+        mode: fullPatch.mode,
+        metadata: fullPatch.metadata,
+        active: fullPatch.active,
+        updated_at: fullPatch.updated_at
+      }
+
+      let saved = await supabase.from('qr_campaigns').update(fullPatch).eq('id', id).select('*').single()
+      if (saved.error) saved = await supabase.from('qr_campaigns').update(safePatch).eq('id', id).select('*').single()
+      if (saved.error) throw saved.error
+
+      let program = null
+      try {
+        const programLookup = await supabase.from('loyalty_programs')
+          .select('*')
+          .or(`qr_campaign_id.eq.${id},slug.eq.${slugValue}`)
+          .eq('customer_id', current.customer_id)
+          .limit(1)
+          .maybeSingle()
+        program = programLookup.error ? null : programLookup.data
+        if (program?.id) {
+          const programMetadata = { ...(program.metadata || {}), purpose: mode, linked_qr_final_rules: metadata }
+          const programPatch = {
+            points_per_scan: metadata.points_per_scan,
+            daily_scan_limit_per_member: metadata.daily_scan_limit_per_member,
+            daily_point_limit_per_member: metadata.daily_point_limit_per_member,
+            suspicion_score_threshold: metadata.suspicion_score_threshold,
+            metadata: programMetadata,
+            active: fullPatch.active,
+            updated_at: fullPatch.updated_at
+          }
+          const programSafePatch = { metadata: programMetadata, active: fullPatch.active, updated_at: fullPatch.updated_at }
+          let programSaved = await supabase.from('loyalty_programs').update(programPatch).eq('id', program.id).select('*').single()
+          if (programSaved.error) programSaved = await supabase.from('loyalty_programs').update(programSafePatch).eq('id', program.id).select('*').single()
+          if (!programSaved.error) program = programSaved.data
+        }
+      } catch (_) {}
+
+      try { await audit('v42_final_slug_rules_updated', { customer_id: current.customer_id, qr_campaign_id: id, slug: slugValue, scan_limits: qrScanLimitSettings(saved.data, program) }) } catch (_) {}
+      res.json({ ok:true, qr_campaign: saved.data, loyalty_program: program, scan_limits: qrScanLimitSettings(saved.data, program), message:'Finale Slug-Seiten-Regeln gespeichert.' })
     } catch (e) { next(e) }
   })
 
