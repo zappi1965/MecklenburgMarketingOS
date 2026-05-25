@@ -3041,3 +3041,9 @@ button,.btn,.nav,input,select,textarea{touch-action:manipulation}
 
 /* V42.24.9 Final Slug rules clarity */
 .finalSlugRules{display:grid;gap:14px}.ruleBox{border:1px solid rgba(139,92,246,.28);background:rgba(139,92,246,.08);border-radius:18px;padding:14px;display:grid;gap:10px}.ruleBox .formField span{font-size:13px;font-weight:850;color:var(--text)}
+
+/* V42.24.10 - öffentliche Slug-Seite: Rewards dauerhaft öffnen */
+.publicRewardOverview{margin-top:18px;border-color:rgba(212,175,55,.42);background:rgba(212,175,55,.09)}
+.publicRewardOverviewHead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:8px}
+.publicRewardOverviewHead b,.publicRewardOverviewHead span{display:block}.publicRewardOverviewHead span{margin-top:4px;color:#d1d5db;font-size:13px;line-height:1.45}.publicRewardEmpty{margin:10px 0 0;color:#d1d5db;font-weight:800}.publicRewardOverview .publicLinkButton{width:auto;white-space:nowrap}
+@media(max-width:640px){.publicRewardOverviewHead{flex-direction:column}.publicRewardOverview .publicLinkButton{width:100%}}
