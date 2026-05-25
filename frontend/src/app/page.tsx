@@ -292,7 +292,8 @@ const seed:any={
 }
 
 const demoScopedTables=new Set([
- 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','competitor_benchmarks','google_business_audits','mini_audits','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_member_security_scores','security_events','dsar_requests'
+ 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','competitor_benchmarks','google_business_audits','mini_audits','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_member_security_scores','security_events','dsar_requests',
+ 'loyalty_segments','loyalty_members','reviews','review_intelligence','review_response_templates','smart_automations','marketing_campaigns','assistant_messages','customer_health','customer_intelligence','dynamic_billing_usage','revenue_forecasts','revenue_shares','package_matrix','timeline_events'
 ])
 function withModeScope(table:string,payload:any){
  const scoped={...payload}
@@ -303,10 +304,55 @@ function withModeScope(table:string,payload:any){
  return scoped
 }
 
+const liveBackendWritableTables=new Set([
+ 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages',
+ 'appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations',
+ 'seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics',
+ 'review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks',
+ 'google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases',
+ 'customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests',
+ 'output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs',
+ 'loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions',
+ 'loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests',
+ 'landing_page_settings','v33_public_leads','v33_functional_records','v35_engine_runs','v37_loyalty_settings',
+ 'loyalty_segments','loyalty_members','reviews','review_intelligence','review_response_templates','smart_automations','marketing_campaigns','assistant_messages','customer_health','customer_intelligence','dynamic_billing_usage','revenue_forecasts','revenue_shares','package_matrix','timeline_events'
+])
+
+async function liveBackendAuthHeaders(){
+ const {data}=await supabaseAuth.auth.getSession()
+ const token=data?.session?.access_token
+ return token?{Authorization:`Bearer ${token}`}:{}
+}
+
+function liveRecordPayload(result:any){
+ return result?.record||result?.data||result?.item||result?.row||result
+}
+
+async function liveRecordCreate(table:string,row:any){
+ if(!liveBackendWritableTables.has(table)) throw new Error(`Live-Backend-Speicherung ist für ${table} nicht freigegeben.`)
+ const headers=await liveBackendAuthHeaders()
+ const result:any=await apiRequest(`${API_BASE}/api/ops/live-records/${encodeURIComponent(table)}`,{method:'POST',headers,body:JSON.stringify(row),timeoutMs:20000})
+ return liveRecordPayload(result)
+}
+
+async function liveRecordUpdate(table:string,id:string,row:any){
+ if(!liveBackendWritableTables.has(table)) throw new Error(`Live-Backend-Aktualisierung ist für ${table} nicht freigegeben.`)
+ const headers=await liveBackendAuthHeaders()
+ const result:any=await apiRequest(`${API_BASE}/api/ops/live-records/${encodeURIComponent(table)}/${encodeURIComponent(id)}`,{method:'PATCH',headers,body:JSON.stringify(row),timeoutMs:20000})
+ return liveRecordPayload(result)
+}
+
+async function liveRecordRemove(table:string,id:string){
+ if(!liveBackendWritableTables.has(table)) throw new Error(`Live-Backend-Löschung ist für ${table} nicht freigegeben.`)
+ const headers=await liveBackendAuthHeaders()
+ await apiRequest(`${API_BASE}/api/ops/live-records/${encodeURIComponent(table)}/${encodeURIComponent(id)}`,{method:'DELETE',headers,timeoutMs:20000})
+ return true
+}
+
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
- const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes']
+ const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_segments','loyalty_members','reviews','review_intelligence','review_response_templates','smart_automations','marketing_campaigns','assistant_messages','customer_health','customer_intelligence','dynamic_billing_usage','revenue_forecasts','revenue_shares','package_matrix','timeline_events']
  function notify(m:string){setToast(m);setTimeout(()=>setToast(''),3200)}
  useEffect(()=>{
   function onGlobalToast(e:any){notify(String(e?.detail||''))}
@@ -340,40 +386,71 @@ function useStore(){
  async function create(table:string,row:any){
   const payload=withModeScope(table,{id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()})
   try{
-   if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
-   else setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
-   addActivity('create',table,payload.id,{live:hasSupabase})
-   notify('Gespeichert')
+   let saved:any=payload
+   if(!isDemoMode()&&liveBackendWritableTables.has(table)){
+    saved=await liveRecordCreate(table,payload)
+    await load()
+   }else if(hasSupabase&&supabase){
+    const {data,error}=await supabase.from(table).insert(payload).select('*').maybeSingle()
+    if(error)throw error
+    saved=data||payload
+    await load()
+   }else{
+    setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+   }
+   addActivity('create',table,saved?.id||payload.id,{live:!isDemoMode()})
+   notify('Live gespeichert')
+   return saved||payload
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote create failed`,e)
-   notify('Live-Speicherung fehlgeschlagen – es wurde kein lokaler Beispieldatensatz angelegt.')
+   const message=e?.message||String(e||'Unbekannter Fehler')
+   notify(`Live-Speicherung fehlgeschlagen: ${message}`)
    throw e
   }
-  return payload
  }
  async function update(table:string,id:string,row:any){
   const normalized=withModeScope(table,{...row,updated_at:row.updated_at||new Date().toISOString()})
   try{
-   if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
-   else setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
-   addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
-   notify('Aktualisiert')
+   let saved:any={id,...normalized}
+   if(!isDemoMode()&&liveBackendWritableTables.has(table)){
+    saved=await liveRecordUpdate(table,id,normalized)
+    await load()
+   }else if(hasSupabase&&supabase){
+    const {data,error}=await supabase.from(table).update(normalized).eq('id',id).select('*').maybeSingle()
+    if(error)throw error
+    saved=data||saved
+    await load()
+   }else{
+    setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
+   }
+   addActivity('update',table,id,{patch:Object.keys(row||{}),live:!isDemoMode()})
+   notify('Live aktualisiert')
+   return saved
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote update failed`,e)
-   notify('Live-Aktualisierung fehlgeschlagen – lokale Änderung wurde nicht gespeichert.')
+   const message=e?.message||String(e||'Unbekannter Fehler')
+   notify(`Live-Aktualisierung fehlgeschlagen: ${message}`)
    throw e
   }
-  return {id,...normalized}
  }
  async function remove(table:string,id:string){
   try{
-   if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
-   else setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
-   addActivity('delete',table,id,{live:hasSupabase})
-   notify('Gelöscht')
+   if(!isDemoMode()&&liveBackendWritableTables.has(table)){
+    await liveRecordRemove(table,id)
+    await load()
+   }else if(hasSupabase&&supabase){
+    const {error}=await supabase.from(table).delete().eq('id',id)
+    if(error)throw error
+    await load()
+   }else{
+    setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
+   }
+   addActivity('delete',table,id,{live:!isDemoMode()})
+   notify('Live gelöscht')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote delete failed`,e)
-   notify('Live-Löschung fehlgeschlagen – lokale Löschung wurde nicht gespeichert.')
+   const message=e?.message||String(e||'Unbekannter Fehler')
+   notify(`Live-Löschung fehlgeschlagen: ${message}`)
    throw e
   }
   return true
@@ -777,7 +854,7 @@ function ProductionStatusCard(){
 
 
 function applyDemoSandboxStorePatch(store:any){
- if(!isDemoFeatureEnabled()) return store
+ if(!isDemoFeatureEnabled()&&!isDemoMode()) return store
  if(!store || store.__demoSandboxPatched) return store
  store.__demoSandboxPatched=true
  const persist=()=>{try{localStorage.setItem(DEMO_SANDBOX_KEY,JSON.stringify(store.data))}catch{}}
@@ -801,17 +878,17 @@ function applyDemoSandboxStorePatch(store:any){
  store.create=async(table:string,row:any)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localCreate(table,row)
-   try{return oldCreate?await oldCreate(table,row):await localCreate(table,row)}catch(e){return localCreate(table,row)}
+   return oldCreate?await oldCreate(table,row):await localCreate(table,row)
  }
  store.update=async(table:string,rowId:string,patch:any)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localUpdate(table,rowId,patch)
-   try{return oldUpdate?await oldUpdate(table,rowId,patch):await localUpdate(table,rowId,patch)}catch(e){return localUpdate(table,rowId,patch)}
+   return oldUpdate?await oldUpdate(table,rowId,patch):await localUpdate(table,rowId,patch)
  }
  store.remove=async(table:string,rowId:string)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localRemove(table,rowId)
-   try{return oldRemove?await oldRemove(table,rowId):await localRemove(table,rowId)}catch(e){return localRemove(table,rowId)}
+   return oldRemove?await oldRemove(table,rowId):await localRemove(table,rowId)
  }
  store.delete=store.remove
  return store
@@ -1117,8 +1194,8 @@ export default function App(){
  const nav=role==='admin'?admin:customer
  const mobileBottomKeys=(role==='admin'?['dashboard','lead_scraper','acquisition_campaigns','crm','security_center']:['dashboard','seo','reviews','reports','finance']).filter((k:string)=>visibleNavKeys.includes(k))
  const blockCustomerScopedRender=liveOnlyMode(role,view)&&customerScopedView(view)&&!liveCidAvailable
- const demoAdminSwitchEnabled=role==='admin'&&isDemoFeatureEnabled()&&!isDemoMode()
- const liveAdminSwitchEnabled=role==='admin'&&isDemoFeatureEnabled()&&isDemoMode()
+ const demoAdminSwitchEnabled=role==='admin'&&!isDemoMode()
+ const liveAdminSwitchEnabled=role==='admin'&&isDemoMode()
  function openDemoAdminEnvironment(){
   if(typeof window==='undefined')return
   markDemoMode()
@@ -1138,7 +1215,7 @@ export default function App(){
   url.searchParams.set('app','1')
   window.location.assign(url.toString())
  }
- return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><FieldHelpEnhancer/>
+ return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{(isDemoFeatureEnabled()||isDemoMode())&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><FieldHelpEnhancer/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  {blockCustomerScopedRender?<NoLiveCustomerPanel store={store} setView={setView} setCid={setCid}/>:<>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
