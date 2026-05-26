@@ -23,6 +23,7 @@ const authRoutes = require('./routes/authRoutes')
 const systemRoutes = require('./routes/systemRoutes')
 const googleRoutes = require('./routes/googleRoutes')
 const businessToolsRoutes = require('./routes/businessToolsRoutes')
+const qrRoutes = require('./routes/qrRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -72,7 +73,8 @@ const PUBLIC_PATHS = [
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/join-or-scan$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/rewards\/[^/]+\/redeem$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/password-reset-request$/,
-  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/review$/
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/review$/,
+  /^\/api\/qr(\?.*)?$/
 ]
 
 const requireAuth = authMiddleware()
@@ -124,6 +126,11 @@ app.use('/api/v33-functional', v33FunctionalRoutes(supabaseAdmin))
 
 // Auth router needs no guard (in PUBLIC_PATHS) and handles its own checks.
 app.use('/api/auth', authRoutes(supabaseAdmin))
+
+// Public QR endpoint replaces the third-party api.qrserver.com / quickchart.io
+// calls that previously leaked customer slugs and IP addresses to non-EU
+// providers. Whitelisted above; rate-limited inside the route.
+app.use('/api/qr', qrRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

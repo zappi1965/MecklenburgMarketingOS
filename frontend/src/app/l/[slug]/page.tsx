@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { v33FunctionalClient } from '@/lib/v33FunctionalClient'
+import { requireConsent } from '@/lib/consent'
+import { safeLocalStorageSet, safeLocalStorageText } from '@/lib/safeStorage'
 
 function titleFromSlug(slug: string) {
   return slug
@@ -12,12 +14,17 @@ function titleFromSlug(slug: string) {
     .join(' ')
 }
 
+// Geräte-ID wird nur gesetzt, wenn der Nutzer der Kategorie "Funktional"
+// zugestimmt hat (§ 25 TDDDG). Ohne Consent läuft Loyalty mit serverseitiger
+// Bindung an E-Mail/Passwort weiter, nur die geräte-spezifischen Limits
+// fallen weg.
 function deviceId() {
   if (typeof window === 'undefined') return undefined
-  const existing = window.localStorage.getItem('mmos_device_id')
+  if (!requireConsent('functional')) return undefined
+  const existing = safeLocalStorageText('mmos_device_id', '', { category: 'functional' })
   if (existing) return existing
   const id = `dev_${Date.now()}_${Math.random().toString(16).slice(2)}`
-  window.localStorage.setItem('mmos_device_id', id)
+  safeLocalStorageSet('mmos_device_id', id, { category: 'functional' })
   return id
 }
 
@@ -140,9 +147,9 @@ export default function PublicLoyaltyPage() {
         if (!showLoyalty) setResult({ ...response, review_submitted: true, points_added: 0, points_balance: response?.member?.points_balance || 0 })
       }
 
-      if (status?.google_review_url && rating >= 4) {
-        setTimeout(() => window.open(status.google_review_url, '_blank'), 400)
-      }
+      // DSGVO/Drittland: Kein automatischer Redirect zu Google mehr.
+      // Bei rating >= 4 wird im Success-View ein expliziter Button angezeigt,
+      // der erst beim Klick auf google.com weiterleitet (echte Einwilligung).
     } catch (e: any) {
       const message = e?.message || 'Speichern fehlgeschlagen'
       setError(friendlyHint(message))
@@ -275,6 +282,21 @@ export default function PublicLoyaltyPage() {
                 </>
               )}
 
+              <p className="publicConsentNotice">
+                Mit dem Absenden willige ich in die Verarbeitung meiner Daten (E-Mail
+                {showReview ? ', Bewertung und Feedback' : ''}) zur Teilnahme am
+                Bonusprogramm ein (Art. 6 Abs. 1 lit. a + b DSGVO). Verantwortlich
+                ist der jeweilige Anbieter dieses Bonusprogramms. Details:{' '}
+                <a href="/datenschutz">Datenschutzhinweise</a>.
+                {showReview && (
+                  <>
+                    {' '}Mein Feedback wird gespeichert; bei einer guten Bewertung
+                    kann ich anschließend selbst entscheiden, ob ich es auch auf
+                    Google veröffentliche.
+                  </>
+                )}
+              </p>
+
               <button disabled={loading || status?.active === false} type="submit">
                 {loading ? 'Speichere...' : showLoyalty && showReview ? `${loyaltyCta} & bewerten` : showReview ? reviewCta : loyaltyCta}
               </button>
@@ -388,6 +410,27 @@ export default function PublicLoyaltyPage() {
                 <button type="button" onClick={() => setResult(null)}>Erneut anmelden / weitere Aktion</button>
                 <button type="button" onClick={copyReferral}>Freund empfehlen</button>
               </div>
+
+              {status?.google_review_url && rating >= 4 && (
+                <div className="publicGoogleReview">
+                  <p>
+                    Freut uns, dass es dir gefallen hat. Wenn du magst, kannst du deine
+                    Bewertung auch auf Google teilen — das hilft anderen, uns zu finden.
+                  </p>
+                  <a
+                    className="publicGoogleReviewBtn"
+                    href={status.google_review_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Auf Google bewerten →
+                  </a>
+                  <p className="publicGoogleReviewHint">
+                    Hinweis: Beim Klick wird google.com (USA) geöffnet. Dabei werden u.a.
+                    deine IP-Adresse und Browser-Daten an Google übertragen.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

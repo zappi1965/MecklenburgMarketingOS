@@ -47,17 +47,18 @@ async function deleteInvoiceAndPdf(store:any, invoice:any){
  for(const f of files) await store.remove('customer_files',f.id)
 }
 
-function v424ExternalQrUrls(value:string){
- const encoded=encodeURIComponent(value)
- return [
-  `https://api.qrserver.com/v1/create-qr-code/?size=520x520&margin=20&data=${encoded}`,
-  `https://quickchart.io/qr?size=520&margin=2&text=${encoded}`
- ]
+// DSGVO/Drittland: QR-Codes werden serverseitig vom MMOS-Backend gerendert.
+// Vorher liefen Requests an api.qrserver.com und quickchart.io, was IP und
+// Slug-Inhalte an Drittanbieter (teils USA) übermittelte.
+function qrServerUrl(value:string, opts?:{size?:number; fg?:string; bg?:string}){
+ const size = opts?.size || 512
+ const params = new URLSearchParams({ value, size: String(size) })
+ if (opts?.fg) params.set('fg', opts.fg)
+ if (opts?.bg) params.set('bg', opts.bg)
+ return `${API_BASE}/api/qr?${params.toString()}`
 }
 function V424QrImage({value}:{value:string}){
- const urls=v424ExternalQrUrls(value)
- const [idx,setIdx]=useState(0)
- return <img className="qrSmall" src={urls[idx]} alt="QR Code" onError={()=>setIdx(Math.min(idx+1,urls.length-1))}/>
+ return <img className="qrSmall" src={qrServerUrl(value)} alt="QR Code"/>
 }
 
 
@@ -1714,7 +1715,7 @@ function V42QrCodePanel({cid}:any){
  const slug=data?.qr_campaign?.slug||data?.loyalty_program?.slug||manualSlug
  const appBase=process.env.NEXT_PUBLIC_APP_URL || (typeof window!=='undefined'?window.location.origin:'')
  const url=slug?`${appBase.replace(/\/+$/,'')}/l/${slug}`:''
- return <Card title="QR Kampagne erstellen" action={<button className="btn secondary" onClick={create}>QR + Loyalty erstellen</button>}>{url?<div className="qrExport"><V424QrImage value={url}/><div><b>{url}</b><p className="sub">QR wird extern erzeugt. Ausweichdienst: qrserver.com → quickchart.io</p><div className="toolbarActions"><button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button><a className="btn secondary" href={v424ExternalQrUrls(url)[0]} target="_blank">QR extern öffnen</a></div></div></div>:<div className="sub">Noch kein QR erstellt. Klicke auf „QR + Loyalty erstellen“.</div>}<input className="input" value={manualSlug} onChange={e=>setManualSlug(e.target.value)} placeholder="Optional: vorhandenen Slug manuell eingeben, z. B. kunde-bonusclub"/>{msg&&<div className="sub">{msg}</div>}</Card>
+ return <Card title="QR Kampagne erstellen" action={<button className="btn secondary" onClick={create}>QR + Loyalty erstellen</button>}>{url?<div className="qrExport"><V424QrImage value={url}/><div><b>{url}</b><p className="sub">QR wird serverseitig im MMOS-Backend erzeugt — keine Übermittlung an Drittanbieter.</p><div className="toolbarActions"><button className="btn secondary" onClick={()=>navigator.clipboard?.writeText(url)}>Link kopieren</button><button className="btn secondary" onClick={()=>window.open(url,'_blank')}>Slug öffnen</button><a className="btn secondary" href={qrServerUrl(url)} target="_blank" rel="noopener">QR als Bild öffnen</a></div></div></div>:<div className="sub">Noch kein QR erstellt. Klicke auf „QR + Loyalty erstellen“.</div>}<input className="input" value={manualSlug} onChange={e=>setManualSlug(e.target.value)} placeholder="Optional: vorhandenen Slug manuell eingeben, z. B. kunde-bonusclub"/>{msg&&<div className="sub">{msg}</div>}</Card>
 }
 
 function V42ReviewsHub({store,cid}:any){
@@ -1981,14 +1982,14 @@ function V37LoyaltyBuilder({cid}:any){
 }
 
 function V37QrDesignPreview({settings,url}:any){
- const qr=`https://api.qrserver.com/v1/create-qr-code/?size=640x640&color=${String(settings.qr_foreground||'#111827').replace('#','')}&bgcolor=${String(settings.qr_background||'#ffffff').replace('#','')}&data=${encodeURIComponent(url||'/l/slug')}`
+ const qr=qrServerUrl(url||'/l/slug',{size:512,fg:String(settings.qr_foreground||'#111827'),bg:String(settings.qr_background||'#ffffff')})
  return <div className={`v37QrPreview ${settings.qr_style||'luxury'}`}><img src={qr} alt="QR Preview"/><div className="v37QrBadge">{settings.qr_logo_text||'QR'}</div><span>{settings.qr_style} · scanbar</span></div>
 }
 
 function V36QrExport({slug,path}:{slug?:string,path?:string}){
  const publicBase=process.env.NEXT_PUBLIC_APP_URL || (typeof window!=='undefined'?window.location.origin:'')
  const url=slug?`${publicBase}/l/${slug}`:(path?`${publicBase}${path}`:'')
- const qr=`https://api.qrserver.com/v1/create-qr-code/?size=640x640&data=${encodeURIComponent(url)}`
+ const qr=qrServerUrl(url,{size:512})
  async function copy(){try{await navigator.clipboard.writeText(url)}catch{}}
  function download(){const a=document.createElement('a');a.href=qr;a.download=`qr-${slug||'loyalty'}.png`;a.target='_blank';a.click()}
  if(!url)return null
