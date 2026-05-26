@@ -114,6 +114,60 @@ test('POST /api/data-quality/validate/email requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('GET /api/accounting/export requires auth', async () => {
+  const r = await status('/api/accounting/export?format=datev_extf&period_start=2026-01-01&period_end=2026-01-31')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/dunning/levels/<id> requires auth', async () => {
+  const r = await status('/api/dunning/levels/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/dunning/run-now requires auth', async () => {
+  const r = await status('/api/dunning/run-now', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/pos/webhook/mock is public (no auth required)', async () => {
+  // Webhook ist whitelisted; ohne Body -> 400/415, NIE 401.
+  const r = await status('/api/pos/webhook/mock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: 'smoke-test', amount: 0, status: 'failed' })
+  })
+  assert.notEqual(r.status, 401)
+})
+
+test('GET /api/pos/transactions/<id> requires auth', async () => {
+  const r = await status('/api/pos/transactions/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/no-show/scan requires auth', async () => {
+  const r = await status('/api/no-show/scan', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/chatbot/start is public (no auth required)', async () => {
+  const r = await status('/api/chatbot/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug: 'probe' })
+  })
+  // ohne Supabase wird 503 oder 400, niemals 401.
+  assert.notEqual(r.status, 401)
+})
+
+test('POST /api/chatbot/message is public (no auth required)', async () => {
+  const r = await status('/api/chatbot/message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversation_id: 'x', message: 'hi' })
+  })
+  assert.notEqual(r.status, 401)
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.

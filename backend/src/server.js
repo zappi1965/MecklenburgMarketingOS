@@ -31,6 +31,11 @@ const referralRoutes = require('./routes/referralRoutes')
 const { walletPassRoutes, newsletterRoutes, voucherRoutes } = require('./routes/quickWinRoutes')
 const securityRoutes = require('./routes/securityRoutes')
 const dataQualityRoutes = require('./routes/dataQualityRoutes')
+const accountingRoutes = require('./routes/accountingRoutes')
+const dunningRoutes = require('./routes/dunningRoutes')
+const posRoutes = require('./routes/posRoutes')
+const noShowRoutes = require('./routes/noShowRoutes')
+const chatbotRoutes = require('./routes/chatbotRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -81,7 +86,9 @@ const PUBLIC_PATHS = [
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/rewards\/[^/]+\/redeem$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/password-reset-request$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/review$/,
-  /^\/api\/qr(\?.*)?$/
+  /^\/api\/qr(\?.*)?$/,
+  /^\/api\/pos\/webhook\/[^/]+$/,
+  /^\/api\/chatbot\/(start|message)$/
 ]
 
 const requireAuth = authMiddleware()
@@ -160,6 +167,14 @@ app.use('/api/vouchers', voucherRoutes(supabaseAdmin))
 // Alle global authentifiziert; pro Route eigene Admin-/Customer-Pruefung.
 app.use('/api/security', securityRoutes())
 app.use('/api/data-quality', dataQualityRoutes())
+
+// Phase 11d — Buchhaltung, Mahnstufen, POS, No-Show, Chatbot.
+app.use('/api/accounting', accountingRoutes())
+app.use('/api/dunning', dunningRoutes())
+app.use('/api/pos', posRoutes())
+app.use('/api/no-show', noShowRoutes())
+// Chatbot ist oeffentlich (PUBLIC_PATHS-Whitelist deckt /start und /message).
+app.use('/api/chatbot', chatbotRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')
