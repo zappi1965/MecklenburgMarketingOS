@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState } from 'react'
 import { supabaseAuth, getCurrentUserProfilePayload } from '@/lib/authClient'
 import { customerPortalClient } from '@/lib/customerPortalClient'

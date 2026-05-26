@@ -1,11 +1,57 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { BROWSER_BACKEND_BASE } from './backendUrl'
 import { apiRequest } from './apiRequest'
 
-export const supabaseAuth = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-)
+// Supabase darf beim Modul-Load NICHT crashen, wenn ENV fehlt
+// (Vercel-Pre-Render ohne NEXT_PUBLIC_SUPABASE_URL).
+// Stattdessen liefern wir einen Stub-Client, der bei jedem Call
+// einen klaren "supabase_not_configured"-Fehler bzw. leere Daten
+// zurueckgibt. Sobald die ENV gesetzt ist, laeuft alles normal.
+
+function createStubClient(): SupabaseClient {
+  const noConfig = { message: 'Supabase nicht konfiguriert (NEXT_PUBLIC_SUPABASE_URL fehlt)' }
+  const emptyAuth = {
+    getSession: async () => ({ data: { session: null }, error: null }),
+    getUser: async () => ({ data: { user: null }, error: null }),
+    signOut: async () => ({ error: null }),
+    signInWithPassword: async () => ({ data: { user: null, session: null }, error: noConfig }),
+    signUp: async () => ({ data: { user: null, session: null }, error: noConfig }),
+    resetPasswordForEmail: async () => ({ data: null, error: noConfig }),
+    updateUser: async () => ({ data: { user: null }, error: noConfig }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
+  }
+  const fromChain: any = {
+    select: () => fromChain,
+    insert: () => fromChain,
+    update: () => fromChain,
+    upsert: () => fromChain,
+    delete: () => fromChain,
+    eq: () => fromChain,
+    ilike: () => fromChain,
+    order: () => fromChain,
+    limit: () => fromChain,
+    maybeSingle: async () => ({ data: null, error: null }),
+    single: async () => ({ data: null, error: null }),
+    then: (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve)
+  }
+  return {
+    auth: emptyAuth,
+    from: () => fromChain
+  } as unknown as SupabaseClient
+}
+
+function buildAuthClient(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !key) return createStubClient()
+  try {
+    return createClient(url, key)
+  } catch {
+    return createStubClient()
+  }
+}
+
+export const supabaseAuth = buildAuthClient()
 
 export async function getCurrentSession() {
   const { data } = await supabaseAuth.auth.getSession()
