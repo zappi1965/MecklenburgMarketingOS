@@ -1,0 +1,31 @@
+{
+  "name": "mecklenburg-marketing-os",
+  "private": true,
+  "packageManager": "yarn@1.22.19",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "yarn --cwd frontend dev",
+    "build": "yarn --cwd frontend build",
+    "start": "yarn --cwd frontend start",
+    "typecheck": "yarn --cwd frontend typecheck",
+    "backend:start": "yarn --cwd backend start"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-is": "^18.3.1",
+    "recharts": "latest",
+    "typescript": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
