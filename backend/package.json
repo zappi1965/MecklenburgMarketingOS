@@ -8,7 +8,9 @@
     "smoke": "node tests/smoke.test.js",
     "healthcheck": "node src/healthcheck.js",
     "security-audit": "node src/workers/securityAuditWorker.js",
-    "enterprise-worker": "node src/workers/enterpriseWorker.js"
+    "enterprise-worker": "node src/workers/enterpriseWorker.js",
+    "gdpr-worker": "node src/workers/gdprWorker.js --cron",
+    "gdpr-worker:once": "node src/workers/gdprWorker.js"
   },
   "dependencies": {
     "express": "latest",
