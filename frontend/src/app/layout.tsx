@@ -5,7 +5,7 @@ import LegalFooter from '@/components/legal/LegalFooter'
 import FieldHelpEnhancer from '@/components/FieldHelpEnhancer'
 import ConsentBanner from '@/components/ConsentBanner'
 
-export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 1, viewportFit: 'cover', themeColor: '#070b12' }
+export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 5, viewportFit: 'cover', themeColor: '#070b12' }
 
 export const metadata = {
   title: 'Mecklenburg Marketing OS',
