@@ -3262,3 +3262,56 @@ input,select,textarea{font-size:16px} /* iOS Auto-Zoom verhindern */
 .adminBackupGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
 .adminCode.adminInline{display:inline-block;margin:0;padding:8px 12px}
 @media(max-width:640px){.adminBackupGrid{grid-template-columns:1fr}}
+
+/* Phase 11i — globales Admin-Shell mit persistenter Sidebar + Mobile-Drawer */
+.adminShell{min-height:100vh;display:grid;grid-template-columns:240px 1fr;background:var(--bg)}
+.adminSidebar{position:sticky;top:0;height:100vh;background:var(--surface-2);border-right:1px solid var(--border-soft);display:flex;flex-direction:column}
+.adminSidebarHeader{padding:16px 14px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between}
+.adminBrand{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-weight:900;font-size:16px}
+.adminBrand.inline{font-size:15px}
+.adminBrandMark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--brand-gold),#b8932e);display:grid;place-items:center;color:var(--brand-gold-on);font-weight:950}
+.adminBrandText{letter-spacing:.05em}
+.adminDrawerClose{display:none;appearance:none;border:0;background:transparent;color:var(--text);cursor:pointer;padding:4px}
+.adminNav{flex:1;overflow-y:auto;padding:12px 8px;display:flex;flex-direction:column;gap:14px}
+.adminNavSection{display:flex;flex-direction:column;gap:2px}
+.adminNavSectionLabel{padding:6px 10px 4px;font-size:11px;font-weight:800;color:var(--text-muted-strong);text-transform:uppercase;letter-spacing:.08em}
+.adminNavItem{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--text-soft);text-decoration:none;font-size:13.5px;font-weight:600;line-height:1.2}
+.adminNavItem:hover{background:var(--surface-3);color:var(--text)}
+.adminNavItem.active{background:linear-gradient(90deg,rgba(212,175,55,.18),rgba(212,175,55,.04));color:var(--brand-gold);border-left:2px solid var(--brand-gold);padding-left:8px}
+.adminSidebarFooter{padding:12px 14px;border-top:1px solid var(--border-soft);display:flex;flex-direction:column;gap:10px}
+.adminProfile{display:flex;align-items:center;gap:10px}
+.adminProfileMark{width:30px;height:30px;border-radius:8px;background:var(--surface-3);color:var(--brand-gold);font-weight:900;display:grid;place-items:center;font-size:13px}
+.adminProfileText{display:flex;flex-direction:column;font-size:12.5px;min-width:0}
+.adminProfileText strong{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+.adminProfileText span{color:var(--text-muted-strong);font-size:11px}
+.adminLogout{appearance:none;border:1px solid var(--border-soft);background:transparent;color:var(--text-soft);border-radius:8px;padding:8px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;font-size:13px;cursor:pointer}
+.adminLogout:hover{color:var(--semantic-danger-fg);border-color:var(--semantic-danger-border)}
+
+.adminTopbar{display:none;position:sticky;top:0;z-index:30;background:var(--surface-2);border-bottom:1px solid var(--border-soft);padding:10px 14px;align-items:center;gap:12px}
+.adminMenuBtn{appearance:none;border:0;background:transparent;color:var(--text);cursor:pointer;padding:4px}
+.adminDrawerOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:35}
+
+.adminContent{min-width:0}
+
+@media(max-width:960px){
+  .adminShell{grid-template-columns:1fr}
+  .adminSidebar{position:fixed;top:0;left:-260px;width:260px;z-index:40;transition:left .25s ease}
+  .adminShell.drawerOpen .adminSidebar{left:0}
+  .adminShell.drawerOpen .adminDrawerOverlay{display:block}
+  .adminTopbar{display:flex}
+  .adminDrawerClose{display:inline-flex}
+}
+
+/* Phase 11i — Onboarding-Wizard */
+.obPage{max-width:780px}
+.obSteps{display:flex;align-items:center;flex-wrap:wrap;gap:6px;background:var(--surface-1);border:1px solid var(--border-soft);border-radius:14px;padding:12px 14px;margin-bottom:18px}
+.obStep{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;color:var(--text-muted-strong);font-size:13px;font-weight:700}
+.obStep.done{color:var(--semantic-success-fg)}
+.obStep.active{background:var(--brand-gold-muted);color:var(--brand-gold)}
+.obStepIcon{width:22px;height:22px;border-radius:50%;background:var(--surface-3);display:grid;place-items:center;color:inherit}
+.obStep.done .obStepIcon{background:var(--semantic-success-bg)}
+.obStep.active .obStepIcon{background:var(--brand-gold);color:var(--brand-gold-on)}
+.obSep{color:var(--text-muted-strong);opacity:.5}
+.obDoneList{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;color:var(--text-soft)}
+.obDoneList li{padding:10px 12px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:9px}
+.obDoneList b{color:var(--brand-gold);margin-right:4px}

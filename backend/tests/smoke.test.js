@@ -243,6 +243,16 @@ test('POST /api/pricing/calculate/<id> requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('GET /api/onboarding/status/<id> requires auth', async () => {
+  const r = await status('/api/onboarding/status/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/onboarding/brand/<id> requires auth', async () => {
+  const r = await status('/api/onboarding/brand/00000000-0000-0000-0000-000000000000', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.

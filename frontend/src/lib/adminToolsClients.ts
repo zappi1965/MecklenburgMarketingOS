@@ -290,3 +290,25 @@ export const securityClient = {
       body: JSON.stringify({ code })
     })
 }
+
+// === Onboarding ===
+export type OnboardingStatus = {
+  customer?: { id: string; name?: string; metadata?: any } | null
+  steps: Record<string, any>
+  all_steps: string[]
+}
+
+export const onboardingClient = {
+  status: (customer_id: string) =>
+    call<{ ok: boolean } & OnboardingStatus>(`/api/onboarding/status/${encodeURIComponent(customer_id)}`),
+  brand: (customer_id: string, payload: { brand_name?: string; brand_primary?: string; brand_secondary?: string; brand_voice?: string }) =>
+    call<{ ok: boolean }>(`/api/onboarding/brand/${encodeURIComponent(customer_id)}`, { method: 'POST', body: JSON.stringify(payload) }),
+  qr: (customer_id: string, payload: { title?: string; headline?: string; slug?: string }) =>
+    call<{ ok: boolean; campaign: { id: string; slug: string } }>(`/api/onboarding/qr/${encodeURIComponent(customer_id)}`, { method: 'POST', body: JSON.stringify(payload) }),
+  loyalty: (customer_id: string, payload: { program_name?: string; reward_title?: string; reward_points?: number }) =>
+    call<{ ok: boolean; loyalty_program_id?: string }>(`/api/onboarding/loyalty/${encodeURIComponent(customer_id)}`, { method: 'POST', body: JSON.stringify(payload) }),
+  samples: (customer_id: string) =>
+    call<{ ok: boolean }>(`/api/onboarding/samples/${encodeURIComponent(customer_id)}`, { method: 'POST' }),
+  complete: (customer_id: string) =>
+    call<{ ok: boolean }>(`/api/onboarding/complete/${encodeURIComponent(customer_id)}`, { method: 'POST' })
+}

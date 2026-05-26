@@ -44,6 +44,7 @@ const complianceCockpitRoutes = require('./routes/complianceCockpitRoutes')
 const apiKeyRoutes = require('./routes/apiKeyRoutes')
 const publicApiV1Routes = require('./routes/publicApiV1Routes')
 const pricingRoutes = require('./routes/pricingRoutes')
+const onboardingRoutes = require('./routes/onboardingRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -200,6 +201,7 @@ app.use('/api/api-keys', apiKeyRoutes())
 // Public-API ueber X-API-Key (eigene Auth, kein Bearer-Token).
 app.use('/api/public/v1', publicApiV1Routes())
 app.use('/api/pricing', pricingRoutes())
+app.use('/api/onboarding', onboardingRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')
