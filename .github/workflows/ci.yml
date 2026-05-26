@@ -101,3 +101,48 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://invalid.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: fake-anon-key
           NEXT_PUBLIC_API_BASE: http://localhost:4000
+
+  e2e:
+    name: Playwright Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: frontend
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install
+        run: yarn install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/yarn.lock') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: yarn e2e --project=chromium
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://invalid.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: fake-anon-key
+          NEXT_PUBLIC_API_BASE: http://localhost:4000
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7

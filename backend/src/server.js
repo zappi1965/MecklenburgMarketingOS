@@ -28,6 +28,7 @@ const gdprRoutes = require('./routes/gdprRoutes')
 const automationRoutes = require('./routes/automationRoutes')
 const eInvoiceRoutes = require('./routes/eInvoiceRoutes')
 const referralRoutes = require('./routes/referralRoutes')
+const { walletPassRoutes, newsletterRoutes, voucherRoutes } = require('./routes/quickWinRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -146,6 +147,12 @@ app.use('/api/gdpr', gdprRoutes(supabaseAdmin))
 // Referral-Programm: GET/POST sind authentifiziert (global), per-customer-
 // Access wird im Router selbst via requireCustomerAccess geprueft.
 app.use('/api/referrals', referralRoutes(supabaseAdmin))
+
+// Phase-11 Quick-Win-Bundle (Wallet, Newsletter, Vouchers). Alle global
+// authentifiziert ueber den /api-Guard; per-customer-Pruefung im Router.
+app.use('/api/wallet', walletPassRoutes(supabaseAdmin))
+app.use('/api/newsletter', newsletterRoutes(supabaseAdmin))
+app.use('/api/vouchers', voucherRoutes(supabaseAdmin))
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

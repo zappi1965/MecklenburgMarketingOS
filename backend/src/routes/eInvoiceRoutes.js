@@ -1,5 +1,6 @@
 const express = require('express')
 const { buildXRechnungXml } = require('../services/eInvoiceService')
+const { buildZugferdPdf } = require('../services/zugferdService')
 
 // Endpunkte fuer XRechnung-Export.
 // Eingehaengt in server.js mit requireAdmin.
@@ -65,6 +66,62 @@ function eInvoiceRoutes(supabase) {
       res.setHeader('Content-Type', 'application/xml; charset=utf-8')
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
       res.send(xml)
+    } catch (e) { next(e) }
+  })
+
+  // ZUGFeRD-Light: PDF mit eingebettetem XRechnung-XML als Attachment.
+  // Praktisch fuer E-Mail-Versand an Buchhaltungs-Endpunkte / DATEV /
+  // PEPPOL.
+  router.get('/invoices/:id/zugferd', async (req, res, next) => {
+    try {
+      if (!supabase) return res.status(503).json({ ok: false, error: 'Supabase nicht konfiguriert' })
+      const id = String(req.params.id || '')
+      if (!id) return res.status(400).json({ ok: false, error: 'invoice id fehlt' })
+
+      const { data: invoice, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+      if (error) throw error
+      if (!invoice) return res.status(404).json({ ok: false, error: 'Rechnung nicht gefunden' })
+
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id, name, email, phone, vat_id, contact_person, address, postal_code, city, country_code')
+        .eq('id', invoice.customer_id)
+        .maybeSingle()
+
+      const seller = {
+        name: process.env.E_INVOICE_SELLER_NAME || 'Mecklenburg Marketing',
+        address: process.env.E_INVOICE_SELLER_ADDRESS || '',
+        postal_code: process.env.E_INVOICE_SELLER_POSTAL_CODE || '',
+        city: process.env.E_INVOICE_SELLER_CITY || '',
+        country_code: process.env.E_INVOICE_SELLER_COUNTRY || 'DE',
+        vat_id: process.env.E_INVOICE_SELLER_VAT_ID || '',
+        tax_id: process.env.E_INVOICE_SELLER_TAX_ID || '',
+        email: process.env.E_INVOICE_SELLER_EMAIL || '',
+        iban: process.env.E_INVOICE_SELLER_IBAN || '',
+        bic: process.env.E_INVOICE_SELLER_BIC || ''
+      }
+      const buyer = customer
+        ? {
+            name: customer.name,
+            email: customer.email,
+            address: customer.address,
+            postal_code: customer.postal_code,
+            city: customer.city,
+            country_code: customer.country_code || 'DE',
+            vat_id: customer.vat_id || ''
+          }
+        : { name: 'Kunde' }
+
+      const pdfBuffer = await buildZugferdPdf({ ...invoice, seller, buyer })
+      const filename = `${(invoice.invoice_number || invoice.id).toString().replace(/[^a-z0-9_\-]/gi, '_')}_zugferd.pdf`
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      res.setHeader('Content-Length', pdfBuffer.length)
+      res.end(pdfBuffer)
     } catch (e) { next(e) }
   })
 

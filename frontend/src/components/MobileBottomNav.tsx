@@ -1,6 +1,11 @@
 'use client'
 
 import { useMemo } from 'react'
+import {
+  LayoutDashboard, Users, QrCode, Star, Megaphone, Bot, CalendarClock,
+  TrendingUp, Target, CreditCard, Wallet, LineChart, Settings,
+  type LucideIcon
+} from 'lucide-react'
 import { getMobileBottomNav, type ToolSection } from '@/lib/toolRegistry'
 
 type Area = 'admin' | 'customer'
@@ -59,7 +64,7 @@ export default function MobileBottomNav({
             className={active ? 'mmosBottomNavItem active' : 'mmosBottomNavItem'}
           >
             <span className="mmosBottomNavIcon" aria-hidden="true">
-              {iconGlyph(s.icon)}
+              <IconFor name={s.icon} />
             </span>
             <span className="mmosBottomNavLabel">{s.label}</span>
           </a>
@@ -69,25 +74,25 @@ export default function MobileBottomNav({
   )
 }
 
-// Sehr leichte Icon-Map. Solange noch keine Icon-Library eingebunden ist
-// (Phase 9 ersetzt das durch lucide-react), werden die Icon-Keys aus der
-// Registry auf passende Glyphen gemappt. Default: kleiner Punkt.
-function iconGlyph(key?: string): string {
-  if (!key) return '•'
-  const map: Record<string, string> = {
-    'layout-dashboard': '⌂',
-    users: '👥',
-    'qr-code': '⌗',
-    star: '★',
-    megaphone: '◗',
-    bot: '◉',
-    'calendar-clock': '⌚',
-    'trending-up': '↗',
-    target: '◎',
-    'credit-card': '▭',
-    wallet: '◫',
-    'line-chart': '⟋',
-    settings: '⚙'
-  }
-  return map[key] || '•'
+// Lucide-Icon-Map: jeder Icon-Key aus der toolRegistry-SectionMeta wird
+// auf eine konkrete Lucide-Komponente abgebildet.
+const ICONS: Record<string, LucideIcon> = {
+  'layout-dashboard': LayoutDashboard,
+  users: Users,
+  'qr-code': QrCode,
+  star: Star,
+  megaphone: Megaphone,
+  bot: Bot,
+  'calendar-clock': CalendarClock,
+  'trending-up': TrendingUp,
+  target: Target,
+  'credit-card': CreditCard,
+  wallet: Wallet,
+  'line-chart': LineChart,
+  settings: Settings
+}
+
+function IconFor({ name }: { name?: string }) {
+  const Icon = (name && ICONS[name]) || LayoutDashboard
+  return <Icon size={20} strokeWidth={2} />
 }
