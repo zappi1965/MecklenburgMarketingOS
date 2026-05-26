@@ -10,7 +10,9 @@
     "security-audit": "node src/workers/securityAuditWorker.js",
     "enterprise-worker": "node src/workers/enterpriseWorker.js",
     "gdpr-worker": "node src/workers/gdprWorker.js --cron",
-    "gdpr-worker:once": "node src/workers/gdprWorker.js"
+    "gdpr-worker:once": "node src/workers/gdprWorker.js",
+    "automation-worker": "node src/workers/automationWorker.js --cron",
+    "automation-worker:once": "node src/workers/automationWorker.js"
   },
   "dependencies": {
     "express": "latest",

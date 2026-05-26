@@ -25,6 +25,7 @@ const googleRoutes = require('./routes/googleRoutes')
 const businessToolsRoutes = require('./routes/businessToolsRoutes')
 const qrRoutes = require('./routes/qrRoutes')
 const gdprRoutes = require('./routes/gdprRoutes')
+const automationRoutes = require('./routes/automationRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -106,7 +107,8 @@ const adminScopedRoutes = [
   ['/api/enterprise', enterpriseRoutes],
   ['/api/admin-profiles', adminProfilesRoutes],
   ['/api/google', googleRoutes],
-  ['/api/business-tools', businessToolsRoutes]
+  ['/api/business-tools', businessToolsRoutes],
+  ['/api/automations', automationRoutes]
 ]
 
 for (const [routePath, routeFactory] of adminScopedRoutes) {
