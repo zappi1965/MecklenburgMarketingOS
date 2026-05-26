@@ -36,6 +36,10 @@ const dunningRoutes = require('./routes/dunningRoutes')
 const posRoutes = require('./routes/posRoutes')
 const noShowRoutes = require('./routes/noShowRoutes')
 const chatbotRoutes = require('./routes/chatbotRoutes')
+const analyticsRoutes = require('./routes/analyticsRoutes')
+const gmbRoutes = require('./routes/gmbRoutes')
+const aiCrmMailRoutes = require('./routes/aiCrmMailRoutes')
+const { reviewWidgetRoutes, reviewWidgetEmbedRouter } = require('./routes/reviewWidgetRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -88,7 +92,8 @@ const PUBLIC_PATHS = [
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/review$/,
   /^\/api\/qr(\?.*)?$/,
   /^\/api\/pos\/webhook\/[^/]+$/,
-  /^\/api\/chatbot\/(start|message)$/
+  /^\/api\/chatbot\/(start|message)$/,
+  /^\/api\/review-widget\/embed\/[^/]+$/
 ]
 
 const requireAuth = authMiddleware()
@@ -175,6 +180,14 @@ app.use('/api/pos', posRoutes())
 app.use('/api/no-show', noShowRoutes())
 // Chatbot ist oeffentlich (PUBLIC_PATHS-Whitelist deckt /start und /message).
 app.use('/api/chatbot', chatbotRoutes())
+
+// Phase 11e — BI + GMB + AI-CRM-Mail + Bewertungs-Widget.
+app.use('/api/analytics', analyticsRoutes())
+app.use('/api/gmb', gmbRoutes())
+app.use('/api/ai-crm-mail', aiCrmMailRoutes())
+app.use('/api/review-widget', reviewWidgetRoutes())
+// iframe-Endpoint ist oeffentlich (PUBLIC_PATHS-Whitelist).
+app.use('/api/review-widget/embed', reviewWidgetEmbedRouter())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

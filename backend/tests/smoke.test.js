@@ -168,6 +168,42 @@ test('POST /api/chatbot/message is public (no auth required)', async () => {
   assert.notEqual(r.status, 401)
 })
 
+test('POST /api/analytics/peer-benchmark/<id> requires auth', async () => {
+  const r = await status('/api/analytics/peer-benchmark/00000000-0000-0000-0000-000000000000', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/analytics/cohorts/<id> requires auth', async () => {
+  const r = await status('/api/analytics/cohorts/00000000-0000-0000-0000-000000000000', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/analytics/clv/<id> requires auth', async () => {
+  const r = await status('/api/analytics/clv/00000000-0000-0000-0000-000000000000', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/gmb/posts/<id> requires auth', async () => {
+  const r = await status('/api/gmb/posts/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/ai-crm-mail/draft/<id> requires auth', async () => {
+  const r = await status('/api/ai-crm-mail/draft/00000000-0000-0000-0000-000000000000', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/review-widget/customer/<id> requires auth', async () => {
+  const r = await status('/api/review-widget/customer/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/review-widget/embed/<slug> is public (no auth required)', async () => {
+  const r = await status('/api/review-widget/embed/probe')
+  // Ohne Supabase: 503 oder 404 — niemals 401.
+  assert.notEqual(r.status, 401)
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.
