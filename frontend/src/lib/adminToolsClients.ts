@@ -168,3 +168,125 @@ export const aiMailClient = {
       { method: 'POST', body: JSON.stringify(payload) }
     )
 }
+
+// === Dunning ===
+export type DunningLevel = {
+  id?: string
+  level: number
+  days_overdue: number
+  fee_eur: number
+  action: string
+  template?: string | null
+  enabled?: boolean
+}
+
+export const dunningClient = {
+  list: (customer_id: string) =>
+    call<{ ok: boolean; levels: DunningLevel[] }>(`/api/dunning/levels/${encodeURIComponent(customer_id)}`),
+  ensureDefaults: (customer_id: string) =>
+    call<{ ok: boolean; levels: DunningLevel[] }>(`/api/dunning/levels/${encodeURIComponent(customer_id)}/defaults`, { method: 'POST' }),
+  upsert: (customer_id: string, level: DunningLevel) =>
+    call<{ ok: boolean; level: DunningLevel }>(`/api/dunning/levels/${encodeURIComponent(customer_id)}`, {
+      method: 'POST',
+      body: JSON.stringify(level)
+    }),
+  remove: (customer_id: string, level: number) =>
+    call<{ ok: boolean }>(`/api/dunning/levels/${encodeURIComponent(customer_id)}/${level}`, { method: 'DELETE' }),
+  runNow: () => call<{ ok: boolean; result: any }>('/api/dunning/run-now', { method: 'POST' })
+}
+
+// === Review Widget ===
+export type ReviewWidget = {
+  id?: string
+  slug: string
+  show_count: number
+  min_rating: number
+  theme: { primary?: string; background?: string; text?: string }
+  active?: boolean
+}
+
+export const widgetClient = {
+  list: (customer_id: string) =>
+    call<{ ok: boolean; widgets: ReviewWidget[] }>(`/api/review-widget/customer/${encodeURIComponent(customer_id)}`),
+  create: (customer_id: string, w: ReviewWidget) =>
+    call<{ ok: boolean; widget: ReviewWidget }>(`/api/review-widget/customer/${encodeURIComponent(customer_id)}`, {
+      method: 'POST',
+      body: JSON.stringify(w)
+    }),
+  update: (customer_id: string, id: string, patch: Partial<ReviewWidget>) =>
+    call<{ ok: boolean; widget: ReviewWidget }>(`/api/review-widget/customer/${encodeURIComponent(customer_id)}/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    })
+}
+
+// === Newsletter ===
+export type Subscriber = {
+  id: string
+  email: string
+  status: string
+  created_at?: string | null
+  confirmed_at?: string | null
+}
+
+export type NewsletterCampaign = {
+  id?: string
+  subject?: string
+  body?: string
+  status?: string
+  created_at?: string | null
+  sent_at?: string | null
+}
+
+export const newsletterClient = {
+  listSubscribers: (customer_id: string, status?: string) => {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+    return call<{ ok: boolean; subscribers: Subscriber[] }>(`/api/newsletter/subscribers/${encodeURIComponent(customer_id)}${qs}`)
+  },
+  createCampaign: (customer_id: string, subject: string, body: string, audience = 'active') =>
+    call<{ ok: boolean; campaign: NewsletterCampaign }>('/api/newsletter/campaigns', {
+      method: 'POST',
+      body: JSON.stringify({ customer_id, subject, body, audience })
+    }),
+  send: (campaign_id: string) =>
+    call<{ ok: boolean; result: any }>(`/api/newsletter/campaigns/${encodeURIComponent(campaign_id)}/send`, { method: 'POST' })
+}
+
+// === No-Show Risk ===
+export type RiskScore = {
+  appointment_id: string
+  risk_score: number
+  risk_level: 'low' | 'medium' | 'high'
+  reasons: Array<{ key: string; value?: number; weight?: number }>
+  reminder_strategy: string
+}
+
+export const noShowClient = {
+  highRisk: (customer_id: string) =>
+    call<{ ok: boolean; scores: RiskScore[] }>(`/api/no-show/high-risk/${encodeURIComponent(customer_id)}`),
+  scan: () => call<{ ok: boolean; result: any }>('/api/no-show/scan', { method: 'POST' }),
+  calculate: (appointment_id: string) =>
+    call<{ ok: boolean; score: RiskScore }>(`/api/no-show/calculate/${encodeURIComponent(appointment_id)}`, { method: 'POST' })
+}
+
+// === Security / MFA ===
+export type MfaEnrollResponse = { otpauth: string; secret: string }
+
+export const securityClient = {
+  enroll: () => call<{ ok: boolean } & MfaEnrollResponse>('/api/security/mfa/enroll', { method: 'POST' }),
+  activate: (code: string) =>
+    call<{ ok: boolean; backupCodes: string[] }>('/api/security/mfa/activate', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    }),
+  verify: (code: string) =>
+    call<{ ok: boolean; reason?: string; via?: string }>('/api/security/mfa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    }),
+  disable: (code: string) =>
+    call<{ ok: boolean }>('/api/security/mfa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    })
+}
