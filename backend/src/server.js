@@ -24,6 +24,7 @@ const systemRoutes = require('./routes/systemRoutes')
 const googleRoutes = require('./routes/googleRoutes')
 const businessToolsRoutes = require('./routes/businessToolsRoutes')
 const qrRoutes = require('./routes/qrRoutes')
+const gdprRoutes = require('./routes/gdprRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -131,6 +132,11 @@ app.use('/api/auth', authRoutes(supabaseAdmin))
 // calls that previously leaked customer slugs and IP addresses to non-EU
 // providers. Whitelisted above; rate-limited inside the route.
 app.use('/api/qr', qrRoutes())
+
+// Art. 15 / 17 DSGVO self-service endpoints (export, delete-request,
+// delete-cancel, status). Each route inside enforces auth on its own via
+// authMiddleware() so the global guard above is redundant but harmless.
+app.use('/api/gdpr', gdprRoutes(supabaseAdmin))
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')
