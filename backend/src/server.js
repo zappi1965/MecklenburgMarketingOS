@@ -40,6 +40,10 @@ const analyticsRoutes = require('./routes/analyticsRoutes')
 const gmbRoutes = require('./routes/gmbRoutes')
 const aiCrmMailRoutes = require('./routes/aiCrmMailRoutes')
 const { reviewWidgetRoutes, reviewWidgetEmbedRouter } = require('./routes/reviewWidgetRoutes')
+const complianceCockpitRoutes = require('./routes/complianceCockpitRoutes')
+const apiKeyRoutes = require('./routes/apiKeyRoutes')
+const publicApiV1Routes = require('./routes/publicApiV1Routes')
+const pricingRoutes = require('./routes/pricingRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -93,7 +97,8 @@ const PUBLIC_PATHS = [
   /^\/api\/qr(\?.*)?$/,
   /^\/api\/pos\/webhook\/[^/]+$/,
   /^\/api\/chatbot\/(start|message)$/,
-  /^\/api\/review-widget\/embed\/[^/]+$/
+  /^\/api\/review-widget\/embed\/[^/]+$/,
+  /^\/api\/public\/v1\//
 ]
 
 const requireAuth = authMiddleware()
@@ -188,6 +193,13 @@ app.use('/api/ai-crm-mail', aiCrmMailRoutes())
 app.use('/api/review-widget', reviewWidgetRoutes())
 // iframe-Endpoint ist oeffentlich (PUBLIC_PATHS-Whitelist).
 app.use('/api/review-widget/embed', reviewWidgetEmbedRouter())
+
+// Phase 11f — DSGVO-Cockpit + Public-API + Smart-Pricing.
+app.use('/api/compliance', complianceCockpitRoutes())
+app.use('/api/api-keys', apiKeyRoutes())
+// Public-API ueber X-API-Key (eigene Auth, kein Bearer-Token).
+app.use('/api/public/v1', publicApiV1Routes())
+app.use('/api/pricing', pricingRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

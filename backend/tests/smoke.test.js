@@ -204,6 +204,45 @@ test('GET /api/review-widget/embed/<slug> is public (no auth required)', async (
   assert.notEqual(r.status, 401)
 })
 
+test('GET /api/compliance/snapshot requires auth', async () => {
+  const r = await status('/api/compliance/snapshot')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/api-keys/scopes requires auth', async () => {
+  const r = await status('/api/api-keys/scopes')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/api-keys/customer/<id> requires auth', async () => {
+  const r = await status('/api/api-keys/customer/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/public/v1/me without key -> 401 API_KEY_MISSING', async () => {
+  const r = await status('/api/public/v1/me')
+  assert.equal(r.status, 401)
+  assert.equal(r.body?.code, 'API_KEY_MISSING')
+})
+
+test('GET /api/public/v1/me with invalid key -> 401 API_KEY_INVALID', async () => {
+  const r = await status('/api/public/v1/me', {
+    headers: { 'X-API-Key': 'mmos_test_garbage_key' }
+  })
+  assert.equal(r.status, 401)
+  assert.equal(r.body?.code, 'API_KEY_INVALID')
+})
+
+test('GET /api/pricing/rules/<id> requires auth', async () => {
+  const r = await status('/api/pricing/rules/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/pricing/calculate/<id> requires auth', async () => {
+  const r = await status('/api/pricing/calculate/00000000-0000-0000-0000-000000000000', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.
