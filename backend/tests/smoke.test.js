@@ -49,6 +49,21 @@ test('GET /api/automations/rules requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('GET /api/e-invoice/invoices/<id>/xml requires auth', async () => {
+  const r = await status('/api/e-invoice/invoices/00000000-0000-0000-0000-000000000000/xml')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/referrals/customer/<id> requires auth', async () => {
+  const r = await status('/api/referrals/customer/00000000-0000-0000-0000-000000000000')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/referrals/redeem requires auth', async () => {
+  const r = await status('/api/referrals/redeem', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.

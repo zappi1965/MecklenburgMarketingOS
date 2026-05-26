@@ -5,7 +5,7 @@
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "worker": "node src/workers/apiReadyWorker.js",
-    "test": "node --test tests/redact.test.js tests/automationEngine.test.js",
+    "test": "node --test tests/redact.test.js tests/automationEngine.test.js tests/eInvoice.test.js",
     "smoke": "node --test tests/smoke.test.js",
     "smoke:full": "bash tests/run-smoke.sh",
     "healthcheck": "node src/healthcheck.js",

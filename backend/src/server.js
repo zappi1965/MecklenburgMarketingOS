@@ -26,6 +26,8 @@ const businessToolsRoutes = require('./routes/businessToolsRoutes')
 const qrRoutes = require('./routes/qrRoutes')
 const gdprRoutes = require('./routes/gdprRoutes')
 const automationRoutes = require('./routes/automationRoutes')
+const eInvoiceRoutes = require('./routes/eInvoiceRoutes')
+const referralRoutes = require('./routes/referralRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -108,7 +110,8 @@ const adminScopedRoutes = [
   ['/api/admin-profiles', adminProfilesRoutes],
   ['/api/google', googleRoutes],
   ['/api/business-tools', businessToolsRoutes],
-  ['/api/automations', automationRoutes]
+  ['/api/automations', automationRoutes],
+  ['/api/e-invoice', eInvoiceRoutes]
 ]
 
 for (const [routePath, routeFactory] of adminScopedRoutes) {
@@ -139,6 +142,10 @@ app.use('/api/qr', qrRoutes())
 // delete-cancel, status). Each route inside enforces auth on its own via
 // authMiddleware() so the global guard above is redundant but harmless.
 app.use('/api/gdpr', gdprRoutes(supabaseAdmin))
+
+// Referral-Programm: GET/POST sind authentifiziert (global), per-customer-
+// Access wird im Router selbst via requireCustomerAccess geprueft.
+app.use('/api/referrals', referralRoutes(supabaseAdmin))
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')
