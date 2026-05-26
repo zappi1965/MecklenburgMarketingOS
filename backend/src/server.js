@@ -1,6 +1,10 @@
 const express = require('express')
 const cors = require('cors')
-const { createClient } = require('@supabase/supabase-js')
+
+const { getSupabaseAdmin } = require('./lib/supabaseAdmin')
+const authMiddleware = require('./middleware/auth')
+const requireCustomerAccess = require('./middleware/requireCustomerAccess')
+const { initSentry, attachErrorHandler, getSentry } = require('./services/sentryService')
 
 const monitoringRoutes = require('./routes/monitoringRoutes')
 const opsRoutes = require('./routes/opsRoutes')
@@ -23,6 +27,9 @@ const { securityHeaders, generalRateLimit } = require('./middleware/securityHard
 
 const app = express()
 
+// Sentry first so it can capture errors raised by everything else.
+initSentry(app)
+
 // Railway/Vercel run the backend behind a reverse proxy.
 // express-rate-limit requires Express to trust exactly the proxy hop count,
 // otherwise X-Forwarded-For triggers ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
@@ -30,8 +37,6 @@ const trustProxyHopsRaw = process.env.TRUST_PROXY_HOPS || process.env.RAILWAY_TR
 const trustProxyHops = Math.max(0, Number(trustProxyHopsRaw) || 1)
 app.set('trust proxy', trustProxyHops)
 
-
-// V42.16 STABILITY HARDENING
 // One CORS block only. Credentials stay disabled because the current app does
 // not use cookie auth between Vercel and Railway.
 app.use(cors({
@@ -49,51 +54,82 @@ app.use(securityHeaders)
 app.use(generalRateLimit)
 app.use(express.json({ limit: '50mb' }))
 
-const supabaseConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+const supabaseAdmin = getSupabaseAdmin()
+const supabaseConfigured = Boolean(supabaseAdmin)
 const demoModeEnabled = process.env.ENABLE_DEMO_MODE === 'true'
-const supabaseAdmin = supabaseConfigured
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : null
 
 app.get('/api/health', (_, res) => {
   res.json({ ok: true, service: 'MMOS Backend', timestamp: new Date().toISOString() })
 })
 
+// Public endpoints that must remain accessible without a Supabase session.
+// Health checks, auth bootstrap, and the public QR/loyalty slug surface.
+const PUBLIC_PATHS = [
+  /^\/api\/health$/,
+  /^\/api\/system\/health$/,
+  /^\/api\/auth\//,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/status$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/join-or-scan$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/rewards\/[^/]+\/redeem$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/password-reset-request$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/review$/
+]
+
+const requireAuth = authMiddleware()
+const requireAdmin = authMiddleware({ roles: ['admin'] })
+
+app.use('/api', (req, res, next) => {
+  // req.originalUrl is the full path before any router stripping; strip the
+  // query string so the whitelist regexes only need to match the path.
+  const fullPath = (req.originalUrl || req.url || '').split('?')[0]
+  if (PUBLIC_PATHS.some((re) => re.test(fullPath))) return next()
+  return requireAuth(req, res, next)
+})
+
 // System route is critical because Vercel proxy-health and deployment checks use it.
 app.use('/api/system', systemRoutes(supabaseAdmin))
 
-const criticalRoutes = [
+// Routes that touch admin-only or cross-tenant data. Adds a second guard
+// requiring role=admin in user_profiles (admin or super_admin with status=active).
+const adminScopedRoutes = [
   ['/api/monitoring', monitoringRoutes],
   ['/api/ops', opsRoutes],
   ['/api/package-billing', packageBillingRoutes],
   ['/api/v20-growth', v20GrowthRoutes],
-  ['/api/customer-intelligence', customerIntelligenceRoutes],
   ['/api/ai-automation-core', aiAutomationCoreRoutes],
   ['/api/advanced-loyalty', advancedLoyaltyRoutes],
   ['/api/revenue-dynamic-billing', revenueDynamicBillingRoutes],
   ['/api/review-intelligence', reviewIntelligenceRoutes],
-  ['/api/v33-functional', v33FunctionalRoutes],
   ['/api/enterprise', enterpriseRoutes],
-  ['/api/customer-portal', customerPortalRoutes],
-  ['/api/auth', authRoutes],
   ['/api/admin-profiles', adminProfilesRoutes],
   ['/api/google', googleRoutes],
   ['/api/business-tools', businessToolsRoutes]
 ]
 
-for (const [routePath, routeFactory] of criticalRoutes) {
-  app.use(routePath, routeFactory(supabaseAdmin))
-  console.log(`[V42.16] Loaded critical route ${routePath}`)
+for (const [routePath, routeFactory] of adminScopedRoutes) {
+  app.use(routePath, requireAdmin, routeFactory(supabaseAdmin))
 }
+
+// Customer-intelligence reads PII per customer. Mount with per-customer access
+// check that admins automatically pass through.
+app.use('/api/customer-intelligence', requireCustomerAccess(), customerIntelligenceRoutes(supabaseAdmin))
+
+// Customer portal also operates on the authenticated user's own customer.
+app.use('/api/customer-portal', customerPortalRoutes(supabaseAdmin))
+
+// v33-functional has a mix: public /public/* paths (whitelisted above) plus
+// admin/customer endpoints. Auth is already enforced by the global middleware
+// for everything that isn't whitelisted, so we mount the router as-is.
+app.use('/api/v33-functional', v33FunctionalRoutes(supabaseAdmin))
+
+// Auth router needs no guard (in PUBLIC_PATHS) and handles its own checks.
+app.use('/api/auth', authRoutes(supabaseAdmin))
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')
   const demoToolRoutes = require('./routes/demoToolRoutes')
-  app.use('/api/demo-environment', demoEnvironmentRoutes(supabaseAdmin))
-  app.use('/api/demo-tools', demoToolRoutes(supabaseAdmin))
-  console.log('[V42.24] Demo/Test routes enabled by ENABLE_DEMO_MODE=true')
-} else {
-  console.log('[V42.24] Demo/Test routes disabled for live system')
+  app.use('/api/demo-environment', requireAdmin, demoEnvironmentRoutes(supabaseAdmin))
+  app.use('/api/demo-tools', requireAdmin, demoToolRoutes(supabaseAdmin))
 }
 
 const optionalRoutes = [
@@ -108,29 +144,45 @@ for (const [modulePath, routePath] of optionalRoutes) {
   try {
     const routeFactory = require(modulePath)
     if (typeof routeFactory === 'function') {
-      app.use(routePath, routeFactory(supabaseAdmin))
-      console.log(`[V42.16] Loaded optional route ${routePath}`)
+      app.use(routePath, requireAuth, routeFactory(supabaseAdmin))
     }
-  } catch (error) {
-    console.log(`[V42.16] Optional route skipped ${routePath}: ${error.message}`)
+  } catch (_) {
+    // Optional route not present in this build; skip silently.
   }
 }
 
-// One final error handler only. Keeps runtime errors JSON-safe and readable in Vercel proxy responses.
+// Sentry error handler must run before the JSON error responder.
+attachErrorHandler(app)
+
+// Final error responder. Never leaks stack traces or request bodies to the client.
 app.use((err, req, res, next) => {
-  console.error('[V42.16 API ERROR]', err)
   if (res.headersSent) return next(err)
-  res.status(err.status || 500).json({
+  const status = err.status || err.statusCode || 500
+  const safeMessage = typeof err.message === 'string' ? err.message.slice(0, 500) : 'Interner Serverfehler'
+  res.status(status).json({
     ok: false,
     code: err.code || 'INTERNAL_ERROR',
-    error: err.message || 'Interner Serverfehler',
-    details: process.env.NODE_ENV === 'production' ? undefined : String(err.stack || ''),
-    hint: err.hint || 'Prüfe Railway Logs, Supabase Migrationen, API Provider Mapping und Backend-ENV.',
-    provider: err.provider,
-    google_status: err.google_status,
-    missing_env: err.missing_env
+    error: safeMessage,
+    hint: err.hint || undefined
   })
+  // Lightweight fallback log when Sentry is not configured. Only path + method,
+  // never the body or stack.
+  const { enabled } = getSentry()
+  if (!enabled) {
+    console.error('[API_ERROR]', req.method, req.path, status, safeMessage)
+  }
 })
 
 const port = process.env.PORT || 4000
-app.listen(port, () => console.log(`MMOS backend running on ${port}`))
+const server = app.listen(port, () => {
+  console.log(`MMOS backend running on ${port}`)
+})
+
+// Graceful shutdown so in-flight requests can complete under Railway SIGTERM.
+function shutdown(signal) {
+  console.log(`[${signal}] graceful shutdown initiated`)
+  server.close(() => process.exit(0))
+  setTimeout(() => process.exit(1), 10000).unref()
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

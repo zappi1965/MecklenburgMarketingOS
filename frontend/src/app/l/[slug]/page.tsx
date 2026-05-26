@@ -77,7 +77,7 @@ export default function PublicLoyaltyPage() {
   const loyaltyCta = campaignTexts.cta_label || 'Punkte sammeln'
   const reviewCta = campaignTexts.review_cta_label || 'Bewertung absenden'
   const successTitle = campaignTexts.success_title || 'Deine Punkte wurden gespeichert.'
-  const successMessage = campaignTexts.success_message || 'Danke fÃ¼r deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.'
+  const successMessage = campaignTexts.success_message || 'Danke für deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.'
   const fineprint = campaignTexts.fineprint || 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Deine Angaben werden dem jeweiligen Anbieter zugeordnet.'
 
   const publicUrl = useMemo(() => {
@@ -100,9 +100,9 @@ export default function PublicLoyaltyPage() {
     const m = String(message || '')
     if (m.includes('Tageslimit')) return 'Du hast heute bereits Punkte gesammelt.'
     if (m.includes('Wochenlimit')) return 'Diese Woche ist dein Limit erreicht.'
-    if (m.includes('nicht gefunden') || m.includes('Kein Loyalty')) return 'Dieser QR-Link ist noch nicht aktiv. Bitte prÃ¼fe die Kampagne im Adminbereich.'
+    if (m.includes('nicht gefunden') || m.includes('Kein Loyalty')) return 'Dieser QR-Link ist noch nicht aktiv. Bitte prüfe die Kampagne im Adminbereich.'
     if (m.includes('Failed to fetch') || m.includes('Network') || m.includes('fetch failed')) return 'Der Server ist gerade nicht erreichbar. Bitte versuche es gleich erneut.'
-    return 'Wir konnten deine Aktion gerade nicht speichern. Bitte versuche es spÃ¤ter erneut.'
+    return 'Wir konnten deine Aktion gerade nicht speichern. Bitte versuche es später erneut.'
   }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -136,7 +136,7 @@ export default function PublicLoyaltyPage() {
           rating,
           feedback_text: reviewText
         })
-        setHint(review?.ok ? 'Danke fÃ¼r deine Bewertung.' : 'Bewertung gespeichert.')
+        setHint(review?.ok ? 'Danke für deine Bewertung.' : 'Bewertung gespeichert.')
         if (!showLoyalty) setResult({ ...response, review_submitted: true, points_added: 0, points_balance: response?.member?.points_balance || 0 })
       }
 
@@ -146,7 +146,7 @@ export default function PublicLoyaltyPage() {
     } catch (e: any) {
       const message = e?.message || 'Speichern fehlgeschlagen'
       setError(friendlyHint(message))
-      setHint('Aus SicherheitsgrÃ¼nden werden Punkte und Bewertungen erst nach erfolgreicher E-Mail/Passwort-Verifizierung gespeichert.')
+      setHint('Aus Sicherheitsgründen werden Punkte und Bewertungen erst nach erfolgreicher E-Mail/Passwort-Verifizierung gespeichert.')
     } finally {
       setLoading(false)
     }
@@ -158,7 +158,7 @@ export default function PublicLoyaltyPage() {
     setError('')
     setHint('')
     if (rewardStaffRequired(reward) && !staffCodes[rewardId]) {
-      setHint('Bitte lass den Mitarbeitercode oder die Mitarbeiter-PIN eintragen, um die PrÃ¤mie einzulÃ¶sen.')
+      setHint('Bitte lass den Mitarbeitercode oder die Mitarbeiter-PIN eintragen, um die Prämie einzulösen.')
       return
     }
     setRedeeming(rewardId)
@@ -176,10 +176,10 @@ export default function PublicLoyaltyPage() {
         last_redemption: response.redemption
       }))
       setStatus((current: any) => current ? ({ ...current, rewards: current.rewards }) : current)
-      setHint(`${reward.title || reward.name || 'PrÃ¤mie'} wurde eingelÃ¶st. ${response.points_spent || 0} Punkte wurden abgezogen.`)
+      setHint(`${reward.title || reward.name || 'Prämie'} wurde eingelöst. ${response.points_spent || 0} Punkte wurden abgezogen.`)
       setStaffCodes((current) => ({ ...current, [rewardId]: '' }))
     } catch (e: any) {
-      const message = e?.message || 'PrÃ¤mie konnte nicht eingelÃ¶st werden.'
+      const message = e?.message || 'Prämie konnte nicht eingelöst werden.'
       setError(message)
     } finally {
       setRedeeming(null)
@@ -253,14 +253,14 @@ export default function PublicLoyaltyPage() {
 
               <label>
                 E-Mail
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail-Adresse fÃ¼r dein Bonuskonto" autoComplete="email" required />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail-Adresse für dein Bonuskonto" autoComplete="email" required />
               </label>
 
               <label>
                 Passwort
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mindestens 8 Zeichen" autoComplete="current-password" minLength={8} required />
               </label>
-              <div className="publicPasswordHint">Dein Passwort schÃ¼tzt dein Bonuskonto und verhindert, dass andere Personen Punkte oder Rewards in deinem Namen verwenden.</div><button className="publicLinkButton" type="button" onClick={requestPasswordReset}>Passwort vergessen?</button>
+              <div className="publicPasswordHint">Dein Passwort schützt dein Bonuskonto und verhindert, dass andere Personen Punkte oder Rewards in deinem Namen verwenden.</div><button className="publicLinkButton" type="button" onClick={requestPasswordReset}>Passwort vergessen?</button>
 
               {showReview && (
                 <>
@@ -286,13 +286,13 @@ export default function PublicLoyaltyPage() {
               <div className="publicRewardOverviewHead">
                 <div>
                   <b>Rewards ansehen</b>
-                  <span>{result ? `Dein aktueller Stand: ${points} Punkte` : 'Melde dich an, damit wir deinen Punktestand und verfÃ¼gbare Rewards prÃ¼fen kÃ¶nnen.'}</span>
+                  <span>{result ? `Dein aktueller Stand: ${points} Punkte` : 'Melde dich an, damit wir deinen Punktestand und verfügbare Rewards prüfen können.'}</span>
                 </div>
-                <button type="button" className="publicLinkButton" onClick={() => setRewardOverviewOpen(false)}>SchlieÃen</button>
+                <button type="button" className="publicLinkButton" onClick={() => setRewardOverviewOpen(false)}>Schließen</button>
               </div>
 
               {visibleRewards.length === 0 ? (
-                <p className="publicRewardEmpty">Aktuell sind fÃ¼r diese Slug-Seite noch keine Rewards hinterlegt.</p>
+                <p className="publicRewardEmpty">Aktuell sind für diese Slug-Seite noch keine Rewards hinterlegt.</p>
               ) : (
                 visibleRewards.map((r: any) => {
                   const rewardId = String(r.id || r.local_id || '')
@@ -304,12 +304,12 @@ export default function PublicLoyaltyPage() {
                     <div key={rewardId || r.title} className={isUnlocked ? 'publicRewardItem publicRewardRedeemItem' : 'publicRewardItem'}>
                       <div className="publicRewardText">
                         <span>{r.title || r.name || 'Reward'}</span>
-                        <em>{required} Punkte Â· {isUnlocked ? 'verfÃ¼gbar' : result ? `noch ${missing} Punkte` : 'nach Anmeldung prÃ¼fbar'}</em>
+                        <em>{required} Punkte Â· {isUnlocked ? 'verfügbar' : result ? `noch ${missing} Punkte` : 'nach Anmeldung prüfbar'}</em>
                       </div>
 
                       {isUnlocked && (
                         onceRedeemed ? (
-                          <strong className="publicRedeemedBadge">Bereits eingelÃ¶st</strong>
+                          <strong className="publicRedeemedBadge">Bereits eingelöst</strong>
                         ) : (
                           <div className="publicRedeemBox">
                             {rewardStaffRequired(r) && (
@@ -321,7 +321,7 @@ export default function PublicLoyaltyPage() {
                               />
                             )}
                             <button type="button" onClick={() => redeemReward(r)} disabled={redeeming === rewardId}>
-                              {redeeming === rewardId ? 'LÃ¶se ein...' : 'PrÃ¤mie einlÃ¶sen'}
+                              {redeeming === rewardId ? 'Löse ein...' : 'Prämie einlösen'}
                             </button>
                           </div>
                         )
@@ -341,7 +341,7 @@ export default function PublicLoyaltyPage() {
 
               {unlockedRewards.length > 0 && (
                 <div className="publicRewards">
-                  <b>Jetzt verfÃ¼gbar</b>
+                  <b>Jetzt verfügbar</b>
                   {unlockedRewards.map((r: any) => {
                     const rewardId = String(r.id || r.local_id || '')
                     const onceRedeemed = alreadyRedeemed(r) && !rewardAllowsMultiple(r)
@@ -349,10 +349,10 @@ export default function PublicLoyaltyPage() {
                       <div key={rewardId || r.title} className="publicRewardItem publicRewardRedeemItem">
                         <div className="publicRewardText">
                           <span>{r.title || r.name || 'Reward'}</span>
-                          <em>{rewardPoints(r)} Punkte Â· {rewardAllowsMultiple(r) ? 'mehrfach einlÃ¶sbar' : 'einmalig einlÃ¶sbar'}</em>
+                          <em>{rewardPoints(r)} Punkte Â· {rewardAllowsMultiple(r) ? 'mehrfach einlösbar' : 'einmalig einlösbar'}</em>
                         </div>
                         {onceRedeemed ? (
-                          <strong className="publicRedeemedBadge">Bereits eingelÃ¶st</strong>
+                          <strong className="publicRedeemedBadge">Bereits eingelöst</strong>
                         ) : (
                           <div className="publicRedeemBox">
                             {rewardStaffRequired(r) && (
@@ -364,7 +364,7 @@ export default function PublicLoyaltyPage() {
                               />
                             )}
                             <button type="button" onClick={() => redeemReward(r)} disabled={redeeming === rewardId}>
-                              {redeeming === rewardId ? 'LÃ¶se ein...' : 'PrÃ¤mie einlÃ¶sen'}
+                              {redeeming === rewardId ? 'Löse ein...' : 'Prämie einlösen'}
                             </button>
                           </div>
                         )}
@@ -376,7 +376,7 @@ export default function PublicLoyaltyPage() {
 
               {nextReward && (
                 <div className="publicRewards locked">
-                  <b>NÃ¤chster Reward</b>
+                  <b>Nächster Reward</b>
                   <div className="publicRewardItem">
                     <span>{nextReward.title || nextReward.name || 'Reward'}</span>
                     <em>Noch {Math.max(0, rewardPoints(nextReward) - points)} Punkte</em>
