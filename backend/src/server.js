@@ -29,6 +29,8 @@ const automationRoutes = require('./routes/automationRoutes')
 const eInvoiceRoutes = require('./routes/eInvoiceRoutes')
 const referralRoutes = require('./routes/referralRoutes')
 const { walletPassRoutes, newsletterRoutes, voucherRoutes } = require('./routes/quickWinRoutes')
+const securityRoutes = require('./routes/securityRoutes')
+const dataQualityRoutes = require('./routes/dataQualityRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -153,6 +155,11 @@ app.use('/api/referrals', referralRoutes(supabaseAdmin))
 app.use('/api/wallet', walletPassRoutes(supabaseAdmin))
 app.use('/api/newsletter', newsletterRoutes(supabaseAdmin))
 app.use('/api/vouchers', voucherRoutes(supabaseAdmin))
+
+// Phase 11c — Sicherheit (2FA) + Datenqualitaet + AI-Review-Response.
+// Alle global authentifiziert; pro Route eigene Admin-/Customer-Pruefung.
+app.use('/api/security', securityRoutes())
+app.use('/api/data-quality', dataQualityRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

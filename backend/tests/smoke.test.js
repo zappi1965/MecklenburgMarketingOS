@@ -84,6 +84,36 @@ test('GET /api/e-invoice/invoices/<id>/zugferd requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('POST /api/security/mfa/enroll requires auth', async () => {
+  const r = await status('/api/security/mfa/enroll', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/security/mfa/verify requires auth', async () => {
+  const r = await status('/api/security/mfa/verify', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/data-quality/duplicates requires auth', async () => {
+  const r = await status('/api/data-quality/duplicates')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/data-quality/duplicates/merge requires auth', async () => {
+  const r = await status('/api/data-quality/duplicates/merge', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/data-quality/ai/review-response requires auth', async () => {
+  const r = await status('/api/data-quality/ai/review-response', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/data-quality/validate/email requires auth', async () => {
+  const r = await status('/api/data-quality/validate/email', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.
