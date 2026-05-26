@@ -1,77 +1,52 @@
+import { customerVisibleToolsForPackage, mmosToolRegistry, type MmosTool, type PackageTier } from './toolRegistry'
 
-import { toolsForPackage } from './toolRegistry'
+// Die Tool-Labels und -Sichtbarkeit kommen jetzt komplett aus toolRegistry.
+// Diese Datei stellt nur noch die Paket-Matrix fuer die Landing-Page / das
+// Pricing zur Verfuegung.
 
-const labels: Record<string, string> = {
-  dashboard:'Dashboard',
-  invoices:'Rechnungen',
-  tickets:'Tickets',
-  media_center:'Media Center',
-  integrations:'Integrationen',
-  seo_dashboard:'SEO Dashboard',
-  seo_heatmap:'SEO Heatmap',
-  workflow_center:'Workflow Center',
-  kpi_analytics:'KPI Analytics',
-  booking:'Booking',
-  qr_campaigns:'QR Kampagnen',
-  loyalty:'Loyalty Programm',
-  loyalty_rewards:'Rewards',
-  loyalty_reward_rules:'Reward Regeln',
-  staff_confirmation_codes:'Mitarbeitercode',
-  loyalty_segments:'Loyalty Segmente',
-  smart_loyalty_v2:'Smart Loyalty V2',
-  reviews:'Reviews',
-  review_intelligence:'Review Intelligence',
-  review_response_templates:'Antwortvorlagen',
-  marketing_automation:'Marketing Automation',
-  smart_automation:'Smart Automation',
-  ai_business_assistant:'AI Business Assistant',
-  customer_health:'Customer Health',
-  customer_intelligence:'Customer Intelligence',
-  dynamic_billing:'Dynamic Billing',
-  revenue_forecasting:'Revenue Forecasting',
-  revenue_share:'Revenue Share',
-  package_matrix:'Paket-Matrix',
-  package_recommendations:'Package Recommendations',
-  public_landing_page:'Öffentliche QR Landingpage',
-  pipeline:'Pipeline',
-  crm:'CRM',
-  timeline:'Timeline'
+function toolKeys(packageKey: string): string[] {
+  return customerVisibleToolsForPackage(packageKey).map((t) => t.key)
 }
 
-function toolKeys(packageKey: string) {
-  return toolsForPackage(packageKey).map(tool => tool.key)
-}
-
-function featureLabels(packageKey: string) {
-  return toolKeys(packageKey).map(key => labels[key] || key.replaceAll('_', ' '))
+function featureLabels(packageKey: string): string[] {
+  return customerVisibleToolsForPackage(packageKey).map((t) => t.label)
 }
 
 export const packageMatrix = [
   {
-    key:'starter',
-    name:'Starter',
-    subtitle:'Basis für kleine Betriebe',
-    price:149,
-    cta:'Starter anfragen',
-    tools:toolKeys('starter'),
-    features:featureLabels('starter')
+    key: 'starter',
+    name: 'Starter',
+    subtitle: 'Basis fuer kleine Betriebe',
+    price: 149,
+    cta: 'Starter anfragen',
+    tools: toolKeys('starter'),
+    features: featureLabels('starter')
   },
   {
-    key:'growth',
-    name:'Growth',
-    subtitle:'QR, Reviews und Kundenbindung',
-    price:299,
-    cta:'Growth anfragen',
-    tools:toolKeys('growth'),
-    features:featureLabels('growth')
+    key: 'growth',
+    name: 'Growth',
+    subtitle: 'QR, Reviews und Kundenbindung',
+    price: 299,
+    cta: 'Growth anfragen',
+    tools: toolKeys('growth'),
+    features: featureLabels('growth')
   },
   {
-    key:'premium',
-    name:'Premium',
-    subtitle:'Vollständiges Marketing OS mit AI, Automation, Billing und Forecasting',
-    price:499,
-    cta:'Premium anfragen',
-    tools:toolKeys('premium'),
-    features:featureLabels('premium')
+    key: 'premium',
+    name: 'Premium',
+    subtitle: 'Vollstaendiges Marketing OS mit AI, Automation, Billing und Forecasting',
+    price: 499,
+    cta: 'Premium anfragen',
+    tools: toolKeys('premium'),
+    features: featureLabels('premium')
   }
 ]
+
+// Convenience: alle Tools einer Stufe (auch admin-only) fuer die Paket-Matrix
+// im Admin-Bereich, falls dort die volle Tool-Liste gezeigt werden soll.
+export function allToolsForPackage(packageKey: PackageTier | string): MmosTool[] {
+  return mmosToolRegistry.filter((t) => {
+    const order: Record<string, number> = { starter: 1, growth: 2, premium: 3 }
+    return (order[packageKey] || 1) >= (order[t.packageMin] || 1)
+  })
+}
