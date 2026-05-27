@@ -1,6 +1,7 @@
 const legalLinks = [
   { href: '/impressum', label: 'Impressum' },
   { href: '/datenschutz', label: 'Datenschutz' },
+  { href: '/privacy/me', label: 'Meine Datenrechte' },
   { href: '/cookies', label: 'Cookie-Einstellungen' },
   { href: '/agb', label: 'AGB' },
   { href: '/widerruf', label: 'Widerruf' }
