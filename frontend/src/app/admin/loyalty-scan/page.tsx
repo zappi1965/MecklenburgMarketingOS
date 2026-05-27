@@ -8,6 +8,7 @@ import { getCurrentUserProfile } from '@/lib/authClient'
 import { loyaltyScanClient, type LoyaltyMemberSnapshot } from '@/lib/adminToolsClients'
 
 type Mode = 'idle' | 'scanning' | 'review' | 'done' | 'error'
+type Engine = 'native' | 'qr-scanner' | 'none'
 
 declare global {
   // Native BarcodeDetector ist in Chromium-Browsern verfuegbar.
@@ -27,12 +28,13 @@ export default function LoyaltyScanPage() {
   const [info, setInfo] = useState('')
   const [lastResult, setLastResult] = useState<{ pointsAdded: number; newBalance: number; name: string } | null>(null)
   const [busy, setBusy] = useState(false)
-  const [detectorAvailable, setDetectorAvailable] = useState<boolean | null>(null)
+  const [engine, setEngine] = useState<Engine>('none')
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const detectorRef = useRef<any>(null)
   const rafRef = useRef<number | null>(null)
+  const qrScannerRef = useRef<any>(null)
 
   useEffect(() => {
     (async () => {
@@ -42,7 +44,9 @@ export default function LoyaltyScanPage() {
       setCustomerId(profile.customer_id || '')
     })()
     if (typeof window !== 'undefined') {
-      setDetectorAvailable(Boolean(window.BarcodeDetector))
+      // Engine-Detection: native BarcodeDetector bevorzugt (Chromium), sonst
+      // qr-scanner als JS-Fallback (~12 KB, funktioniert auf iOS Safari).
+      setEngine(window.BarcodeDetector ? 'native' : 'qr-scanner')
     }
     return () => stopCamera()
   }, [])
@@ -50,6 +54,10 @@ export default function LoyaltyScanPage() {
   function stopCamera() {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
     rafRef.current = null
+    if (qrScannerRef.current) {
+      try { qrScannerRef.current.stop(); qrScannerRef.current.destroy() } catch {}
+      qrScannerRef.current = null
+    }
     if (streamRef.current) {
       for (const t of streamRef.current.getTracks()) t.stop()
       streamRef.current = null
@@ -61,32 +69,58 @@ export default function LoyaltyScanPage() {
 
   async function startCamera() {
     setError(''); setInfo('')
-    if (!window.BarcodeDetector) {
-      setError('BarcodeDetector ist im Browser nicht verfuegbar. Bitte Chrome/Edge auf Android oder Desktop nutzen, oder unten den Code manuell eintragen.')
-      return
-    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
+      if (engine === 'native') {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        })
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+        detectorRef.current = new window.BarcodeDetector({ formats: ['qr_code'] })
+        setMode('scanning')
+        nativeLoop()
+        return
       }
-      detectorRef.current = new window.BarcodeDetector({ formats: ['qr_code'] })
-      setMode('scanning')
-      loop()
+      if (engine === 'qr-scanner') {
+        // Dynamic import damit qr-scanner nur geladen wird, wenn er
+        // gebraucht wird — kein zusaetzliches Gewicht im initialen Bundle.
+        const QrScannerModule = await import('qr-scanner')
+        const QrScanner = QrScannerModule.default
+        if (!videoRef.current) return
+        setMode('scanning')
+        qrScannerRef.current = new QrScanner(
+          videoRef.current,
+          (result: any) => {
+            const raw = typeof result === 'string' ? result : result?.data || ''
+            if (raw) {
+              stopCamera()
+              handleQrPayload(raw)
+            }
+          },
+          {
+            preferredCamera: 'environment',
+            highlightScanRegion: false,
+            highlightCodeOutline: false,
+            maxScansPerSecond: 5
+          }
+        )
+        await qrScannerRef.current.start()
+        return
+      }
+      setError('Keine Scan-Engine verfuegbar. Bitte unten manuell eingeben.')
     } catch (e: any) {
       setError(e?.message || 'Kamera-Zugriff fehlgeschlagen.')
     }
   }
 
-  function loop() {
+  function nativeLoop() {
     rafRef.current = requestAnimationFrame(async () => {
       try {
-        if (!videoRef.current || !detectorRef.current) { loop(); return }
+        if (!videoRef.current || !detectorRef.current) { nativeLoop(); return }
         if (videoRef.current.readyState >= 2) {
           const codes = await detectorRef.current.detect(videoRef.current)
           if (codes && codes.length > 0) {
@@ -98,9 +132,9 @@ export default function LoyaltyScanPage() {
             }
           }
         }
-        loop()
+        nativeLoop()
       } catch {
-        loop()
+        nativeLoop()
       }
     })
   }
@@ -174,12 +208,17 @@ export default function LoyaltyScanPage() {
           {(mode === 'idle' || mode === 'error') && (
             <section className="adminCard">
               <h2>1 · QR-Code scannen</h2>
-              {detectorAvailable === false && (
+              {engine === 'none' && (
                 <p className="adminMuted">
-                  Dein Browser unterstuetzt keine Kamera-Erkennung. Du kannst den Member-Code unten manuell eintippen oder einfuegen.
+                  Dein Browser unterstuetzt keine Kamera-Erkennung. Bitte unten manuell eingeben.
                 </p>
               )}
-              <button type="button" className="adminBtn scanBtnLarge" onClick={startCamera} disabled={busy || detectorAvailable === false}>
+              {engine === 'qr-scanner' && (
+                <p className="adminMuted">
+                  iOS Safari erkannt — wir nutzen den JS-QR-Scanner als Fallback (lokal-only, kein Drittland-Service).
+                </p>
+              )}
+              <button type="button" className="adminBtn scanBtnLarge" onClick={startCamera} disabled={busy || engine === 'none'}>
                 <Camera size={18} /> Kamera starten
               </button>
 

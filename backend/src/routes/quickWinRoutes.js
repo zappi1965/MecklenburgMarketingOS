@@ -3,7 +3,12 @@
 
 const express = require('express')
 const requireCustomerAccess = require('../middleware/requireCustomerAccess')
-const { buildGoogleWalletPass, buildApplePassJson } = require('../services/walletPassService')
+const {
+  buildGoogleWalletPass,
+  buildApplePassJson,
+  buildApplePkpass,
+  applePkpassConfigured
+} = require('../services/walletPassService')
 const { NewsletterService } = require('../services/newsletterService')
 const { VoucherService } = require('../services/voucherService')
 
@@ -39,9 +44,57 @@ function walletPassRoutes(supabase) {
       res.json({
         ok: true,
         google: { saveUrl: google.saveUrl, signed: google.signed, loyaltyObject: google.loyaltyObject },
-        apple: { passJson: applePass, signing: 'requires_signer' }
+        apple: {
+          passJson: applePass,
+          signing: applePkpassConfigured() ? 'ready' : 'requires_signer',
+          download_url: applePkpassConfigured() ? `/api/wallet/loyalty-member/${encodeURIComponent(memberId)}/apple.pkpass` : null
+        }
       })
     } catch (e) { next(e) }
+  })
+
+  // Apple .pkpass-Download. Liefert ein signiertes Bundle, das auf dem
+  // iPhone als "Zu Apple Wallet hinzufuegen"-Dialog erscheint.
+  router.get('/loyalty-member/:member_id/apple.pkpass', async (req, res, next) => {
+    try {
+      if (!supabase) return res.status(503).json({ ok: false, error: 'Supabase nicht konfiguriert' })
+      if (!applePkpassConfigured()) {
+        return res.status(503).json({
+          ok: false,
+          code: 'APPLE_CERTS_MISSING',
+          error: 'Apple Wallet Zertifikate fehlen — siehe docs/WALLET_PASS_SETUP.md'
+        })
+      }
+      const memberId = String(req.params.member_id)
+      const { data: member } = await supabase
+        .from('loyalty_customers')
+        .select('id, customer_id, email, display_name, points_balance, tier')
+        .eq('id', memberId)
+        .maybeSingle()
+      if (!member) return res.status(404).json({ ok: false, error: 'Loyalty-Mitglied nicht gefunden' })
+
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id, name, email, brand_primary, brand_secondary')
+        .eq('id', member.customer_id)
+        .maybeSingle()
+      const { data: program } = await supabase
+        .from('loyalty_programs')
+        .select('id, name')
+        .eq('customer_id', member.customer_id)
+        .maybeSingle()
+
+      const buffer = await buildApplePkpass({ member, customer, program })
+      res.setHeader('Content-Type', 'application/vnd.apple.pkpass')
+      res.setHeader('Content-Disposition', `attachment; filename="mmos-loyalty-${memberId.slice(0, 8)}.pkpass"`)
+      res.setHeader('Content-Length', buffer.length)
+      res.end(buffer)
+    } catch (e) {
+      if (e.code === 'APPLE_CERTS_MISSING') {
+        return res.status(503).json({ ok: false, code: e.code, error: e.message, hint: e.hint })
+      }
+      next(e)
+    }
   })
 
   return router

@@ -126,4 +126,93 @@ function buildApplePassJson({ member, customer, program }) {
   }
 }
 
-module.exports = { buildGoogleWalletPass, buildApplePassJson }
+// Apple .pkpass-Bundle bauen.
+//
+// Nur aktiv, wenn alle drei Zert-ENVs gesetzt sind:
+//   APPLE_WALLET_CERT_PEM, APPLE_WALLET_KEY_PEM, APPLE_WALLET_WWDR_PEM
+// Optional: APPLE_WALLET_KEY_PASSPHRASE.
+//
+// Liefert einen Buffer mit dem signierten .pkpass-ZIP — direkt streambar.
+// Im Mock-Modus (keine Certs) wirft die Funktion einen 'apple_certs_missing'
+// Error, damit der Route-Layer eine klare Fehlermeldung zurueckgeben kann.
+async function buildApplePkpass({ member, customer, program }) {
+  const certPem = process.env.APPLE_WALLET_CERT_PEM
+  const keyPem = process.env.APPLE_WALLET_KEY_PEM
+  const wwdrPem = process.env.APPLE_WALLET_WWDR_PEM
+  if (!certPem || !keyPem || !wwdrPem) {
+    const err = new Error('apple_certs_missing')
+    err.code = 'APPLE_CERTS_MISSING'
+    err.hint = 'APPLE_WALLET_CERT_PEM / _KEY_PEM / _WWDR_PEM in ENV setzen — siehe docs/WALLET_PASS_SETUP.md'
+    throw err
+  }
+
+  // Lazy require: passkit-generator nur laden, wenn wirklich signiert wird.
+  const { PKPass } = require('passkit-generator')
+
+  const passJson = buildApplePassJson({ member, customer, program })
+  // passkit-generator erwartet die Felder als getrennte Properties statt im
+  // pass.json — wir uebersetzen sie.
+
+  // Minimal-Icons als 1x1-Pixel-Fallback, falls keine echten Icons im Repo
+  // liegen. Produktion: ueber docs/WALLET_PASS_SETUP.md echte Icons in
+  // backend/src/assets/wallet/ ablegen.
+  const tinyPng = Buffer.from(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082',
+    'hex'
+  )
+
+  let buffers
+  try {
+    const path = require('path')
+    const fs = require('fs')
+    const assetsDir = path.join(__dirname, '../assets/wallet')
+    const fromAssets = {}
+    for (const name of ['icon.png', 'icon@2x.png', 'logo.png', 'logo@2x.png']) {
+      const p = path.join(assetsDir, name)
+      if (fs.existsSync(p)) fromAssets[name] = fs.readFileSync(p)
+    }
+    buffers = {
+      'icon.png': fromAssets['icon.png'] || tinyPng,
+      'icon@2x.png': fromAssets['icon@2x.png'] || tinyPng,
+      'logo.png': fromAssets['logo.png'] || tinyPng,
+      'logo@2x.png': fromAssets['logo@2x.png'] || tinyPng
+    }
+  } catch (_) {
+    buffers = {
+      'icon.png': tinyPng,
+      'icon@2x.png': tinyPng,
+      'logo.png': tinyPng,
+      'logo@2x.png': tinyPng
+    }
+  }
+
+  const pass = new PKPass(
+    {
+      'pass.json': Buffer.from(JSON.stringify(passJson), 'utf-8'),
+      ...buffers
+    },
+    {
+      wwdr: wwdrPem.replace(/\\n/g, '\n'),
+      signerCert: certPem.replace(/\\n/g, '\n'),
+      signerKey: keyPem.replace(/\\n/g, '\n'),
+      signerKeyPassphrase: process.env.APPLE_WALLET_KEY_PASSPHRASE || undefined
+    }
+  )
+
+  return pass.getAsBuffer()
+}
+
+function applePkpassConfigured() {
+  return Boolean(
+    process.env.APPLE_WALLET_CERT_PEM &&
+    process.env.APPLE_WALLET_KEY_PEM &&
+    process.env.APPLE_WALLET_WWDR_PEM
+  )
+}
+
+module.exports = {
+  buildGoogleWalletPass,
+  buildApplePassJson,
+  buildApplePkpass,
+  applePkpassConfigured
+}
