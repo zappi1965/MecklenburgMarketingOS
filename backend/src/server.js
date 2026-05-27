@@ -48,6 +48,7 @@ const onboardingRoutes = require('./routes/onboardingRoutes')
 const loyaltyScanRoutes = require('./routes/loyaltyScanRoutes')
 const walletMeRoutes = require('./routes/walletMeRoutes')
 const storeRoutes = require('./routes/storeRoutes')
+const opsAdminRoutes = require('./routes/opsAdminRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -213,6 +214,10 @@ app.use('/api/wallet/me', walletMeRoutes())
 // Generisches CRUD fuer den Frontend-Monolith. Globaler Auth-Guard
 // laeuft davor; pro Tabelle prueft storeService Admin/Customer-Scope.
 app.use('/api/store', storeRoutes())
+
+// Admin-Automatisierungs-Tools: Health-Cockpit, Maintenance-Reminder,
+// Onboarding-Audit. Alle Routen pruefen intern Admin-Rolle.
+app.use('/api/ops-admin', opsAdminRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

@@ -16,7 +16,9 @@
     "automation-worker": "node src/workers/automationWorker.js --cron",
     "automation-worker:once": "node src/workers/automationWorker.js",
     "daily-briefing-worker": "node src/workers/dailyBriefingWorker.js --cron",
-    "daily-briefing-worker:once": "node src/workers/dailyBriefingWorker.js"
+    "daily-briefing-worker:once": "node src/workers/dailyBriefingWorker.js",
+    "maintenance-worker": "node src/workers/maintenanceCheckWorker.js --cron",
+    "maintenance-worker:once": "node src/workers/maintenanceCheckWorker.js"
   },
   "dependencies": {
     "@sentry/node": "^8.36.0",

@@ -4,7 +4,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
-  Wallet, Menu, X, LogOut, User, ScanLine, Search
+  Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
+  Wrench, FileSearch
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -17,6 +18,9 @@ const NAV: NavSection[] = [
   {
     label: 'Ueberblick',
     items: [
+      { href: '/admin/ops', label: 'Health-Cockpit', icon: Activity, hint: 'Wo brennt\'s über alle Customer' },
+      { href: '/admin/maintenance', label: 'Wartungs-Reminder', icon: Wrench, hint: 'Tages-Scan: Logo, Loyalty, MFA, ...' },
+      { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Customer' },
       { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
       { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln' }
     ]

@@ -3394,3 +3394,32 @@ input,select,textarea{font-size:16px} /* iOS Auto-Zoom verhindern */
 .seoFooter{margin-top:14px;font-size:12.5px}
 .seoFooter code{color:var(--brand-gold)}
 @media(max-width:640px){.adminTabs{padding:4px;gap:4px}.adminTab{padding:8px 10px;font-size:12.5px}}
+
+/* Phase 11m — Admin-Automation-Tools (Health-Cockpit, Maintenance, Audits) */
+.opsStatsRow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.opsStatBtn{appearance:none;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--text);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left}
+.opsStatBtn.static{cursor:default}
+.opsStatBtn:hover:not(.static){filter:brightness(1.1)}
+.opsStatBtn.on{outline:2px solid var(--brand-gold)}
+.opsStatBtn.red{border-color:#7f1d1d}
+.opsStatBtn.red svg{color:#fca5a5}
+.opsStatBtn.yellow{border-color:#854d0e}
+.opsStatBtn.yellow svg{color:#fde68a}
+.opsStatBtn.green svg{color:#86efac}
+.opsStatBtn strong{display:block;font-size:22px;font-weight:900;color:var(--brand-gold);line-height:1}
+.opsStatBtn span{display:block;color:var(--text-muted-strong);font-size:11.5px;margin-top:3px}
+.opsSummaryRow{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:13px;color:var(--text-soft);padding:12px 14px;background:var(--surface-1);border:1px solid var(--border-soft);border-radius:12px;margin-bottom:14px}
+.opsSummaryRow b{color:var(--brand-gold)}
+.opsList{display:flex;flex-direction:column;gap:10px}
+.opsCustomer{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:12px;padding:14px;border-left-width:4px}
+.opsCustomer.status-red{border-left-color:#dc2626}
+.opsCustomer.status-yellow{border-left-color:#f59e0b}
+.opsCustomer.status-green{border-left-color:#22c55e}
+.opsCustomerHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.opsCustomerHead strong{display:block;font-size:15px}
+.opsCustomerHead span{display:block;font-size:12px}
+.opsMetrics{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--text-soft);margin-bottom:6px}
+.opsCritical{color:#fca5a5;font-weight:700}
+.opsWarn{color:#fde68a}
+.opsAlertList{list-style:disc;padding-left:18px;margin:6px 0 0;font-size:13px}
+@media(max-width:640px){.opsStatsRow{grid-template-columns:1fr 1fr}}

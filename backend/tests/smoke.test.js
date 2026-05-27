@@ -350,3 +350,18 @@ test('DELETE /api/store/<table>/<id> requires auth', async () => {
   const r = await status('/api/store/qr_campaigns/00000000-0000-0000-0000-000000000000', { method: 'DELETE' })
   assert.equal(r.status, 401)
 })
+
+test('GET /api/ops-admin/health-snapshot requires auth', async () => {
+  const r = await status('/api/ops-admin/health-snapshot')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/ops-admin/maintenance-alerts requires auth', async () => {
+  const r = await status('/api/ops-admin/maintenance-alerts')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/ops-admin/audits/start requires auth', async () => {
+  const r = await status('/api/ops-admin/audits/start', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
