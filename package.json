@@ -15,7 +15,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",
+    "lucide-react": "^1.16.0",
     "next": "latest",
+    "qr-scanner": "^1.4.2",
     "react": "latest",
     "react-dom": "latest",
     "react-is": "^18.3.1",
