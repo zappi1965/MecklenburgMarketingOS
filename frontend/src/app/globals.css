@@ -3315,3 +3315,20 @@ input,select,textarea{font-size:16px} /* iOS Auto-Zoom verhindern */
 .obDoneList{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;color:var(--text-soft)}
 .obDoneList li{padding:10px 12px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:9px}
 .obDoneList b{color:var(--brand-gold);margin-right:4px}
+
+/* Phase 11j — Loyalty-Scan Cashier-UI */
+.scanPage h2{display:flex;align-items:center;gap:8px}
+.scanBtnLarge{min-height:56px;font-size:16px;padding:0 22px;display:inline-flex;align-items:center;gap:10px}
+.scanCameraCard{padding:14px}
+.scanVideoWrap{position:relative;width:100%;max-width:480px;aspect-ratio:1/1;margin:12px auto;border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--border-soft)}
+.scanVideo{width:100%;height:100%;object-fit:cover;display:block}
+.scanReticle{position:absolute;inset:18%;border:3px solid var(--brand-gold);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
+.scanMemberCard{display:flex;gap:14px;align-items:center;padding:14px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:12px;margin-bottom:14px}
+.scanMemberAvatar{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand-gold),#b8932e);color:var(--brand-gold-on);font-weight:900;font-size:22px;flex:0 0 auto}
+.scanMemberInfo{display:flex;flex-direction:column;gap:3px;min-width:0}
+.scanMemberInfo strong{font-size:18px;color:var(--text)}
+.scanMemberInfo span{color:var(--text-soft);font-size:13.5px}
+.scanResultBig{display:flex;flex-direction:column;align-items:center;gap:4px;margin:14px 0}
+.scanResultPlus{font-size:56px;font-weight:950;color:var(--brand-gold);letter-spacing:-.04em;line-height:1}
+.scanResultSub{color:var(--text-soft);font-size:14px}
+@media(max-width:640px){.scanResultPlus{font-size:48px}.scanBtnLarge{width:100%}}

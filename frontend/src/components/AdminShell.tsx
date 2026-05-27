@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
-  Wallet, Menu, X, LogOut, User
+  Wallet, Menu, X, LogOut, User, ScanLine
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -33,6 +33,7 @@ const NAV: NavSection[] = [
   {
     label: 'Betrieb',
     items: [
+      { href: '/admin/loyalty-scan', label: 'Loyalty-Scan (Kasse)', icon: ScanLine, hint: 'Kunden-QR scannen, Punkte buchen' },
       { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
       { href: '/admin/dunning', label: 'Mahnstufen', icon: ChartLine },
       { href: '/admin/pricing', label: 'Smart Pricing', icon: Wallet }

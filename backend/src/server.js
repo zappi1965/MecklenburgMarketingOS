@@ -45,6 +45,7 @@ const apiKeyRoutes = require('./routes/apiKeyRoutes')
 const publicApiV1Routes = require('./routes/publicApiV1Routes')
 const pricingRoutes = require('./routes/pricingRoutes')
 const onboardingRoutes = require('./routes/onboardingRoutes')
+const loyaltyScanRoutes = require('./routes/loyaltyScanRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -202,6 +203,7 @@ app.use('/api/api-keys', apiKeyRoutes())
 app.use('/api/public/v1', publicApiV1Routes())
 app.use('/api/pricing', pricingRoutes())
 app.use('/api/onboarding', onboardingRoutes())
+app.use('/api/loyalty', loyaltyScanRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

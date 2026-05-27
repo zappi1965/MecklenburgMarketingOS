@@ -312,3 +312,36 @@ export const onboardingClient = {
   complete: (customer_id: string) =>
     call<{ ok: boolean }>(`/api/onboarding/complete/${encodeURIComponent(customer_id)}`, { method: 'POST' })
 }
+
+// === Loyalty-Staff-Scan ===
+export type LoyaltyMemberSnapshot = {
+  id: string
+  customer_id: string
+  display_name?: string | null
+  email?: string | null
+  points_balance: number
+  tier?: string | null
+  last_scan_at?: string | null
+}
+
+export type LoyaltyScanResult = {
+  ok: boolean
+  skipped?: boolean
+  reason?: string
+  member: LoyaltyMemberSnapshot & { points_added: number }
+  transaction?: { id: string; points: number; created_at: string }
+  staff_code_used?: boolean
+}
+
+export const loyaltyScanClient = {
+  lookup: (customer_id: string, qr_payload: string) =>
+    call<{ ok: boolean; member: LoyaltyMemberSnapshot }>(`/api/loyalty/lookup-member/${encodeURIComponent(customer_id)}`, {
+      method: 'POST',
+      body: JSON.stringify({ qr_payload })
+    }),
+  scan: (customer_id: string, payload: { qr_payload: string; points?: number; qr_campaign_id?: string; staff_code?: string; idempotency_key?: string }) =>
+    call<LoyaltyScanResult>(`/api/loyalty/staff-scan/${encodeURIComponent(customer_id)}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+}
