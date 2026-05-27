@@ -47,6 +47,7 @@ const pricingRoutes = require('./routes/pricingRoutes')
 const onboardingRoutes = require('./routes/onboardingRoutes')
 const loyaltyScanRoutes = require('./routes/loyaltyScanRoutes')
 const walletMeRoutes = require('./routes/walletMeRoutes')
+const storeRoutes = require('./routes/storeRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -208,6 +209,10 @@ app.use('/api/onboarding', onboardingRoutes())
 app.use('/api/loyalty', loyaltyScanRoutes())
 // Wallet-Self-Service fuer Endkunden (Magic-Link, oeffentlich whitelisted).
 app.use('/api/wallet/me', walletMeRoutes())
+
+// Generisches CRUD fuer den Frontend-Monolith. Globaler Auth-Guard
+// laeuft davor; pro Tabelle prueft storeService Admin/Customer-Scope.
+app.use('/api/store', storeRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

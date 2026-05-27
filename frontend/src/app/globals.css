@@ -3375,3 +3375,22 @@ input,select,textarea{font-size:16px} /* iOS Auto-Zoom verhindern */
 .walletMeLegal{margin-top:24px;display:flex;gap:14px;justify-content:center;color:var(--text-muted-strong);font-size:12.5px}
 .walletMeLegal a{color:var(--brand-gold);text-decoration:underline}
 @media(max-width:640px){.walletMeStats{grid-template-columns:1fr 1fr 1fr;gap:8px}.walletMeStat strong{font-size:22px}.walletMeMemberMeta{text-align:left}.walletMeMember{padding:14px}}
+
+/* Phase 11l — Admin-Tab-Pattern (Konsolidierte Tools wie /admin/seo) */
+.adminTabs{display:flex;align-items:center;gap:6px;background:var(--surface-1);border:1px solid var(--border-soft);border-radius:12px;padding:6px;margin-bottom:18px;flex-wrap:wrap}
+.adminTab{appearance:none;border:0;background:transparent;color:var(--text-soft);padding:8px 14px;border-radius:8px;font-weight:700;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:38px}
+.adminTab:hover{color:var(--text);background:var(--surface-2)}
+.adminTab.active{background:var(--brand-gold);color:var(--brand-gold-on)}
+.adminTabSpacer{flex:1}
+.seoGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.seoStat{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:14px}
+.seoStat strong{display:block;font-size:28px;font-weight:900;color:var(--brand-gold);letter-spacing:-.02em}
+.seoStat span{display:block;color:var(--text-muted-strong);font-size:12.5px;margin-top:4px}
+.seoStat em{display:block;font-style:normal;margin-top:4px;font-size:12px;font-weight:700}
+.seoTrendUp{color:var(--semantic-success-fg)}
+.seoTrendDown{color:var(--semantic-danger-fg)}
+.seoHeatmapWrap{display:flex;flex-direction:column;gap:10px}
+.seoHeatmapTable th,.seoHeatmapTable td{font-size:13px}
+.seoFooter{margin-top:14px;font-size:12.5px}
+.seoFooter code{color:var(--brand-gold)}
+@media(max-width:640px){.adminTabs{padding:4px;gap:4px}.adminTab{padding:8px 10px;font-size:12.5px}}

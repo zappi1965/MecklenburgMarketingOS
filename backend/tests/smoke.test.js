@@ -325,3 +325,28 @@ test('invalid bearer token -> 401 INVALID_SESSION', async () => {
   assert.equal(r.status, 401)
   assert.equal(r.body?.code, 'INVALID_SESSION')
 })
+
+test('GET /api/store/_meta requires auth', async () => {
+  const r = await status('/api/store/_meta')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/store/landing_page_settings requires auth', async () => {
+  const r = await status('/api/store/landing_page_settings')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/store/qr_campaigns requires auth', async () => {
+  const r = await status('/api/store/qr_campaigns', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('PATCH /api/store/<table>/<id> requires auth', async () => {
+  const r = await status('/api/store/qr_campaigns/00000000-0000-0000-0000-000000000000', { method: 'PATCH' })
+  assert.equal(r.status, 401)
+})
+
+test('DELETE /api/store/<table>/<id> requires auth', async () => {
+  const r = await status('/api/store/qr_campaigns/00000000-0000-0000-0000-000000000000', { method: 'DELETE' })
+  assert.equal(r.status, 401)
+})

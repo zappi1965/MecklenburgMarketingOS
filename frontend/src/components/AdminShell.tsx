@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
-  Wallet, Menu, X, LogOut, User, ScanLine
+  Wallet, Menu, X, LogOut, User, ScanLine, Search
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -24,6 +24,7 @@ const NAV: NavSection[] = [
   {
     label: 'Marketing',
     items: [
+      { href: '/admin/seo', label: 'SEO & Sichtbarkeit', icon: Search, hint: 'Dashboard, Heatmap, KPI, Wettbewerber' },
       { href: '/admin/gmb', label: 'Google Business', icon: Megaphone },
       { href: '/admin/widget', label: 'Bewertungs-Widget', icon: Star },
       { href: '/admin/newsletter', label: 'Newsletter', icon: Mail },
