@@ -46,6 +46,7 @@ const publicApiV1Routes = require('./routes/publicApiV1Routes')
 const pricingRoutes = require('./routes/pricingRoutes')
 const onboardingRoutes = require('./routes/onboardingRoutes')
 const loyaltyScanRoutes = require('./routes/loyaltyScanRoutes')
+const walletMeRoutes = require('./routes/walletMeRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -100,7 +101,8 @@ const PUBLIC_PATHS = [
   /^\/api\/pos\/webhook\/[^/]+$/,
   /^\/api\/chatbot\/(start|message)$/,
   /^\/api\/review-widget\/embed\/[^/]+$/,
-  /^\/api\/public\/v1\//
+  /^\/api\/public\/v1\//,
+  /^\/api\/wallet\/me(\/request-link)?$/
 ]
 
 const requireAuth = authMiddleware()
@@ -204,6 +206,8 @@ app.use('/api/public/v1', publicApiV1Routes())
 app.use('/api/pricing', pricingRoutes())
 app.use('/api/onboarding', onboardingRoutes())
 app.use('/api/loyalty', loyaltyScanRoutes())
+// Wallet-Self-Service fuer Endkunden (Magic-Link, oeffentlich whitelisted).
+app.use('/api/wallet/me', walletMeRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

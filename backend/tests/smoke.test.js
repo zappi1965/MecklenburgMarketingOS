@@ -263,6 +263,30 @@ test('POST /api/loyalty/lookup-member/<id> requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('POST /api/wallet/me/request-link is public (no auth)', async () => {
+  const r = await status('/api/wallet/me/request-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'smoke@example.com' })
+  })
+  // Antwort immer ok (kein User-Enumeration), nie 401.
+  assert.notEqual(r.status, 401)
+})
+
+test('GET /api/wallet/me without token -> 401 TOKEN_INVALID (not auth wall)', async () => {
+  const r = await status('/api/wallet/me')
+  // Route ist public, gibt aber 401 mit code TOKEN_INVALID zurueck wenn
+  // kein Token mitgeliefert wird.
+  assert.equal(r.status, 401)
+  assert.equal(r.body?.code, 'TOKEN_INVALID')
+})
+
+test('GET /api/wallet/me with invalid token -> 401 TOKEN_INVALID', async () => {
+  const r = await status('/api/wallet/me?email=a@b.de&exp=9999999999999&sig=garbage')
+  assert.equal(r.status, 401)
+  assert.equal(r.body?.code, 'TOKEN_INVALID')
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.
