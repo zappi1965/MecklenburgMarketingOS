@@ -60,19 +60,21 @@ alter table public.onboarding_audits enable row level security;
 alter table public.ops_health_snapshots enable row level security;
 
 -- Admin-Schreibrechte aus 0081 covern diese drei neuen Tabellen analog:
-do $$ begin
-  for tbl in (select unnest(array['maintenance_alerts','onboarding_audits','ops_health_snapshots']) as t) loop
+do $$
+declare t text;
+begin
+  for t in select unnest(array['maintenance_alerts','onboarding_audits','ops_health_snapshots']) loop
     if not exists (
       select 1 from pg_policies
-      where schemaname='public' and tablename=tbl.t and policyname='mmos_admin_write'
+      where schemaname='public' and tablename=t and policyname='mmos_admin_write'
     ) then
       begin
         execute format(
           'create policy mmos_admin_write on public.%I for all to authenticated using (coalesce(public.mmos_is_admin(), false)) with check (coalesce(public.mmos_is_admin(), false))',
-          tbl.t
+          t
         );
       exception when others then
-        raise notice 'mmos_admin_write skipped on %: %', tbl.t, sqlerrm;
+        raise notice 'mmos_admin_write skipped on %: %', t, sqlerrm;
       end;
     end if;
   end loop;
