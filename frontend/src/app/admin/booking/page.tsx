@@ -31,6 +31,7 @@ export default function BookingAdminPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
+  const [copied, setCopied] = useState('')
 
   const [services, setServices] = useState<Service[]>([])
   const [resources, setResources] = useState<Resource[]>([])
@@ -344,6 +345,31 @@ export default function BookingAdminPage() {
                 <p className="adminMuted">Oeffentliche Buchungs-URL: <code>/book/{effectiveSettings.booking_slug}</code></p>
               )}
               <button type="button" className="adminBtn" onClick={() => saveSettings(effectiveSettings)} disabled={busy}>Speichern</button>
+
+              {effectiveSettings.booking_slug && settings?.id && (
+                <div style={{ marginTop: 22, borderTop: '1px solid var(--border-soft)', paddingTop: 18 }}>
+                  <h3 style={{ fontSize: 15, margin: '0 0 4px' }}>Auf deiner Website einbinden</h3>
+                  <p className="adminMuted">Kopiere dieses Snippet in deine Website (z.B. WordPress, Wix, Jimdo). Speichere zuerst den Slug.</p>
+                  {(() => {
+                    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+                    const url = `${origin}/book/${effectiveSettings.booking_slug}`
+                    const snippet = `<iframe src="${url}" title="Online-Terminbuchung" style="width:100%;max-width:480px;height:720px;border:0;border-radius:18px" loading="lazy"></iframe>`
+                    return (
+                      <>
+                        <textarea className="adminInput" readOnly rows={3} value={snippet} style={{ fontFamily: 'monospace', fontSize: 12.5 }} onFocus={(e) => e.currentTarget.select()} />
+                        <div className="adminActions" style={{ marginTop: 8 }}>
+                          <button type="button" className="adminBtn small" onClick={async () => {
+                            try { await navigator.clipboard.writeText(snippet); setCopied('snippet'); setTimeout(() => setCopied(''), 2500) } catch (_) { setError('Kopieren nicht moeglich — bitte manuell markieren.') }
+                          }}>{copied === 'snippet' ? 'Kopiert ✓' : 'Snippet kopieren'}</button>
+                          <button type="button" className="adminBtn small" onClick={async () => {
+                            try { await navigator.clipboard.writeText(url); setCopied('url'); setTimeout(() => setCopied(''), 2500) } catch (_) { setError('Kopieren nicht moeglich.') }
+                          }}>{copied === 'url' ? 'Kopiert ✓' : 'Nur Link kopieren'}</button>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
             </section>
           )}
         </>

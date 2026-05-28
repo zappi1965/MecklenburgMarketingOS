@@ -6,6 +6,13 @@
 
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
+// Optionale Cross-Modul-Hooks. Lazy + best-effort, damit eine Buchung nie
+// an Mail/Score-Nebenwirkungen scheitert.
+let MailService = null
+try { MailService = require('./mailService') } catch (_) { MailService = null }
+let noShowService = null
+try { noShowService = require('./noShowService') } catch (_) { noShowService = null }
+
 // 'HH:MM' -> Minuten seit Mitternacht.
 function hmToMin(hm) {
   const m = String(hm || '').match(/^(\d{1,2}):(\d{2})$/)
@@ -220,6 +227,69 @@ async function getAvailability({ customer_id, service_id, date, resource_id = nu
   }
 }
 
+function fmtDateDe(date, time) {
+  try {
+    const d = new Date(`${date}T${time}:00`)
+    return d.toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch (_) { return `${date} ${time}` }
+}
+
+function bookingMail({ businessName, service, date, time, pending }) {
+  const when = fmtDateDe(date, time)
+  const head = pending ? 'Deine Terminanfrage ist eingegangen' : 'Dein Termin ist bestaetigt'
+  const intro = pending
+    ? `vielen Dank fuer deine Anfrage bei ${businessName}. Wir bestaetigen deinen Termin in Kuerze.`
+    : `vielen Dank fuer deine Buchung bei ${businessName}. Dein Termin ist fest reserviert.`
+  const text = `${head}\n\nHallo,\n\n${intro}\n\nLeistung: ${service.name}\nTermin: ${when} Uhr\nDauer: ${service.duration_minutes} Min.${Number(service.price_eur) > 0 ? `\nPreis: ${Number(service.price_eur).toFixed(2)} EUR` : ''}\n\nSolltest du den Termin nicht wahrnehmen koennen, gib uns bitte rechtzeitig Bescheid.\n\nViele Gruesse\n${businessName}`
+  const html = `<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#1a2233">
+    <h2 style="font-size:19px;margin:0 0 12px">${head}</h2>
+    <p style="font-size:14px;line-height:1.5">Hallo,<br>${intro}</p>
+    <table style="font-size:14px;border-collapse:collapse;margin:14px 0">
+      <tr><td style="padding:4px 12px 4px 0;color:#667">Leistung</td><td style="padding:4px 0"><strong>${service.name}</strong></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#667">Termin</td><td style="padding:4px 0"><strong>${when} Uhr</strong></td></tr>
+      <tr><td style="padding:4px 12px 4px 0;color:#667">Dauer</td><td style="padding:4px 0">${service.duration_minutes} Min.</td></tr>
+      ${Number(service.price_eur) > 0 ? `<tr><td style="padding:4px 12px 4px 0;color:#667">Preis</td><td style="padding:4px 0">${Number(service.price_eur).toFixed(2)} €</td></tr>` : ''}
+    </table>
+    <p style="font-size:12.5px;color:#778;line-height:1.5">Solltest du den Termin nicht wahrnehmen koennen, gib uns bitte rechtzeitig Bescheid.</p>
+    <p style="font-size:13px">Viele Gruesse<br>${businessName}</p>
+  </div>`
+  return { subject: pending ? `Terminanfrage erhalten — ${service.name}` : `Termin bestaetigt — ${service.name}`, text, html }
+}
+
+// Nachgelagerte Effekte einer Buchung. Best-effort: Fehler werden geschluckt,
+// damit die Buchung selbst immer erfolgreich quittiert wird.
+async function runBookingSideEffects(supabase, { appointment_id, customer_id, service, date, time, email, pending }) {
+  // No-Show-Risiko sofort berechnen (statt erst beim naechtlichen Scan).
+  if (appointment_id && noShowService?.calculateForAppointment) {
+    try { await noShowService.calculateForAppointment(appointment_id) } catch (_) {}
+  }
+
+  // Business-Name fuer die Mail.
+  let businessName = 'unser Team'
+  try {
+    const { data: cust } = await supabase.from('customers').select('name, business_name').eq('id', customer_id).maybeSingle()
+    businessName = cust?.business_name || cust?.name || businessName
+  } catch (_) {}
+
+  // Bestaetigungs-Mail an den Endkunden.
+  if (email && MailService) {
+    try {
+      const mail = new MailService()
+      const { subject, html, text } = bookingMail({ businessName, service, date, time, pending })
+      await mail.send({ to: email, subject, html, text })
+    } catch (_) {}
+  }
+
+  // In-App-Benachrichtigung an den Betrieb (erscheint im Notification-Center).
+  try {
+    await supabase.from('notifications').insert({
+      customer_id,
+      title: pending ? 'Neue Terminanfrage' : 'Neue Online-Buchung',
+      message: `${service.name} am ${fmtDateDe(date, time)} Uhr (${email})`
+    })
+  } catch (_) {}
+}
+
 // Buchung anlegen (Public, vom Widget aufgerufen).
 async function createBooking({ customer_id, service_id, resource_id = null, date, time, contact, now = new Date() }) {
   const supabase = getSupabaseAdmin()
@@ -276,6 +346,12 @@ async function createBooking({ customer_id, service_id, resource_id = null, date
       metadata: { service_id, date, time, confirmation }
     })
   } catch (_) {}
+
+  // No-Show-Score, Bestaetigungs-Mail, Betriebs-Benachrichtigung (best-effort).
+  await runBookingSideEffects(supabase, {
+    appointment_id: data?.id, customer_id, service, date, time, email,
+    pending: confirmation === 'pending'
+  })
 
   return { booking: data, confirmation }
 }
