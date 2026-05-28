@@ -33,6 +33,8 @@ const ALLOWLIST = {
   customer_service_categories:     { scope: 'customer' },
   customer_seo_metrics:            { scope: 'customer' },
   review_funnel_stats:             { scope: 'customer' },
+  invoices:                        { scope: 'customer' },
+  review_feedback:                 { scope: 'customer' },
 
   // Workflows / Automations
   workflow_rules:                  { scope: 'admin' },

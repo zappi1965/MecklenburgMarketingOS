@@ -5,7 +5,7 @@ import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
-  Wrench, FileSearch, CalendarClock, Rocket
+  Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -40,7 +40,15 @@ const NAV: NavSection[] = [
     items: [
       { href: '/admin/booking', label: 'Online-Terminbuchung', icon: CalendarClock, hint: 'Leistungen, Zeiten, Buchungs-Widget' },
       { href: '/admin/loyalty-scan', label: 'Loyalty-Scan (Kasse)', icon: ScanLine, hint: 'Kunden-QR scannen, Punkte buchen' },
-      { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
+      { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock }
+    ]
+  },
+  {
+    label: 'Finanzen',
+    items: [
+      { href: '/admin/e-invoice', label: 'E-Rechnung', icon: FileCode2, hint: 'XRechnung / ZUGFeRD (DE-Pflicht im B2B)' },
+      { href: '/admin/accounting', label: 'Buchhaltungs-Export', icon: FileSpreadsheet, hint: 'DATEV / lexoffice / sevDesk' },
+      { href: '/admin/pos', label: 'Kassen-Anbindung', icon: CreditCard, hint: 'POS-/SumUp-Transaktionen' },
       { href: '/admin/dunning', label: 'Mahnstufen', icon: ChartLine },
       { href: '/admin/pricing', label: 'Smart Pricing', icon: Wallet }
     ]
@@ -49,6 +57,7 @@ const NAV: NavSection[] = [
     label: 'Verwaltung',
     items: [
       { href: '/admin/onboarding', label: 'Einrichtungs-Assistent', icon: Rocket, hint: 'Gefuehrtes Setup: Branding, QR, Loyalty' },
+      { href: '/admin/data-quality', label: 'Datenqualitaet', icon: Database, hint: 'Dubletten, E-Mail-Check, AI-Review-Antwort' },
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
       { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield }
