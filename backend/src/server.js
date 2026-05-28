@@ -39,6 +39,7 @@ const chatbotRoutes = require('./routes/chatbotRoutes')
 const analyticsRoutes = require('./routes/analyticsRoutes')
 const gmbRoutes = require('./routes/gmbRoutes')
 const aiCrmMailRoutes = require('./routes/aiCrmMailRoutes')
+const socialRoutes = require('./routes/socialRoutes')
 const { reviewWidgetRoutes, reviewWidgetEmbedRouter } = require('./routes/reviewWidgetRoutes')
 const complianceCockpitRoutes = require('./routes/complianceCockpitRoutes')
 const apiKeyRoutes = require('./routes/apiKeyRoutes')
@@ -46,6 +47,10 @@ const publicApiV1Routes = require('./routes/publicApiV1Routes')
 const pricingRoutes = require('./routes/pricingRoutes')
 const onboardingRoutes = require('./routes/onboardingRoutes')
 const loyaltyScanRoutes = require('./routes/loyaltyScanRoutes')
+const walletMeRoutes = require('./routes/walletMeRoutes')
+const storeRoutes = require('./routes/storeRoutes')
+const opsAdminRoutes = require('./routes/opsAdminRoutes')
+const { bookingPublicRoutes } = require('./routes/bookingRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -100,7 +105,9 @@ const PUBLIC_PATHS = [
   /^\/api\/pos\/webhook\/[^/]+$/,
   /^\/api\/chatbot\/(start|message)$/,
   /^\/api\/review-widget\/embed\/[^/]+$/,
-  /^\/api\/public\/v1\//
+  /^\/api\/public\/v1\//,
+  /^\/api\/wallet\/me(\/request-link)?$/,
+  /^\/api\/booking\/[^/]+\/(services|slots|book)$/
 ]
 
 const requireAuth = authMiddleware()
@@ -192,6 +199,7 @@ app.use('/api/chatbot', chatbotRoutes())
 app.use('/api/analytics', analyticsRoutes())
 app.use('/api/gmb', gmbRoutes())
 app.use('/api/ai-crm-mail', aiCrmMailRoutes())
+app.use('/api/social', socialRoutes())
 app.use('/api/review-widget', reviewWidgetRoutes())
 // iframe-Endpoint ist oeffentlich (PUBLIC_PATHS-Whitelist).
 app.use('/api/review-widget/embed', reviewWidgetEmbedRouter())
@@ -204,6 +212,21 @@ app.use('/api/public/v1', publicApiV1Routes())
 app.use('/api/pricing', pricingRoutes())
 app.use('/api/onboarding', onboardingRoutes())
 app.use('/api/loyalty', loyaltyScanRoutes())
+// Wallet-Self-Service fuer Endkunden (Magic-Link, oeffentlich whitelisted).
+app.use('/api/wallet/me', walletMeRoutes())
+
+// Generisches CRUD fuer den Frontend-Monolith. Globaler Auth-Guard
+// laeuft davor; pro Tabelle prueft storeService Admin/Customer-Scope.
+app.use('/api/store', storeRoutes())
+
+// Admin-Automatisierungs-Tools: Health-Cockpit, Maintenance-Reminder,
+// Onboarding-Audit. Alle Routen pruefen intern Admin-Rolle.
+app.use('/api/ops-admin', opsAdminRoutes())
+
+// Booking-Engine: oeffentliche Buchungs-Endpunkte (Slug-basiert,
+// PUBLIC_PATHS-Whitelist). Admin-Verwaltung der Booking-Tabellen laeuft
+// ueber /api/store (ALLOWLIST).
+app.use('/api/booking', bookingPublicRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

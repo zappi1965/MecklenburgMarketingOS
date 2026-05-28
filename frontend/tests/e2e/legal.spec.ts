@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test'
 const requiredPages = [
   { path: '/impressum', heading: /Impressum/i },
   { path: '/datenschutz', heading: /Datenschutz/i },
-  { path: '/agb', heading: /AGB/i },
+  { path: '/agb', heading: /Allgemeine Gesch(ä|ae)ftsbedingungen|AGB/i },
   { path: '/widerruf', heading: /Widerruf/i },
   { path: '/cookies', heading: /Cookie/i },
   { path: '/privacy/me', heading: /Datenschutz · Meine Rechte/i }

@@ -263,6 +263,30 @@ test('POST /api/loyalty/lookup-member/<id> requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('POST /api/wallet/me/request-link is public (no auth)', async () => {
+  const r = await status('/api/wallet/me/request-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'smoke@example.com' })
+  })
+  // Antwort immer ok (kein User-Enumeration), nie 401.
+  assert.notEqual(r.status, 401)
+})
+
+test('GET /api/wallet/me without token -> 401 TOKEN_INVALID (not auth wall)', async () => {
+  const r = await status('/api/wallet/me')
+  // Route ist public, gibt aber 401 mit code TOKEN_INVALID zurueck wenn
+  // kein Token mitgeliefert wird.
+  assert.equal(r.status, 401)
+  assert.equal(r.body?.code, 'TOKEN_INVALID')
+})
+
+test('GET /api/wallet/me with invalid token -> 401 TOKEN_INVALID', async () => {
+  const r = await status('/api/wallet/me?email=a@b.de&exp=9999999999999&sig=garbage')
+  assert.equal(r.status, 401)
+  assert.equal(r.body?.code, 'TOKEN_INVALID')
+})
+
 test('GET /api/v33-functional/public/loyalty/<slug>/status is whitelisted (public)', async () => {
   // Public surface — sollte den Auth-Layer nicht treffen, sondern ggf. 404 von
   // der Route selbst zurueckgeben.
@@ -300,4 +324,69 @@ test('invalid bearer token -> 401 INVALID_SESSION', async () => {
   })
   assert.equal(r.status, 401)
   assert.equal(r.body?.code, 'INVALID_SESSION')
+})
+
+test('GET /api/store/_meta requires auth', async () => {
+  const r = await status('/api/store/_meta')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/store/landing_page_settings requires auth', async () => {
+  const r = await status('/api/store/landing_page_settings')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/store/qr_campaigns requires auth', async () => {
+  const r = await status('/api/store/qr_campaigns', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('PATCH /api/store/<table>/<id> requires auth', async () => {
+  const r = await status('/api/store/qr_campaigns/00000000-0000-0000-0000-000000000000', { method: 'PATCH' })
+  assert.equal(r.status, 401)
+})
+
+test('DELETE /api/store/<table>/<id> requires auth', async () => {
+  const r = await status('/api/store/qr_campaigns/00000000-0000-0000-0000-000000000000', { method: 'DELETE' })
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/social/generate requires auth', async () => {
+  const r = await status('/api/social/generate', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/booking/<slug>/services is public (no auth required)', async () => {
+  const r = await status('/api/booking/probe-slug/services')
+  // Public-Widget-Surface: ohne Supabase 503/404, niemals 401.
+  assert.notEqual(r.status, 401, `Expected non-401, got ${r.status}`)
+})
+
+test('GET /api/booking/<slug>/slots without params -> 400 not 401', async () => {
+  const r = await status('/api/booking/probe-slug/slots')
+  assert.notEqual(r.status, 401)
+})
+
+test('POST /api/booking/<slug>/book is public (no auth required)', async () => {
+  const r = await status('/api/booking/probe-slug/book', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ service_id: 'x', date: '2026-06-01', time: '10:00', contact: { email: 'a@b.de' } })
+  })
+  assert.notEqual(r.status, 401, `Expected non-401, got ${r.status}`)
+})
+
+test('GET /api/ops-admin/health-snapshot requires auth', async () => {
+  const r = await status('/api/ops-admin/health-snapshot')
+  assert.equal(r.status, 401)
+})
+
+test('GET /api/ops-admin/maintenance-alerts requires auth', async () => {
+  const r = await status('/api/ops-admin/maintenance-alerts')
+  assert.equal(r.status, 401)
+})
+
+test('POST /api/ops-admin/audits/start requires auth', async () => {
+  const r = await status('/api/ops-admin/audits/start', { method: 'POST' })
+  assert.equal(r.status, 401)
 })

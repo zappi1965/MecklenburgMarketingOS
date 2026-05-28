@@ -2,9 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  BarChart3, Bot, KeyRound, Shield, FileText,
-  Star, Mail, Megaphone, AlarmClock, ChartLine,
-  Wallet, Menu, X, LogOut, User, ScanLine
+  LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
+  Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
+  Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
+  Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -17,6 +18,9 @@ const NAV: NavSection[] = [
   {
     label: 'Ueberblick',
     items: [
+      { href: '/admin/ops', label: 'Health-Cockpit', icon: Activity, hint: 'Wo brennt\'s über alle Customer' },
+      { href: '/admin/maintenance', label: 'Wartungs-Reminder', icon: Wrench, hint: 'Tages-Scan: Logo, Loyalty, MFA, ...' },
+      { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Customer' },
       { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
       { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen & Reports' },
       { href: '/growth-command', label: 'Growth Command', icon: BarChart3, hint: 'Alle 12 Bereiche' },
@@ -26,7 +30,9 @@ const NAV: NavSection[] = [
   {
     label: 'Marketing',
     items: [
+      { href: '/admin/seo', label: 'SEO & Sichtbarkeit', icon: Search, hint: 'Dashboard, Heatmap, KPI, Wettbewerber' },
       { href: '/admin/gmb', label: 'Google Business', icon: Megaphone },
+      { href: '/admin/social', label: 'AI Social-Posts', icon: Sparkles, hint: 'KI-Posts fuer Instagram, Facebook, Google, LinkedIn' },
       { href: '/admin/tools', label: 'Kundentools', icon: Megaphone, hint: 'Module, Pakete, Add-ons' },
       { href: '/reputation-center', label: 'Reputation Center', icon: Star },
       { href: '/slug-hub', label: 'Slug-Hub', icon: Megaphone },
@@ -40,11 +46,20 @@ const NAV: NavSection[] = [
   {
     label: 'Betrieb',
     items: [
+      { href: '/admin/booking', label: 'Online-Terminbuchung', icon: CalendarClock, hint: 'Leistungen, Zeiten, Buchungs-Widget' },
       { href: '/admin/loyalty-scan', label: 'Loyalty-Scan (Kasse)', icon: ScanLine, hint: 'Kunden-QR scannen, Punkte buchen' },
+      { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
       { href: '/loyalty/growth', label: 'Loyalty Growth', icon: ScanLine },
       { href: '/automation/playbooks', label: 'Automation Playbooks', icon: AlarmClock },
-      { href: '/media/report-center', label: 'Media & Reports', icon: FileText },
-      { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
+      { href: '/media/report-center', label: 'Media & Reports', icon: FileText }
+    ]
+  },
+  {
+    label: 'Finanzen',
+    items: [
+      { href: '/admin/e-invoice', label: 'E-Rechnung', icon: FileCode2, hint: 'XRechnung / ZUGFeRD (DE-Pflicht im B2B)' },
+      { href: '/admin/accounting', label: 'Buchhaltungs-Export', icon: FileSpreadsheet, hint: 'DATEV / lexoffice / sevDesk' },
+      { href: '/admin/pos', label: 'Kassen-Anbindung', icon: CreditCard, hint: 'POS-/SumUp-Transaktionen' },
       { href: '/admin/dunning', label: 'Mahnstufen', icon: ChartLine },
       { href: '/admin/pricing', label: 'Smart Pricing', icon: Wallet }
     ]
@@ -52,6 +67,8 @@ const NAV: NavSection[] = [
   {
     label: 'Verwaltung',
     items: [
+      { href: '/admin/onboarding', label: 'Einrichtungs-Assistent', icon: Rocket, hint: 'Gefuehrtes Setup: Branding, QR, Loyalty' },
+      { href: '/admin/data-quality', label: 'Datenqualitaet', icon: Database, hint: 'Dubletten, E-Mail-Check, AI-Review-Antwort' },
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
       { href: '/admin/tool-access-v2', label: 'Tool-Freigaben Pro', icon: Shield },

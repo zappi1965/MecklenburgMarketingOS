@@ -3332,3 +3332,94 @@ input,select,textarea{font-size:16px} /* iOS Auto-Zoom verhindern */
 .scanResultPlus{font-size:56px;font-weight:950;color:var(--brand-gold);letter-spacing:-.04em;line-height:1}
 .scanResultSub{color:var(--text-soft);font-size:14px}
 @media(max-width:640px){.scanResultPlus{font-size:48px}.scanBtnLarge{width:100%}}
+
+/* Phase 11k — /wallet/me Endkunden-Self-Service */
+.walletMePage{max-width:760px;margin:0 auto;padding:32px 16px 80px;color:var(--text);font-size:14px;line-height:1.55}
+.walletMeHeader{text-align:center;padding:18px 0 28px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.walletMeHeaderIcon{color:var(--brand-gold)}
+.walletMeHeader h1{margin:6px 0 4px;font-size:30px;color:var(--brand-gold);letter-spacing:-.02em}
+.walletMeHeader p{margin:0;color:var(--text-soft);max-width:520px}
+.walletMeCard{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:14px;padding:20px 22px;margin-bottom:16px}
+.walletMeCard.walletMeHighlight{border-color:var(--brand-gold);background:linear-gradient(180deg,rgba(212,175,55,.08),var(--surface-1))}
+.walletMeCard h2{margin:0 0 8px;font-size:18px;color:#f8fafc}
+.walletMeCard p{margin:0 0 12px;color:var(--text-soft)}
+.walletMeLabel{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;color:var(--text-soft);font-size:13.5px}
+.walletMeLabel svg{display:inline-block;margin-right:6px;vertical-align:middle}
+.walletMeInput{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:9px;padding:11px 13px;color:var(--text);font-family:inherit;font-size:16px;width:100%;box-sizing:border-box}
+.walletMeInput:focus{outline:2px solid var(--focus-ring);outline-offset:1px}
+.walletMeBtn{appearance:none;border-radius:9px;padding:10px 16px;font-weight:700;font-size:14px;cursor:pointer;background:var(--surface-3);color:var(--text);border:1px solid var(--border-strong);min-height:44px;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.walletMeBtn.primary{background:var(--brand-gold);color:var(--brand-gold-on);border-color:var(--brand-gold)}
+.walletMeBtn.small{min-height:36px;padding:6px 12px;font-size:12.5px}
+.walletMeBtn:disabled{opacity:.55;cursor:not-allowed}
+.walletMeBtn:hover:not(:disabled){filter:brightness(1.08)}
+.walletMeMuted{color:var(--text-muted-strong);font-size:12.5px}
+.walletMeAlert{background:var(--semantic-danger-bg);color:var(--semantic-danger-fg);border:1px solid var(--semantic-danger-border);border-radius:9px;padding:12px 14px;margin-bottom:16px}
+.walletMeStats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.walletMeStat{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:12px;padding:14px;text-align:center}
+.walletMeStat strong{display:block;font-size:26px;font-weight:900;color:var(--brand-gold);letter-spacing:-.02em}
+.walletMeStat span{display:block;color:var(--text-muted-strong);font-size:12px;margin-top:2px}
+.walletMeMember{border-radius:16px;padding:16px;margin-bottom:14px;background:linear-gradient(135deg,var(--card-secondary,#111827) 0%,var(--card-secondary,#111827) 60%,color-mix(in srgb,var(--card-primary,#d4af37) 22%,var(--card-secondary,#111827) 78%) 100%);border:1px solid var(--border-soft);color:#f8fafc}
+.walletMeMemberHeader{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.walletMeMemberBrand{width:42px;height:42px;border-radius:10px;background:var(--card-primary,#d4af37);color:#111827;font-weight:900;font-size:18px;display:grid;place-items:center;flex:0 0 auto}
+.walletMeMemberTitle{display:flex;flex-direction:column;gap:2px;min-width:0}
+.walletMeMemberTitle strong{font-size:16px}
+.walletMeMemberTier{font-size:11.5px;color:var(--card-primary,#d4af37);display:inline-flex;align-items:center;gap:4px}
+.walletMeMemberBody{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.walletMeMemberPoints{display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}
+.walletMeMemberBalance{font-size:36px;font-weight:950;color:var(--card-primary,#d4af37);letter-spacing:-.04em}
+.walletMeMemberPoints span:last-child{font-size:12px;color:#cbd5e1;margin-top:4px}
+.walletMeMemberMeta{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#e2e8f0;text-align:right}
+.walletMeMemberMeta svg{vertical-align:middle;margin-right:4px}
+.walletMeMemberFooter{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:flex-end}
+.walletMeFooter{text-align:center;margin-top:14px}
+.walletMeLegal{margin-top:24px;display:flex;gap:14px;justify-content:center;color:var(--text-muted-strong);font-size:12.5px}
+.walletMeLegal a{color:var(--brand-gold);text-decoration:underline}
+@media(max-width:640px){.walletMeStats{grid-template-columns:1fr 1fr 1fr;gap:8px}.walletMeStat strong{font-size:22px}.walletMeMemberMeta{text-align:left}.walletMeMember{padding:14px}}
+
+/* Phase 11l — Admin-Tab-Pattern (Konsolidierte Tools wie /admin/seo) */
+.adminTabs{display:flex;align-items:center;gap:6px;background:var(--surface-1);border:1px solid var(--border-soft);border-radius:12px;padding:6px;margin-bottom:18px;flex-wrap:wrap}
+.adminTab{appearance:none;border:0;background:transparent;color:var(--text-soft);padding:8px 14px;border-radius:8px;font-weight:700;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:38px}
+.adminTab:hover{color:var(--text);background:var(--surface-2)}
+.adminTab.active{background:var(--brand-gold);color:var(--brand-gold-on)}
+.adminTabSpacer{flex:1}
+.seoGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.seoStat{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:10px;padding:14px}
+.seoStat strong{display:block;font-size:28px;font-weight:900;color:var(--brand-gold);letter-spacing:-.02em}
+.seoStat span{display:block;color:var(--text-muted-strong);font-size:12.5px;margin-top:4px}
+.seoStat em{display:block;font-style:normal;margin-top:4px;font-size:12px;font-weight:700}
+.seoTrendUp{color:var(--semantic-success-fg)}
+.seoTrendDown{color:var(--semantic-danger-fg)}
+.seoHeatmapWrap{display:flex;flex-direction:column;gap:10px}
+.seoHeatmapTable th,.seoHeatmapTable td{font-size:13px}
+.seoFooter{margin-top:14px;font-size:12.5px}
+.seoFooter code{color:var(--brand-gold)}
+@media(max-width:640px){.adminTabs{padding:4px;gap:4px}.adminTab{padding:8px 10px;font-size:12.5px}}
+
+/* Phase 11m — Admin-Automation-Tools (Health-Cockpit, Maintenance, Audits) */
+.opsStatsRow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.opsStatBtn{appearance:none;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--text);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left}
+.opsStatBtn.static{cursor:default}
+.opsStatBtn:hover:not(.static){filter:brightness(1.1)}
+.opsStatBtn.on{outline:2px solid var(--brand-gold)}
+.opsStatBtn.red{border-color:#7f1d1d}
+.opsStatBtn.red svg{color:#fca5a5}
+.opsStatBtn.yellow{border-color:#854d0e}
+.opsStatBtn.yellow svg{color:#fde68a}
+.opsStatBtn.green svg{color:#86efac}
+.opsStatBtn strong{display:block;font-size:22px;font-weight:900;color:var(--brand-gold);line-height:1}
+.opsStatBtn span{display:block;color:var(--text-muted-strong);font-size:11.5px;margin-top:3px}
+.opsSummaryRow{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:13px;color:var(--text-soft);padding:12px 14px;background:var(--surface-1);border:1px solid var(--border-soft);border-radius:12px;margin-bottom:14px}
+.opsSummaryRow b{color:var(--brand-gold)}
+.opsList{display:flex;flex-direction:column;gap:10px}
+.opsCustomer{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:12px;padding:14px;border-left-width:4px}
+.opsCustomer.status-red{border-left-color:#dc2626}
+.opsCustomer.status-yellow{border-left-color:#f59e0b}
+.opsCustomer.status-green{border-left-color:#22c55e}
+.opsCustomerHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.opsCustomerHead strong{display:block;font-size:15px}
+.opsCustomerHead span{display:block;font-size:12px}
+.opsMetrics{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--text-soft);margin-bottom:6px}
+.opsCritical{color:#fca5a5;font-weight:700}
+.opsWarn{color:#fde68a}
+.opsAlertList{list-style:disc;padding-left:18px;margin:6px 0 0;font-size:13px}
+@media(max-width:640px){.opsStatsRow{grid-template-columns:1fr 1fr}}
