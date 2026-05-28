@@ -5,7 +5,7 @@ import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
-  Wrench, FileSearch, CalendarClock
+  Wrench, FileSearch, CalendarClock, Rocket
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -48,6 +48,7 @@ const NAV: NavSection[] = [
   {
     label: 'Verwaltung',
     items: [
+      { href: '/admin/onboarding', label: 'Einrichtungs-Assistent', icon: Rocket, hint: 'Gefuehrtes Setup: Branding, QR, Loyalty' },
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
       { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield }
