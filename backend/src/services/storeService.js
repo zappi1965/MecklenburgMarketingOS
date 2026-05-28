@@ -58,7 +58,16 @@ const ALLOWLIST = {
 
   // Knowledge & Integrationen
   knowledge_articles:              { scope: 'admin' },
-  integrations:                    { scope: 'customer' }
+  integrations:                    { scope: 'customer' },
+
+  // Booking-Engine
+  booking_services:                { scope: 'customer' },
+  booking_resources:               { scope: 'customer' },
+  booking_resource_services:       { scope: 'admin' },
+  booking_business_hours:          { scope: 'customer' },
+  booking_blackouts:               { scope: 'customer' },
+  booking_settings:                { scope: 'customer' },
+  appointments:                    { scope: 'customer' }
 }
 
 const TABLES = Object.keys(ALLOWLIST)

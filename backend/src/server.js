@@ -49,6 +49,7 @@ const loyaltyScanRoutes = require('./routes/loyaltyScanRoutes')
 const walletMeRoutes = require('./routes/walletMeRoutes')
 const storeRoutes = require('./routes/storeRoutes')
 const opsAdminRoutes = require('./routes/opsAdminRoutes')
+const { bookingPublicRoutes } = require('./routes/bookingRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 
 const app = express()
@@ -104,7 +105,8 @@ const PUBLIC_PATHS = [
   /^\/api\/chatbot\/(start|message)$/,
   /^\/api\/review-widget\/embed\/[^/]+$/,
   /^\/api\/public\/v1\//,
-  /^\/api\/wallet\/me(\/request-link)?$/
+  /^\/api\/wallet\/me(\/request-link)?$/,
+  /^\/api\/booking\/[^/]+\/(services|slots|book)$/
 ]
 
 const requireAuth = authMiddleware()
@@ -218,6 +220,11 @@ app.use('/api/store', storeRoutes())
 // Admin-Automatisierungs-Tools: Health-Cockpit, Maintenance-Reminder,
 // Onboarding-Audit. Alle Routen pruefen intern Admin-Rolle.
 app.use('/api/ops-admin', opsAdminRoutes())
+
+// Booking-Engine: oeffentliche Buchungs-Endpunkte (Slug-basiert,
+// PUBLIC_PATHS-Whitelist). Admin-Verwaltung der Booking-Tabellen laeuft
+// ueber /api/store (ALLOWLIST).
+app.use('/api/booking', bookingPublicRoutes())
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

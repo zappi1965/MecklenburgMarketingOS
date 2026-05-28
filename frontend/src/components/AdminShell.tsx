@@ -5,7 +5,7 @@ import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
-  Wrench, FileSearch
+  Wrench, FileSearch, CalendarClock
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -38,6 +38,7 @@ const NAV: NavSection[] = [
   {
     label: 'Betrieb',
     items: [
+      { href: '/admin/booking', label: 'Online-Terminbuchung', icon: CalendarClock, hint: 'Leistungen, Zeiten, Buchungs-Widget' },
       { href: '/admin/loyalty-scan', label: 'Loyalty-Scan (Kasse)', icon: ScanLine, hint: 'Kunden-QR scannen, Punkte buchen' },
       { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
       { href: '/admin/dunning', label: 'Mahnstufen', icon: ChartLine },

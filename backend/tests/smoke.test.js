@@ -351,6 +351,26 @@ test('DELETE /api/store/<table>/<id> requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('GET /api/booking/<slug>/services is public (no auth required)', async () => {
+  const r = await status('/api/booking/probe-slug/services')
+  // Public-Widget-Surface: ohne Supabase 503/404, niemals 401.
+  assert.notEqual(r.status, 401, `Expected non-401, got ${r.status}`)
+})
+
+test('GET /api/booking/<slug>/slots without params -> 400 not 401', async () => {
+  const r = await status('/api/booking/probe-slug/slots')
+  assert.notEqual(r.status, 401)
+})
+
+test('POST /api/booking/<slug>/book is public (no auth required)', async () => {
+  const r = await status('/api/booking/probe-slug/book', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ service_id: 'x', date: '2026-06-01', time: '10:00', contact: { email: 'a@b.de' } })
+  })
+  assert.notEqual(r.status, 401, `Expected non-401, got ${r.status}`)
+})
+
 test('GET /api/ops-admin/health-snapshot requires auth', async () => {
   const r = await status('/api/ops-admin/health-snapshot')
   assert.equal(r.status, 401)
