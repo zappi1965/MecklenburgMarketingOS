@@ -289,3 +289,19 @@ function shutdown(signal) {
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT', () => shutdown('SIGINT'))
+
+// Process-level crash guards: a stray rejected promise must not silently
+// terminate the server (Node aborts on unhandledRejection by default), and an
+// uncaught exception leaves the process in an undefined state -> log, report to
+// Sentry, then restart cleanly via graceful shutdown (Railway respawns).
+process.on('unhandledRejection', (reason) => {
+  const { enabled, Sentry } = getSentry()
+  if (enabled && Sentry) { try { Sentry.captureException(reason) } catch (_) {} }
+  console.error('[unhandledRejection]', reason instanceof Error ? reason.message : String(reason))
+})
+process.on('uncaughtException', (err) => {
+  const { enabled, Sentry } = getSentry()
+  if (enabled && Sentry) { try { Sentry.captureException(err) } catch (_) {} }
+  console.error('[uncaughtException]', err?.message || String(err))
+  shutdown('uncaughtException')
+})
