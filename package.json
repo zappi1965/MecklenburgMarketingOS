@@ -11,23 +11,24 @@
     "build": "yarn --cwd frontend build",
     "start": "yarn --cwd frontend start",
     "typecheck": "yarn --cwd frontend typecheck",
-    "backend:start": "yarn --cwd backend start"
+    "backend:start": "yarn --cwd backend start",
+    "stability:check": "yarn --cwd frontend typecheck && yarn --cwd frontend build"
   },
   "dependencies": {
-    "@supabase/supabase-js": "latest",
-    "lucide-react": "^1.16.0",
-    "next": "latest",
-    "qr-scanner": "^1.4.2",
-    "react": "latest",
-    "react-dom": "latest",
-    "react-is": "^18.3.1",
-    "recharts": "latest",
-    "typescript": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@supabase/supabase-js": "2.106.2",
+    "lucide-react": "1.16.0",
+    "next": "16.2.6",
+    "qr-scanner": "1.4.2",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-is": "18.3.1",
+    "recharts": "3.8.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "1.60.0",
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
   }
 }

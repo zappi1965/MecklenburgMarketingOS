@@ -1,0 +1,10 @@
+{
+  "required_files_missing": [],
+  "legacy_demo_key_outside_environmentMode": [],
+  "react_cssproperties_remaining": [],
+  "latest_dependencies_remaining": [],
+  "has_growth_command_route": true,
+  "has_public_review_api": true,
+  "has_schema_guard": true,
+  "has_workflow": true
+}

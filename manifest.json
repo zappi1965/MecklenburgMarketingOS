@@ -1,0 +1,31 @@
+{
+  "name": "MMOS V47 Complete Existing Tools Upgrade Fullbuild",
+  "preserves_legal_pages": true,
+  "implements_all_12_points": true,
+  "routes": [
+    "/growth-command",
+    "/analytics/seo-heatmap-pro",
+    "/slug-hub",
+    "/hub/[slug]",
+    "/reputation-center",
+    "/loyalty/growth",
+    "/admin/sales/lead-engine",
+    "/admin/sales/value-offers",
+    "/admin/tool-access-v2",
+    "/crm/customer-health",
+    "/automation/playbooks",
+    "/media/report-center"
+  ],
+  "new_tables": [
+    "v47_heatmap_points",
+    "v47_slug_hub_settings",
+    "v47_review_goals",
+    "v47_loyalty_goals",
+    "v47_lead_audits",
+    "v47_value_offers",
+    "v47_tool_access_rules",
+    "v47_customer_health_events",
+    "v47_automation_playbooks",
+    "v47_media_report_links"
+  ]
+}

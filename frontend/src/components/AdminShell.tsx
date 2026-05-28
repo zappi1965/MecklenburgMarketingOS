@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
-  Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
+  BarChart3, Bot, KeyRound, Shield, FileText,
+  Star, Mail, Megaphone, AlarmClock, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
@@ -18,6 +18,8 @@ const NAV: NavSection[] = [
     label: 'Ueberblick',
     items: [
       { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
+      { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen & Reports' },
+      { href: '/growth-command', label: 'Growth Command', icon: BarChart3, hint: 'Alle 12 Bereiche' },
       { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln' }
     ]
   },
@@ -25,6 +27,11 @@ const NAV: NavSection[] = [
     label: 'Marketing',
     items: [
       { href: '/admin/gmb', label: 'Google Business', icon: Megaphone },
+      { href: '/admin/tools', label: 'Kundentools', icon: Megaphone, hint: 'Module, Pakete, Add-ons' },
+      { href: '/reputation-center', label: 'Reputation Center', icon: Star },
+      { href: '/slug-hub', label: 'Slug-Hub', icon: Megaphone },
+      { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Megaphone },
+      { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText },
       { href: '/admin/widget', label: 'Bewertungs-Widget', icon: Star },
       { href: '/admin/newsletter', label: 'Newsletter', icon: Mail },
       { href: '/admin/mail-assistant', label: 'AI Mail-Assistant', icon: Mail }
@@ -34,6 +41,9 @@ const NAV: NavSection[] = [
     label: 'Betrieb',
     items: [
       { href: '/admin/loyalty-scan', label: 'Loyalty-Scan (Kasse)', icon: ScanLine, hint: 'Kunden-QR scannen, Punkte buchen' },
+      { href: '/loyalty/growth', label: 'Loyalty Growth', icon: ScanLine },
+      { href: '/automation/playbooks', label: 'Automation Playbooks', icon: AlarmClock },
+      { href: '/media/report-center', label: 'Media & Reports', icon: FileText },
       { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
       { href: '/admin/dunning', label: 'Mahnstufen', icon: ChartLine },
       { href: '/admin/pricing', label: 'Smart Pricing', icon: Wallet }
@@ -44,7 +54,10 @@ const NAV: NavSection[] = [
     items: [
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
-      { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield }
+      { href: '/admin/tool-access-v2', label: 'Tool-Freigaben Pro', icon: Shield },
+      { href: '/crm/customer-health', label: 'Customer Health', icon: BarChart3 },
+      { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield },
+      { href: '/admin/demo-data', label: 'Demo-Daten', icon: FileText }
     ]
   }
 ]

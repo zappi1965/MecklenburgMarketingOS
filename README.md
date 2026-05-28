@@ -84,3 +84,19 @@ auf jedem Push.
 Private Vorabversion. Stand und offene Punkte siehe
 [`docs/PRODUCTION_PASS.md`](docs/PRODUCTION_PASS.md) und
 [`docs/REMAINING_LIMITATIONS.md`](docs/REMAINING_LIMITATIONS.md).
+
+
+## V49 Stability & Production Guard
+
+Dieser Fullbuild enthält Stabilitätsfixes für den echten Projektstand:
+
+- gepinnte Dependencies
+- zentrale Demo-/Live-Logik
+- TypeScript-Fixes
+- Public Hub API
+- Tool-Access-Guard
+- Soft Middleware Guard
+- Schema Guard Migration 0048
+- GitHub Build Check Workflow
+
+Details: `docs/V49_STABILITY_PRODUCTION_GUARD.md`

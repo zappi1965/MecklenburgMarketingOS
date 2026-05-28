@@ -1,0 +1,39 @@
+{
+  "name": "MMOS V49 STABILITY PRODUCTION GUARD FULLBUILD",
+  "created_at": "2026-05-28T08:32:55.266980+00:00",
+  "base_zip": "MMOS_V48_REAL_FULLBUILD_PLUS_V47.zip",
+  "repo_root": "MecklenburgMarketingOS-main-V48",
+  "files_after_build": 549,
+  "removed_files": [
+    "docs/V42_5_NEXT_API_PROXY_FULLBUILD.md.cpgz",
+    "docs/V42_5_NEXT_API_PROXY_FULLBUILD.md 2"
+  ],
+  "stability_fixes": [
+    "pinned_dependencies",
+    "central_environment_mode",
+    "v46_cssproperties_type_fix",
+    "error_reporter",
+    "tool_access_guard",
+    "public_hub_review_api",
+    "soft_middleware_guard",
+    "schema_guard_migration_0048",
+    "github_build_check_workflow",
+    "cleanup_duplicate_archive_docs"
+  ],
+  "migrations_to_run": [
+    "0043_customer_tool_modules.sql",
+    "0044_v44_functional_customer_tools.sql",
+    "0045_v45_stability_demo_data.sql",
+    "0046_v46_value_dashboard_reports.sql",
+    "0047_v47_complete_existing_tools_upgrade.sql",
+    "0048_v49_stability_schema_guard.sql"
+  ],
+  "test_routes": [
+    "/api/public/review-feedback",
+    "/admin/demo-data",
+    "/value-dashboard",
+    "/growth-command",
+    "/hub/demo-friseur-hansekamm",
+    "/admin/tool-access-v2"
+  ]
+}
