@@ -1,0 +1,6 @@
+interface:
+  display_name: "MecklenburgMarketingOS"
+  short_description: "Repo-specific patterns and workflows for MecklenburgMarketingOS"
+  default_prompt: "Use the MecklenburgMarketingOS repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
