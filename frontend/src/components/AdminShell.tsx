@@ -5,7 +5,7 @@ import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
-  Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database
+  Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -30,6 +30,7 @@ const NAV: NavSection[] = [
     items: [
       { href: '/admin/seo', label: 'SEO & Sichtbarkeit', icon: Search, hint: 'Dashboard, Heatmap, KPI, Wettbewerber' },
       { href: '/admin/gmb', label: 'Google Business', icon: Megaphone },
+      { href: '/admin/social', label: 'AI Social-Posts', icon: Sparkles, hint: 'KI-Posts fuer Instagram, Facebook, Google, LinkedIn' },
       { href: '/admin/widget', label: 'Bewertungs-Widget', icon: Star },
       { href: '/admin/newsletter', label: 'Newsletter', icon: Mail },
       { href: '/admin/mail-assistant', label: 'AI Mail-Assistant', icon: Mail }

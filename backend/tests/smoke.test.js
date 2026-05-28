@@ -351,6 +351,11 @@ test('DELETE /api/store/<table>/<id> requires auth', async () => {
   assert.equal(r.status, 401)
 })
 
+test('POST /api/social/generate requires auth', async () => {
+  const r = await status('/api/social/generate', { method: 'POST' })
+  assert.equal(r.status, 401)
+})
+
 test('GET /api/booking/<slug>/services is public (no auth required)', async () => {
   const r = await status('/api/booking/probe-slug/services')
   // Public-Widget-Surface: ohne Supabase 503/404, niemals 401.

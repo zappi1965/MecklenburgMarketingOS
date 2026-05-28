@@ -84,6 +84,17 @@ export const eInvoiceClient = {
     download(`/api/e-invoice/invoices/${encodeURIComponent(invoiceId)}/zugferd`, `${invoiceId}_zugferd.pdf`)
 }
 
+// === AI Social-Post-Generator ===
+export type SocialPlatform = 'instagram' | 'facebook' | 'google_post' | 'linkedin'
+export type SocialPost = { text: string; hashtags: string[] }
+
+export const socialClient = {
+  generate: (params: { customer_id?: string; platform: SocialPlatform; topic?: string; tone?: string; language?: string; count?: number }) =>
+    call<{ ok: boolean; provider: string; platform: string; posts: SocialPost[] }>(`/api/social/generate`, {
+      method: 'POST', body: JSON.stringify(params)
+    })
+}
+
 // === POS ===
 export type PosTransaction = {
   id: string; provider?: string; amount?: number; currency?: string; status?: string

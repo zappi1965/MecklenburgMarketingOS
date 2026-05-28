@@ -35,6 +35,7 @@ const ALLOWLIST = {
   review_funnel_stats:             { scope: 'customer' },
   invoices:                        { scope: 'customer' },
   review_feedback:                 { scope: 'customer' },
+  social_posts:                    { scope: 'customer' },
 
   // Workflows / Automations
   workflow_rules:                  { scope: 'admin' },
