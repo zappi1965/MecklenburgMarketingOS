@@ -12,6 +12,7 @@
     "healthcheck": "node src/healthcheck.js",
     "security-audit": "node src/workers/securityAuditWorker.js",
     "enterprise-worker": "node src/workers/enterpriseWorker.js",
+    "worker:all": "node src/workers/allCronWorker.js",
     "gdpr-worker": "node src/workers/gdprWorker.js --cron",
     "gdpr-worker:once": "node src/workers/gdprWorker.js",
     "automation-worker": "node src/workers/automationWorker.js --cron",
