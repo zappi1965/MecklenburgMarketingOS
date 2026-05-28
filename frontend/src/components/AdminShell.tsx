@@ -22,6 +22,8 @@ const NAV: NavSection[] = [
       { href: '/admin/maintenance', label: 'Wartungs-Reminder', icon: Wrench, hint: 'Tages-Scan: Logo, Loyalty, MFA, ...' },
       { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Customer' },
       { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
+      { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen & Reports' },
+      { href: '/growth-command', label: 'Growth Command', icon: BarChart3, hint: 'Alle 12 Bereiche' },
       { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln' }
     ]
   },
@@ -31,6 +33,11 @@ const NAV: NavSection[] = [
       { href: '/admin/seo', label: 'SEO & Sichtbarkeit', icon: Search, hint: 'Dashboard, Heatmap, KPI, Wettbewerber' },
       { href: '/admin/gmb', label: 'Google Business', icon: Megaphone },
       { href: '/admin/social', label: 'AI Social-Posts', icon: Sparkles, hint: 'KI-Posts fuer Instagram, Facebook, Google, LinkedIn' },
+      { href: '/admin/tools', label: 'Kundentools', icon: Megaphone, hint: 'Module, Pakete, Add-ons' },
+      { href: '/reputation-center', label: 'Reputation Center', icon: Star },
+      { href: '/slug-hub', label: 'Slug-Hub', icon: Megaphone },
+      { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Megaphone },
+      { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText },
       { href: '/admin/widget', label: 'Bewertungs-Widget', icon: Star },
       { href: '/admin/newsletter', label: 'Newsletter', icon: Mail },
       { href: '/admin/mail-assistant', label: 'AI Mail-Assistant', icon: Mail }
@@ -41,7 +48,10 @@ const NAV: NavSection[] = [
     items: [
       { href: '/admin/booking', label: 'Online-Terminbuchung', icon: CalendarClock, hint: 'Leistungen, Zeiten, Buchungs-Widget' },
       { href: '/admin/loyalty-scan', label: 'Loyalty-Scan (Kasse)', icon: ScanLine, hint: 'Kunden-QR scannen, Punkte buchen' },
-      { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock }
+      { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
+      { href: '/loyalty/growth', label: 'Loyalty Growth', icon: ScanLine },
+      { href: '/automation/playbooks', label: 'Automation Playbooks', icon: AlarmClock },
+      { href: '/media/report-center', label: 'Media & Reports', icon: FileText }
     ]
   },
   {
@@ -61,7 +71,10 @@ const NAV: NavSection[] = [
       { href: '/admin/data-quality', label: 'Datenqualitaet', icon: Database, hint: 'Dubletten, E-Mail-Check, AI-Review-Antwort' },
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
-      { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield }
+      { href: '/admin/tool-access-v2', label: 'Tool-Freigaben Pro', icon: Shield },
+      { href: '/crm/customer-health', label: 'Customer Health', icon: BarChart3 },
+      { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield },
+      { href: '/admin/demo-data', label: 'Demo-Daten', icon: FileText }
     ]
   }
 ]
