@@ -361,6 +361,16 @@ function allowLocalWriteFallback(){
  return process.env.NEXT_PUBLIC_ENABLE_LOCAL_WRITE_FALLBACK==='true'
 }
 function liveWriteUnavailableMessage(table:string){return `Live-Speicherung für ${table} nicht möglich: Backend/Supabase nicht erreichbar oder keine gültige Session.`}
+function compactLiveError(e:any){
+ const raw=String(e?.message||e?.error||e||'Unbekannter Live-Fehler').replace(/\s+/g,' ').trim()
+ if(!raw)return 'Unbekannter Live-Fehler'
+ if(raw.includes('Tabelle')&&raw.includes('nicht erlaubt'))return raw
+ if(raw.includes('Admin-Zugriffe')||raw.includes('Keine Berechtigung'))return raw
+ if(raw.includes('Nicht authentifiziert')||raw.includes('Session'))return raw
+ if(raw.includes('API lieferte HTML'))return 'Backend-Proxy liefert HTML statt JSON. BACKEND_URL/Vercel-Proxy prüfen.'
+ if(raw.includes('Failed to fetch')||raw.includes('fetch failed'))return 'Backend nicht erreichbar. BACKEND_URL/Proxy prüfen.'
+ return raw.length>180?raw.slice(0,180)+'…':raw
+}
 
 function useStore(){
  const [data,setData]=useState<any>(seed)
@@ -424,22 +434,22 @@ function useStore(){
  // serverseitige Scope-Pruefung -> umgeht die RLS-Lotterie). Faellt bei jedem
  // Backend-Fehler (Tabelle nicht erlaubt, nicht eingeloggt, etc.) transparent
  // auf den bisherigen Browser-Supabase-Pfad zurueck -> keine Regression.
- async function backendWrite(op:'create'|'update'|'remove',table:string,payload:any,id?:string):Promise<boolean>{
+ async function backendWrite(op:'create'|'update'|'remove',table:string,payload:any,id?:string):Promise<{ok:boolean,error?:any}>{
   try{
    if(op==='create') await storeClient.create(table,payload)
    else if(op==='update') await storeClient.update(table,String(id),payload)
    else await storeClient.remove(table,String(id))
-   return true
-  }catch(_){ return false }
+   return {ok:true}
+  }catch(error){ return {ok:false,error} }
  }
  async function create(table:string,row:any){
   const payload=withModeScope(table,{id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()})
   try{
    const viaBackend=await backendWrite('create',table,payload)
-   if(viaBackend){await load()}
+   if(viaBackend.ok){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
-   else throw new Error(liveWriteUnavailableMessage(table))
+   else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
    addActivity('create',table,payload.id,{live:hasSupabase})
    notify('Gespeichert')
   }catch(e:any){
@@ -450,7 +460,7 @@ function useStore(){
     notify('Lokal gespeichert (Demo/Fallback)')
     return payload
    }
-   notify('Live-Speicherung fehlgeschlagen – es wurde kein lokaler Beispieldatensatz angelegt.')
+   notify('Live-Speicherung fehlgeschlagen: '+compactLiveError(e))
    throw e
   }
   return payload
@@ -459,10 +469,10 @@ function useStore(){
   const normalized=withModeScope(table,{...row,updated_at:row.updated_at||new Date().toISOString()})
   try{
    const viaBackend=await backendWrite('update',table,normalized,id)
-   if(viaBackend){await load()}
+   if(viaBackend.ok){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
-   else throw new Error(liveWriteUnavailableMessage(table))
+   else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
    addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
    notify('Aktualisiert')
   }catch(e:any){
@@ -473,7 +483,7 @@ function useStore(){
     notify('Lokal aktualisiert (Demo/Fallback)')
     return {id,...normalized}
    }
-   notify('Live-Aktualisierung fehlgeschlagen – lokale Änderung wurde nicht gespeichert.')
+   notify('Live-Aktualisierung fehlgeschlagen: '+compactLiveError(e))
    throw e
   }
   return {id,...normalized}
@@ -481,10 +491,10 @@ function useStore(){
  async function remove(table:string,id:string){
   try{
    const viaBackend=await backendWrite('remove',table,null,id)
-   if(viaBackend){await load()}
+   if(viaBackend.ok){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
-   else throw new Error(liveWriteUnavailableMessage(table))
+   else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
    addActivity('delete',table,id,{live:hasSupabase})
    notify('Gelöscht')
   }catch(e:any){
@@ -495,7 +505,7 @@ function useStore(){
     notify('Lokal gelöscht (Demo/Fallback)')
     return true
    }
-   notify('Live-Löschung fehlgeschlagen – lokale Löschung wurde nicht gespeichert.')
+   notify('Live-Löschung fehlgeschlagen: '+compactLiveError(e))
    throw e
   }
   return true

@@ -143,6 +143,37 @@ function notFound(message) {
   const e = new Error(message); e.status = 404; e.code = 'NOT_FOUND'; return e
 }
 
+function isMissingColumnError(error, columnNames = []) {
+  const msg = String(error?.message || error?.details || error?.hint || '').toLowerCase()
+  const code = String(error?.code || '').toUpperCase()
+  if (code === 'PGRST204') return columnNames.some((c) => msg.includes(String(c).toLowerCase())) || columnNames.length === 0
+  if (!msg.includes('column') && !msg.includes('schema cache') && !msg.includes('could not find')) return false
+  return columnNames.some((c) => msg.includes(String(c).toLowerCase()))
+}
+
+async function insertWithTimestampRetry(supabase, table, payload) {
+  let result = await supabase.from(table).insert(payload).select('*').maybeSingle()
+  if (!result.error) return result
+  if (isMissingColumnError(result.error, ['updated_at', 'created_at'])) {
+    const fallback = { ...payload }
+    delete fallback.updated_at
+    delete fallback.created_at
+    result = await supabase.from(table).insert(fallback).select('*').maybeSingle()
+  }
+  return result
+}
+
+async function updateWithTimestampRetry(supabase, table, id, patch) {
+  let result = await supabase.from(table).update(patch).eq('id', id).select('*').maybeSingle()
+  if (!result.error) return result
+  if (isMissingColumnError(result.error, ['updated_at'])) {
+    const fallback = { ...patch }
+    delete fallback.updated_at
+    result = await supabase.from(table).update(fallback).eq('id', id).select('*').maybeSingle()
+  }
+  return result
+}
+
 // Pruefung pro Operation. Wirft Fehler wenn nicht erlaubt.
 async function authorize({ supabase, table, row, user, userRole }) {
   const cfg = tableConfig(table)
@@ -211,7 +242,7 @@ async function createRow({ table, row, user, userRole }) {
   // created_at nur setzen wenn nicht uebergeben — Supabase-Default sollte
   // greifen, manche Tabellen haben aber keinen Default.
   if (!payload.created_at) payload.created_at = new Date().toISOString()
-  const { data, error } = await supabase.from(table).insert(payload).select('*').maybeSingle()
+  const { data, error } = await insertWithTimestampRetry(supabase, table, payload)
   if (error) throw error
   return data
 }
@@ -239,7 +270,7 @@ async function updateRow({ table, id, row, user, userRole }) {
   }
 
   const patch = { ...row, updated_at: new Date().toISOString() }
-  const { data, error } = await supabase.from(table).update(patch).eq('id', id).select('*').maybeSingle()
+  const { data, error } = await updateWithTimestampRetry(supabase, table, id, patch)
   if (error) throw error
   if (!data) throw notFound('Datensatz nicht gefunden')
   return data

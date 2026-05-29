@@ -39,23 +39,39 @@ function authMiddleware(options = {}) {
       req.user = data.user
 
       // Resolve role from the canonical user_profiles table — same pattern as authRoutes.js:/me.
-      // Tolerant: if no profile row exists yet, treat the user as 'customer' (least privilege).
+      // Wichtig: In manchen Supabase-Projekten ist user_profiles.id nicht identisch
+      // mit auth.users.id, der Datensatz ist aber per email vorhanden. Ohne diesen
+      // Fallback wird ein echter Admin als customer behandelt und /api/store lehnt
+      // Admin-Tabellen wie landing_page_settings ab.
       let role = 'customer'
       let status = 'active'
       let profile = null
+      const email = String(data.user.email || '').trim().toLowerCase()
       try {
         const lookup = await supabase
           .from('user_profiles')
           .select('role, status, customer_id, email')
           .eq('id', data.user.id)
           .maybeSingle()
-        if (lookup?.data) {
-          profile = lookup.data
-          role = String(lookup.data.role || 'customer').toLowerCase()
-          status = String(lookup.data.status || 'active').toLowerCase()
-        }
+        if (lookup?.data) profile = lookup.data
       } catch (_) {
-        // Profile lookup failed → fall back to customer role, do not block the request.
+        // Fallback per E-Mail folgt unten.
+      }
+      if (!profile && email) {
+        try {
+          const lookupByEmail = await supabase
+            .from('user_profiles')
+            .select('role, status, customer_id, email')
+            .ilike('email', email)
+            .maybeSingle()
+          if (lookupByEmail?.data) profile = lookupByEmail.data
+        } catch (_) {
+          // Profile lookup failed → fall back to customer role, do not block the request.
+        }
+      }
+      if (profile) {
+        role = String(profile.role || 'customer').toLowerCase()
+        status = String(profile.status || 'active').toLowerCase()
       }
 
       const isAdmin = ADMIN_ROLES.has(role) && status === 'active'
