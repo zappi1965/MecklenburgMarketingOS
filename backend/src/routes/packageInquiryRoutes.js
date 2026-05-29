@@ -1,6 +1,13 @@
 const express = require('express')
 const MailService = require('../services/mailService')
 
+function cleanEnv(value) {
+  const raw = String(value || '').trim().replace(/^['\"]|['\"]$/g, '')
+  if (!raw) return ''
+  if (['null', 'undefined', 'false', '0', '-'].includes(raw.toLowerCase())) return ''
+  return raw
+}
+
 function clean(value, max = 2000) {
   return String(value || '').trim().slice(0, max)
 }
@@ -40,17 +47,45 @@ function packageInquiryRoutes(supabase) {
         await supabase.from('notifications').insert({ customer_id: null, title: 'Neue Paketanfrage über Landingpage', message: `${companyName || contactName} fragt ${packageName} an. E-Mail: ${email}${phone ? ' · Telefon: ' + phone : ''}`, type: 'public_package_inquiry', actor_name: companyName || contactName, created_at: now }).then(() => undefined, () => undefined)
       }
 
+      const inquiryTo = cleanEnv(process.env.PACKAGE_INQUIRY_TO) || cleanEnv(process.env.MAIL_TO_PACKAGE_INQUIRIES) || cleanEnv(process.env.MAIL_TO) || 'zapf@mecklenburgmarketing.de'
+      const inquiryFrom = cleanEnv(process.env.PACKAGE_INQUIRY_FROM) || 'Mecklenburg Marketing <noreply@mecklenburgmarketing.de>'
       const subject = `Neue Paketanfrage: ${packageName}`
       const text = `Neue Paketanfrage über die Landingpage\n\nPaket: ${packageName}\nName: ${contactName}\nBetrieb: ${companyName || '-'}\nE-Mail: ${email}\nTelefon: ${phone || '-'}\n\nNachricht:\n${message || '-'}\n\nQuelle: ${source}\nZeitpunkt: ${now}`
       const html = `<h2>Neue Paketanfrage</h2><p><b>Paket:</b> ${htmlEscape(packageName)}</p><p><b>Name:</b> ${htmlEscape(contactName)}</p><p><b>Betrieb:</b> ${htmlEscape(companyName || '-')}</p><p><b>E-Mail:</b> ${htmlEscape(email)}</p><p><b>Telefon:</b> ${htmlEscape(phone || '-')}</p><h3>Nachricht</h3><p>${htmlEscape(message || '-').replace(/\n/g,'<br/>')}</p><p><small>Quelle: ${htmlEscape(source)} · ${htmlEscape(now)}</small></p>`
       let mailStatus = 'skipped'
+      let mailErrorMessage = null
+      let mailResult = null
       try {
         const mail = new MailService()
-        const result = await mail.send({ to: 'zapf@mecklenburgmarketing.de', subject, html, text })
-        mailStatus = result?.dryRun ? 'dry_run' : 'sent'
-      } catch (mailError) { mailStatus = mailError.message || 'mail_error' }
+        mailResult = await mail.send({ to: inquiryTo, subject, html, text, replyTo: email, requireDelivery: true, from: inquiryFrom })
+        mailStatus = mailResult?.sent ? 'sent' : (mailResult?.dryRun ? 'dry_run' : 'unknown')
+      } catch (mailError) {
+        mailStatus = 'failed'
+        mailErrorMessage = mailError.message || String(mailError)
+      }
 
-      res.json({ ok:true, request: requestRow, db_status: dbStatus, mail_status: mailStatus })
+      if (supabase && requestRow?.id) {
+        await supabase.from('package_requests').update({
+          mail_status: mailStatus,
+          mail_error: mailErrorMessage,
+          mail_to: inquiryTo,
+          metadata: { ...(requestRow.metadata || metadata || {}), mail_from: inquiryFrom },
+          mail_provider_id: mailResult?.id || null,
+          updated_at: new Date().toISOString()
+        }).eq('id', requestRow.id).then(() => undefined, () => undefined)
+      }
+
+      res.json({
+        ok:true,
+        request: requestRow,
+        db_status: dbStatus,
+        mail_status: mailStatus,
+        mail_sent: mailStatus === 'sent',
+        mail_error: mailErrorMessage,
+        mail_to: inquiryTo,
+        mail_from: inquiryFrom,
+        mail_provider_id: mailResult?.id || null
+      })
     } catch (e) { next(e) }
   })
 

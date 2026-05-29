@@ -1,6 +1,13 @@
 
 const FormData = require('form-data')
 
+function cleanEnv(value) {
+  const raw = String(value || '').trim().replace(/^['\"]|['\"]$/g, '').replace(/\/+$/, '')
+  if (!raw) return ''
+  if (['null', 'undefined', 'false', '0', '-'].includes(raw.toLowerCase())) return ''
+  return raw
+}
+
 function describeFetchError(error) {
   if (!error) return 'Unbekannter Fehler'
   if (error.name === 'AbortError') return 'Zeitüberschreitung beim Verbindungsaufbau'
@@ -16,9 +23,16 @@ function maskGotenbergUrl(value = '') {
   }
 }
 
+function gotenbergBaseUrl(value) {
+  const raw = cleanEnv(value)
+  if (!raw) return ''
+  try { return new URL(raw).origin }
+  catch (_) { return '' }
+}
+
 class GotenbergService {
   constructor(supabase) {
-    this.url = process.env.GOTENBERG_URL
+    this.url = cleanEnv(process.env.GOTENBERG_URL)
     this.enabled = Boolean(this.url)
     this.supabase = supabase
   }
@@ -30,7 +44,8 @@ class GotenbergService {
 
     let base
     try {
-      base = new URL(String(this.url || '').trim().replace(/\/+$/, '')).origin
+      base = gotenbergBaseUrl(this.url)
+      if (!base) throw new Error('invalid_url')
     } catch (_) {
       return { ok: false, connected: false, configured: true, url_masked: 'ungueltige-url', error: 'GOTENBERG_URL ist keine gültige URL.', hint: 'Setze eine erreichbare http(s)-URL.' }
     }
@@ -52,10 +67,13 @@ class GotenbergService {
       return { dryRun: true, note: 'GOTENBERG_URL fehlt. DOCX→PDF vorbereitet, aber nicht aktiv.' }
     }
 
+    const base = gotenbergBaseUrl(this.url)
+    if (!base) return { dryRun: true, note: 'GOTENBERG_URL ist ungültig. DOCX→PDF vorbereitet, aber nicht aktiv.' }
+
     const form = new FormData()
     form.append('files', buffer, filename)
 
-    const res = await fetch(`${this.url.replace(/\/$/,'')}/forms/libreoffice/convert`, {
+    const res = await fetch(`${base}/forms/libreoffice/convert`, {
       method: 'POST',
       body: form
     })
@@ -100,7 +118,15 @@ class GotenbergService {
         signal: controller.signal
       }
       if (typeof form.getHeaders === 'function') init.headers = form.getHeaders()
-      res = await fetch(`${this.url.replace(/\/$/,'')}/forms/chromium/convert/html`, init)
+      const base = gotenbergBaseUrl(this.url)
+      if (!base) {
+        const invalid = new Error('Gotenberg nicht konfiguriert: GOTENBERG_URL fehlt oder ist ungültig.')
+        invalid.status = 503
+        invalid.statusCode = 503
+        invalid.code = 'GOTENBERG_NOT_CONFIGURED'
+        throw invalid
+      }
+      res = await fetch(`${base}/forms/chromium/convert/html`, init)
     } catch (error) {
       const wrapped = new Error(`Gotenberg nicht erreichbar (${maskGotenbergUrl(this.url)}): ${describeFetchError(error)}`)
       wrapped.status = 503

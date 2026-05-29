@@ -126,6 +126,13 @@ async function checkTable(supabaseAdmin, table) {
   }
 }
 
+function cleanIntegrationEnv(value) {
+  const raw = String(value || '').trim().replace(/^['\"]|['\"]$/g, '').replace(/\/+$/, '')
+  if (!raw) return ''
+  if (['null', 'undefined', 'false', '0', '-'].includes(raw.toLowerCase())) return ''
+  return raw
+}
+
 function maskUrl(value = '') {
   try {
     const url = new URL(String(value || '').trim())
@@ -142,7 +149,7 @@ function describeFetchError(error) {
 }
 
 async function checkGotenbergRuntime() {
-  const raw = String(process.env.GOTENBERG_URL || '').trim().replace(/\/+$/, '')
+  const raw = cleanIntegrationEnv(process.env.GOTENBERG_URL)
   if (!raw) {
     return {
       configured: false,
@@ -242,7 +249,7 @@ function systemRoutes(supabaseAdmin) {
       google_oauth: { connected: diagnostics.google_oauth.configured, missing_env: diagnostics.google_oauth.missing_env, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
       google_places: { connected: diagnostics.google_places.present, missing_env: diagnostics.google_places.present ? [] : ['GOOGLE_PLACES_API_KEY'], purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
       gotenberg: { connected: gotenbergRuntime.connected, configured: gotenbergRuntime.configured, missing_env: gotenbergRuntime.missing_env || [], error: gotenbergRuntime.error, hint: gotenbergRuntime.hint, status: gotenbergRuntime.status, url_masked: gotenbergRuntime.url_masked, purpose: 'serverseitige PDF-Erzeugung' },
-      mail: { connected: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST), missing_env: (process.env.RESEND_API_KEY || process.env.SMTP_HOST) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
+      mail: { connected: Boolean(cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)), missing_env: (cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
     }
     res.json({
       ok: true,
@@ -365,7 +372,7 @@ function systemRoutes(supabaseAdmin) {
       google_oauth: { connected: googleOauthMissing.length === 0, missing_env: googleOauthMissing, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
       google_places: { connected: googlePlacesMissing.length === 0, missing_env: googlePlacesMissing, purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
       gotenberg: { connected: gotenbergRuntime.connected, configured: gotenbergRuntime.configured, missing_env: gotenbergRuntime.missing_env || [], error: gotenbergRuntime.error, hint: gotenbergRuntime.hint, status: gotenbergRuntime.status, url_masked: gotenbergRuntime.url_masked, purpose: 'serverseitige PDF-Erzeugung' },
-      mail: { connected: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST), missing_env: (process.env.RESEND_API_KEY || process.env.SMTP_HOST) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
+      mail: { connected: Boolean(cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)), missing_env: (cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
     })
   })
 
@@ -376,10 +383,10 @@ function systemRoutes(supabaseAdmin) {
       ok: Boolean(supabaseAdmin) && missing.length === 0,
       supabase_configured: Boolean(supabaseAdmin),
       missing_env: missing,
-      gotenberg: Boolean(process.env.GOTENBERG_URL),
+      gotenberg: Boolean(cleanIntegrationEnv(process.env.GOTENBERG_URL)),
       google_oauth: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI),
       google_places: Boolean(process.env.GOOGLE_PLACES_API_KEY),
-      mail: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST)
+      mail: Boolean(cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST))
     }
 
     let accessTables = []
