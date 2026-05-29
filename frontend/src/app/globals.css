@@ -3479,3 +3479,22 @@ input,select,textarea{font-size:16px} /* iOS Auto-Zoom verhindern */
 
 /* v0.58 dashboard focus cards without removing tools */
 .portalFocusGrid{margin:0}.portalFocusGrid>div{border:1px solid rgba(148,163,184,.14);border-radius:16px;background:rgba(2,6,23,.22);padding:14px;display:grid;gap:8px;align-content:start;min-height:120px}.portalFocusGrid b{color:#fff;font-size:14px}.portalFocusGrid span{color:#cbd5e1;font-size:12px;line-height:1.45}.portalFocusGrid .btn{margin-top:4px;width:max-content}
+
+
+/* v0.59 public inquiry + UI contrast fixes */
+body .packageLandingCard,
+body .packageLandingCard:first-child,
+body .packageLandingCard:nth-child(1),
+body .packageLandingCard:nth-child(2),
+body .packageLandingCard:nth-child(3){
+  background:linear-gradient(180deg,rgba(18,27,42,.98),rgba(13,20,32,.98))!important;
+  color:#f8fafc!important;
+  border-color:rgba(148,163,184,.24)!important;
+  box-shadow:0 22px 70px rgba(0,0,0,.34)!important;
+}
+body .packageLandingCard h3,body .packageLandingCard .packagePrice,body .packageLandingCard .packageBenefit,body .packageLandingCard li{color:#f8fafc!important}
+body .packageLandingCard .packageEyebrow{color:#93c5fd!important}
+body .packageLandingCard .packagePrice span{color:#94a3b8!important}
+body .packageLandingCard .packageCardBtn{background:rgba(15,23,42,.82)!important;border-color:rgba(148,163,184,.24)!important;color:#e5edf8!important}
+.v42PackageEdit,.inlineForm,.packageEditorGrid .card,.formField,.toolEditRow,.ruleBox{min-width:0;color:#f8fafc}.v42PackageEdit,.inlineForm{background:linear-gradient(180deg,rgba(15,23,42,.84),rgba(9,14,24,.90))!important;border-color:rgba(148,163,184,.18)!important}.v42PackageEdit .input,.inlineForm .input,.packageEditorGrid .input,.formField .input{background:#0a1019!important;color:#fff!important;border-color:rgba(148,163,184,.24)!important}.v42PackageEdit .textarea,.inlineForm .textarea,.packageEditorGrid .textarea,.formField .textarea{min-height:118px!important}.v42PackageEdit .sub,.inlineForm .sub,.packageEditorGrid .sub,.formField .fieldHelp{color:#aeb8c8!important}.packageEditorGrid{align-items:start}.packageEditorGrid .card{overflow:hidden}.toolEditRow{grid-template-columns:minmax(0,1fr) 42px!important}.toolEditRow .input{min-width:0}
+.publicInquiryOverlay{position:fixed;inset:0;background:rgba(2,6,23,.72);backdrop-filter:blur(12px);display:grid;place-items:center;z-index:200;padding:22px}.publicInquiryModal{width:min(720px,96vw);max-height:90dvh;overflow:auto;border:1px solid rgba(148,163,184,.22);border-radius:26px;background:linear-gradient(180deg,rgba(18,27,42,.98),rgba(8,13,23,.98));box-shadow:0 30px 120px rgba(0,0,0,.62);padding:24px;color:#f8fafc;text-align:left}.publicInquiryModal h2{font-size:32px;letter-spacing:-.06em;margin:4px 0 0}.publicInquiryModal p{color:#cbd5e1;line-height:1.55}.publicInquiryModal .input{background:#0a1019!important;color:#fff!important;border-color:rgba(148,163,184,.24)!important}.publicInquiryModal .textarea{min-height:132px!important}.inquiryStatus{margin-top:10px;color:#bfdbfe!important}@media(max-width:760px){.publicInquiryModal .grid2{grid-template-columns:1fr!important}.publicInquiryModal{padding:18px}.publicInquiryModal .row.between{display:grid}.publicInquiryModal .row.between .btn{width:100%}}

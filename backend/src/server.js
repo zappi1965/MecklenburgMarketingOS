@@ -44,6 +44,7 @@ const { reviewWidgetRoutes, reviewWidgetEmbedRouter } = require('./routes/review
 const complianceCockpitRoutes = require('./routes/complianceCockpitRoutes')
 const apiKeyRoutes = require('./routes/apiKeyRoutes')
 const publicApiV1Routes = require('./routes/publicApiV1Routes')
+const packageInquiryRoutes = require('./routes/packageInquiryRoutes')
 const pricingRoutes = require('./routes/pricingRoutes')
 const onboardingRoutes = require('./routes/onboardingRoutes')
 const loyaltyScanRoutes = require('./routes/loyaltyScanRoutes')
@@ -107,6 +108,7 @@ const PUBLIC_PATHS = [
   /^\/api\/pos\/webhook\/[^/]+$/,
   /^\/api\/chatbot\/(start|message)$/,
   /^\/api\/review-widget\/embed\/[^/]+$/,
+  /^\/api\/public\/package-inquiry$/,
   /^\/api\/public\/v1\//,
   /^\/api\/wallet\/me(\/request-link)?$/,
   /^\/api\/booking\/[^/]+\/(services|slots|book)$/
@@ -125,6 +127,7 @@ app.use('/api', (req, res, next) => {
 
 // System route is critical because Vercel proxy-health and deployment checks use it.
 app.use('/api/system', systemRoutes(supabaseAdmin))
+app.use('/api/public', packageInquiryRoutes(supabaseAdmin))
 
 // Routes that touch admin-only or cross-tenant data. Adds a second guard
 // requiring role=admin in user_profiles (admin or super_admin with status=active).
