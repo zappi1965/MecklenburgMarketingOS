@@ -1,9 +1,12 @@
 
 import { BROWSER_BACKEND_BASE } from './backendUrl'
+import { getCurrentSession } from './authClient'
 
 const API_BASE = BROWSER_BACKEND_BASE
 async function request(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${API_BASE}/api/customer-intelligence${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } })
+  const session = await getCurrentSession()
+  const auth = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+  const res = await fetch(`${API_BASE}/api/customer-intelligence${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...auth, ...(options.headers || {}) } })
   const data = await res.json()
   if (!res.ok || data.ok === false) throw new Error(data.error || 'Customer Intelligence Fehler')
   return data

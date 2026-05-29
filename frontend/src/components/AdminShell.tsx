@@ -5,7 +5,8 @@ import {
   LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
-  Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles
+  Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles,
+  BrainCircuit, Gauge, TrendingUp
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -22,6 +23,7 @@ const NAV: NavSection[] = [
       { href: '/admin/maintenance', label: 'Wartungs-Reminder', icon: Wrench, hint: 'Tages-Scan: Logo, Loyalty, MFA, ...' },
       { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Customer' },
       { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
+      { href: '/admin/customer-intelligence', label: 'Customer Intelligence', icon: BrainCircuit, hint: 'Health-/Risiko-/Upsell-Score, Monatsreports' },
       { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen & Reports' },
       { href: '/growth-command', label: 'Growth Command', icon: BarChart3, hint: 'Alle 12 Bereiche' },
       { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln' }
@@ -39,6 +41,7 @@ const NAV: NavSection[] = [
       { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Megaphone },
       { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText },
       { href: '/admin/widget', label: 'Bewertungs-Widget', icon: Star },
+      { href: '/admin/review-intelligence', label: 'Review Intelligence', icon: Gauge, hint: 'Sentiment-Profil, Vorlagen' },
       { href: '/admin/newsletter', label: 'Newsletter', icon: Mail },
       { href: '/admin/mail-assistant', label: 'AI Mail-Assistant', icon: Mail }
     ]
@@ -61,6 +64,7 @@ const NAV: NavSection[] = [
       { href: '/admin/accounting', label: 'Buchhaltungs-Export', icon: FileSpreadsheet, hint: 'DATEV / lexoffice / sevDesk' },
       { href: '/admin/pos', label: 'Kassen-Anbindung', icon: CreditCard, hint: 'POS-/SumUp-Transaktionen' },
       { href: '/admin/dunning', label: 'Mahnstufen', icon: ChartLine },
+      { href: '/admin/revenue-forecast', label: 'Umsatz-Prognose', icon: TrendingUp, hint: 'Forecast, Nutzung, Paket-Empfehlung' },
       { href: '/admin/pricing', label: 'Smart Pricing', icon: Wallet }
     ]
   },
