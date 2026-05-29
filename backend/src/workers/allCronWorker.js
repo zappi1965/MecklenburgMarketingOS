@@ -1,3 +1,4 @@
+require('../lib/wsPolyfill')
 // Kombinierter Cron-Worker: startet ALLE periodischen Hintergrund-Jobs in
 // EINEM Prozess. So braucht es auf Railway nur einen einzigen zusaetzlichen
 // Worker-Service statt vier.

@@ -1,3 +1,4 @@
+require('../lib/wsPolyfill')
 const cron = require('node-cron')
 const { createClient } = require('@supabase/supabase-js')
 

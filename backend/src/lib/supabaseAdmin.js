@@ -1,3 +1,4 @@
+require('./wsPolyfill')
 const { createClient } = require('@supabase/supabase-js')
 
 let cachedClient = null
