@@ -1,20 +1,28 @@
 import { API_BASE } from './config'
 import { apiRequest } from './apiRequest'
+import { getCurrentSession } from './authClient'
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const session = await getCurrentSession()
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+}
 
 export const businessToolsClient = {
   health() {
     return apiRequest(`${API_BASE}/api/business-tools/health`, { timeoutMs: 12000 })
   },
-  googleBusinessAudit(payload: any) {
+  async googleBusinessAudit(payload: any) {
     return apiRequest(`${API_BASE}/api/business-tools/google-business-audit`, {
       method: 'POST',
+      headers: await authHeaders(),
       body: JSON.stringify(payload),
       timeoutMs: 20000
     })
   },
-  leadSearch(payload: any) {
+  async leadSearch(payload: any) {
     return apiRequest(`${API_BASE}/api/business-tools/lead-search`, {
       method: 'POST',
+      headers: await authHeaders(),
       body: JSON.stringify(payload),
       timeoutMs: 25000
     })
@@ -25,7 +33,7 @@ export const businessToolsClient = {
     try {
       const res = await fetch(`${API_BASE}/api/business-tools/render-pdf`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify(payload),
         signal: controller.signal,
         cache: 'no-store'

@@ -6,7 +6,7 @@ import {
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
   Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles,
-  BrainCircuit, Gauge, TrendingUp
+  BrainCircuit, Gauge, TrendingUp, Target
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 
@@ -24,6 +24,7 @@ const NAV: NavSection[] = [
       { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Customer' },
       { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
       { href: '/admin/customer-intelligence', label: 'Customer Intelligence', icon: BrainCircuit, hint: 'Health-/Risiko-/Upsell-Score, Monatsreports' },
+      { href: '/admin/sales', label: 'Sales-Werkzeuge', icon: Target, hint: 'Google-Audit, Lead-Suche, Angebote, Vertraege' },
       { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen & Reports' },
       { href: '/growth-command', label: 'Growth Command', icon: BarChart3, hint: 'Alle 12 Bereiche' },
       { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln' }
