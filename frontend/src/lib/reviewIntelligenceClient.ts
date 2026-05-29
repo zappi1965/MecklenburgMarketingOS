@@ -1,11 +1,14 @@
 
 import { BROWSER_BACKEND_BASE } from './backendUrl'
+import { getCurrentSession } from './authClient'
 
 const API_BASE = BROWSER_BACKEND_BASE
 async function request(path:string, options:RequestInit={}) {
+  const session = await getCurrentSession()
+  const auth = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
   const res = await fetch(`${API_BASE}/api/review-intelligence${path}`, {
     ...options,
-    headers:{ 'Content-Type':'application/json', ...(options.headers || {}) }
+    headers:{ 'Content-Type':'application/json', ...auth, ...(options.headers || {}) }
   })
   const data = await res.json()
   if (!res.ok || data.ok === false) throw new Error(data.error || 'Review Intelligence Fehler')

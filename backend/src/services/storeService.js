@@ -63,6 +63,32 @@ const ALLOWLIST = {
   knowledge_articles:              { scope: 'admin' },
   integrations:                    { scope: 'customer' },
 
+  // Monolith-CRUD (useStore) — customer-scoped Datensaetze
+  tickets:                         { scope: 'customer' },
+  offers:                          { scope: 'customer' },
+  customer_clients:                { scope: 'customer' },
+  notifications:                   { scope: 'customer' },
+  package_requests:                { scope: 'customer' },
+  client_success_events:           { scope: 'customer' },
+  loyalty_customers:               { scope: 'customer' },
+  loyalty_transactions:            { scope: 'customer' },
+  loyalty_reward_redemptions:      { scope: 'customer' },
+  // Monolith-CRUD — admin-scoped (Stammdaten/Billing/Demo)
+  customers:                       { scope: 'admin' },
+  customer_subscriptions:          { scope: 'admin' },
+  customer_tool_access:            { scope: 'admin' },
+  workflow_runs:                   { scope: 'admin' },
+  demo_customers:                  { scope: 'admin' },
+  demo_invoices:                   { scope: 'admin' },
+  demo_contracts:                  { scope: 'admin' },
+  demo_notes:                      { scope: 'admin' },
+  demo_appointments:               { scope: 'admin' },
+  demo_files:                      { scope: 'admin' },
+  demo_notifications:              { scope: 'admin' },
+  demo_workflow_runs:              { scope: 'admin' },
+  demo_qr_campaigns:               { scope: 'admin' },
+  demo_mail_jobs:                  { scope: 'admin' },
+
   // Booking-Engine
   booking_services:                { scope: 'customer' },
   booking_resources:               { scope: 'customer' },

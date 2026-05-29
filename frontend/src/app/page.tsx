@@ -12,6 +12,7 @@ import { supabaseAuth, getCurrentUserProfile } from '@/lib/authClient'
 import { DEMO_SANDBOX_KEY, markDemoMode, markLiveMode, clearDemoSandbox, isDemoMode, isDemoFeatureEnabled } from '@/lib/demoSandbox'
 import { demoToolsClient, openPdfBase64, openQrCampaign } from '@/lib/demoToolsClient'
 import { API_BASE, hasSupabase, supabase } from '@/lib/supabase'
+import { storeClient } from '@/lib/storeClient'
 import { startGoogleAuth, syncGoogleProvider, systemReady, systemSchema, integrationStatus, providerToApiKey } from '@/lib/apiReady'
 import { apiRequest } from '@/lib/apiRequest'
 import { businessToolsClient } from '@/lib/businessToolsClient'
@@ -338,10 +339,24 @@ function useStore(){
   setData((p:any)=>({...p,activity_logs:[log,...(p.activity_logs||[])]}))
   try{if(hasSupabase&&supabase){void Promise.resolve(supabase.from('activity_logs').insert(log)).then(()=>undefined,()=>undefined)}}catch{}
  }
+ // Schreibt bevorzugt ueber das gehaertete /api/store-Backend (Service-Role,
+ // serverseitige Scope-Pruefung -> umgeht die RLS-Lotterie). Faellt bei jedem
+ // Backend-Fehler (Tabelle nicht erlaubt, nicht eingeloggt, etc.) transparent
+ // auf den bisherigen Browser-Supabase-Pfad zurueck -> keine Regression.
+ async function backendWrite(op:'create'|'update'|'remove',table:string,payload:any,id?:string):Promise<boolean>{
+  try{
+   if(op==='create') await storeClient.create(table,payload)
+   else if(op==='update') await storeClient.update(table,String(id),payload)
+   else await storeClient.remove(table,String(id))
+   return true
+  }catch(_){ return false }
+ }
  async function create(table:string,row:any){
   const payload=withModeScope(table,{id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()})
   try{
-   if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
+   const viaBackend=await backendWrite('create',table,payload)
+   if(viaBackend){await load()}
+   else if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
    else setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
    addActivity('create',table,payload.id,{live:hasSupabase})
    notify('Gespeichert')
@@ -355,7 +370,9 @@ function useStore(){
  async function update(table:string,id:string,row:any){
   const normalized=withModeScope(table,{...row,updated_at:row.updated_at||new Date().toISOString()})
   try{
-   if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
+   const viaBackend=await backendWrite('update',table,normalized,id)
+   if(viaBackend){await load()}
+   else if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
    else setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
    addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
    notify('Aktualisiert')
@@ -368,7 +385,9 @@ function useStore(){
  }
  async function remove(table:string,id:string){
   try{
-   if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
+   const viaBackend=await backendWrite('remove',table,null,id)
+   if(viaBackend){await load()}
+   else if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
    else setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
    addActivity('delete',table,id,{live:hasSupabase})
    notify('Gelöscht')
