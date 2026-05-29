@@ -1,14 +1,12 @@
 const cron = require('node-cron')
-const { createClient } = require('@supabase/supabase-js')
+const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
 let MailService
 let ApiSyncService
 try { MailService = require('../services/mailService') } catch { MailService = class { async send(){ return null } } }
 try { ApiSyncService = require('../services/apiSyncService') } catch { ApiSyncService = class {} }
 
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : null
+const supabase = getSupabaseAdmin()
 
 const mail = new MailService()
 const apiSync = supabase ? new ApiSyncService(supabase) : null
