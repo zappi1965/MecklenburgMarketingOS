@@ -29,19 +29,38 @@ export function describeApiError(error: any) {
   return error.message || String(error)
 }
 
+async function resolveAuthHeader(existingHeaders: HeadersInit | undefined): Promise<Record<string, string>> {
+  const current = new Headers(existingHeaders || {})
+  if (current.has('Authorization')) return {}
+
+  try {
+    const mod = await import('./authClient')
+    const session = await mod.getCurrentSession()
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
+function mergeHeaders(expectJson: boolean, initHeaders: HeadersInit | undefined, authHeader: Record<string, string>) {
+  return {
+    ...(expectJson ? { 'Content-Type': 'application/json' } : {}),
+    ...(initHeaders || {}),
+    ...authHeader
+  }
+}
+
 export async function apiRequest<T = any>(url: string, options: ApiRequestOptions = {}): Promise<T> {
   const { timeoutMs = 15000, expectJson = true, ...init } = options
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const authHeader = await resolveAuthHeader(init.headers)
 
   try {
     const res = await fetch(url, {
       ...init,
       signal: controller.signal,
-      headers: {
-        ...(expectJson ? { 'Content-Type': 'application/json' } : {}),
-        ...(init.headers || {})
-      },
+      headers: mergeHeaders(expectJson, init.headers, authHeader),
       cache: init.cache || 'no-store'
     })
 
@@ -63,7 +82,8 @@ export async function apiRequest<T = any>(url: string, options: ApiRequestOption
       const missing = Array.isArray(payload?.missing_env) && payload.missing_env.length
         ? ` · Fehlende ENV: ${payload.missing_env.join(', ')}`
         : ''
-      throw new Error(`${payload?.error || payload?.message || `${res.status} ${res.statusText}`}${hint}${missing}`)
+      const code = payload?.code ? ` [${payload.code}]` : ''
+      throw new Error(`${payload?.error || payload?.message || `${res.status} ${res.statusText}`}${code}${hint}${missing}`)
     }
 
     return payload as T

@@ -95,6 +95,7 @@ app.get('/api/health', (_, res) => {
 const PUBLIC_PATHS = [
   /^\/api\/health$/,
   /^\/api\/system\/health$/,
+  /^\/api\/system\/status$/,
   /^\/api\/auth\//,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/status$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/join-or-scan$/,

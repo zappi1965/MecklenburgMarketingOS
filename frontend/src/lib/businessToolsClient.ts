@@ -8,8 +8,8 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 export const businessToolsClient = {
-  health() {
-    return apiRequest(`${API_BASE}/api/business-tools/health`, { timeoutMs: 12000 })
+  async health() {
+    return apiRequest(`${API_BASE}/api/business-tools/health`, { headers: await authHeaders(), timeoutMs: 12000 })
   },
   async googleBusinessAudit(payload: any) {
     return apiRequest(`${API_BASE}/api/business-tools/google-business-audit`, {

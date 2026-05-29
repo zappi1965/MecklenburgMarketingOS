@@ -13,7 +13,7 @@ import { DEMO_SANDBOX_KEY, markDemoMode, markLiveMode, clearDemoSandbox, isDemoM
 import { demoToolsClient, openPdfBase64, openQrCampaign } from '@/lib/demoToolsClient'
 import { API_BASE, hasSupabase, supabase } from '@/lib/supabase'
 import { storeClient } from '@/lib/storeClient'
-import { startGoogleAuth, syncGoogleProvider, systemReady, systemSchema, integrationStatus, providerToApiKey } from '@/lib/apiReady'
+import { startGoogleAuth, syncGoogleProvider, systemReady, systemSchema, integrationStatus, systemStatus, providerToApiKey } from '@/lib/apiReady'
 import { apiRequest } from '@/lib/apiRequest'
 import { businessToolsClient } from '@/lib/businessToolsClient'
 import { customerPortalClient } from '@/lib/customerPortalClient'
@@ -305,11 +305,26 @@ function withModeScope(table:string,payload:any){
  return scoped
 }
 
+function allowLocalWriteFallback(){
+ try{
+  if(isDemoMode())return true
+  if(typeof window!=='undefined'&&new URLSearchParams(window.location.search).has('demo'))return true
+ }catch{}
+ return process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE==='true'
+}
+
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
  const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes']
  function notify(m:string){setToast(m);setTimeout(()=>setToast(''),3200)}
+ function persistLocal(updater:(p:any)=>any){
+  setData((p:any)=>{
+   const next=updater(p)
+   try{ if(allowLocalWriteFallback()) safeLocalStorageSet(DEMO_SANDBOX_KEY,next) }catch{}
+   return next
+  })
+ }
  useEffect(()=>{
   function onGlobalToast(e:any){notify(String(e?.detail||''))}
   if(typeof window!=='undefined') window.addEventListener('mmos:toast',onGlobalToast as any)
@@ -332,7 +347,11 @@ function useStore(){
   }
   setData((p:any)=>({...p,...r}))
  }
- useEffect(()=>{load()},[])
+ useEffect(()=>{
+  const cached=safeLocalStorageGet(DEMO_SANDBOX_KEY,null as any)
+  if(cached&&typeof cached==='object') setData((p:any)=>({...p,...cached}))
+  load()
+ },[])
  function addActivity(action:string,table:string,refId:string,extra:any={}){
   if(table==='activity_logs')return
   const log={id:uid(),type:action,title:`${table}: ${action}`,ref_table:table,ref_id:refId,severity:action==='delete'?'warning':'success',metadata:extra,created_at:new Date().toISOString()}
@@ -362,6 +381,12 @@ function useStore(){
    notify('Gespeichert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote create failed`,e)
+   if(allowLocalWriteFallback()){
+    persistLocal((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+    addActivity('create-local',table,payload.id,{fallback:true})
+    notify('Lokal gespeichert (Demo/Fallback)')
+    return payload
+   }
    notify('Live-Speicherung fehlgeschlagen – es wurde kein lokaler Beispieldatensatz angelegt.')
    throw e
   }
@@ -378,6 +403,12 @@ function useStore(){
    notify('Aktualisiert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote update failed`,e)
+   if(allowLocalWriteFallback()){
+    persistLocal((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>String(x.id)===String(id)?{...x,...normalized}:x)}))
+    addActivity('update-local',table,id,{fallback:true,patch:Object.keys(row||{})})
+    notify('Lokal aktualisiert (Demo/Fallback)')
+    return {id,...normalized}
+   }
    notify('Live-Aktualisierung fehlgeschlagen – lokale Änderung wurde nicht gespeichert.')
    throw e
   }
@@ -393,6 +424,12 @@ function useStore(){
    notify('Gelöscht')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote delete failed`,e)
+   if(allowLocalWriteFallback()){
+    persistLocal((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>String(x.id)!==String(id))}))
+    addActivity('delete-local',table,id,{fallback:true})
+    notify('Lokal gelöscht (Demo/Fallback)')
+    return true
+   }
    notify('Live-Löschung fehlgeschlagen – lokale Löschung wurde nicht gespeichert.')
    throw e
   }
@@ -401,18 +438,20 @@ function useStore(){
  return {data,setData,create,update,remove,load,toast,notify}
 }
 
-function isDemoRecord(c:any){return Boolean(c?.is_demo)||String(c?.name||'').trim().toUpperCase().startsWith('DEMO ')}
-function liveCustomers(d:any){return (d.customers||[]).filter((c:any)=>!isDemoRecord(c))}
+function isDemoRecord(c:any){return Boolean(c?.is_demo)||String(c?.name||c?.company_name||c?.business_name||'').trim().toUpperCase().startsWith('DEMO ')}
+function customerDisplayName(c:any){return String(c?.name||c?.company_name||c?.business_name||c?.display_name||c?.email||c?.id||'Unbenannter Kunde')}
+function normalizeCustomerRow(c:any){return c?{...c,name:customerDisplayName(c),branch:c.branch||c.industry||c.category||'',email:c.email||c.contact_email||'',package_name:c.package_name||c.package||'Starter'}:null}
+function liveCustomers(d:any){return (d.customers||[]).filter((c:any)=>!isDemoRecord(c)).map(normalizeCustomerRow).filter(Boolean)}
 function demoCustomers(d:any){
  const byId=new Map<string,any>()
- ;[...(d.demo_customers||[]),...(d.customers||[]).filter((c:any)=>isDemoRecord(c))].forEach((c:any)=>byId.set(c.id,c))
+ ;[...(d.demo_customers||[]),...(d.customers||[]).filter((c:any)=>isDemoRecord(c))].forEach((c:any)=>{const n=normalizeCustomerRow(c); if(n) byId.set(String(n.id||n.email||customerDisplayName(n)),n)})
  return Array.from(byId.values())
 }
 function allCustomers(d:any){return isDemoMode()? demoCustomers(d) : liveCustomers(d)}
 function liveCustomerById(d:any,id:string){return liveCustomers(d).find((c:any)=>String(c.id)===String(id))}
 function rawCustomerById(d:any,id:string){return [...(d.customers||[]),...(d.demo_customers||[])].find((c:any)=>String(c.id)===String(id))}
-function cname(d:any,id:string){return allCustomers(d).find((c:any)=>String(c.id)===String(id))?.name||'Kein Live-Kunde ausgewählt'}
-function cobj(d:any,id:string){return allCustomers(d).find((c:any)=>String(c.id)===String(id))}
+function cname(d:any,id:string){const c=allCustomers(d).find((c:any)=>String(c.id)===String(id));return c?customerDisplayName(c):'Kein Live-Kunde ausgewählt'}
+function cobj(d:any,id:string){const c=allCustomers(d).find((c:any)=>String(c.id)===String(id));return normalizeCustomerRow(c)}
 function isDemoCustomer(d:any,id:string){const raw=rawCustomerById(d,id);return Boolean(raw?.is_demo)||String(raw?.name||'').trim().toUpperCase().startsWith('DEMO ')}
 function hasLiveCustomer(d:any,id:string){return Boolean(liveCustomerById(d,id))}
 function firstLiveCustomerId(d:any){return liveCustomers(d)[0]?.id||''}
@@ -527,7 +566,14 @@ function NoLiveCustomerPanel({store,setView,setCid}:any){
  return <><Head title="Kein Live-Kunde ausgewählt" sub="Für dieses Modul muss zuerst ein echter Kunde angelegt oder ausgewählt werden." action={<LiveModeBadge/>}/><Card title="Live-Bereich ohne Beispieldaten"><p className="sub">Dieses Live-System zeigt keine Beispiel- oder Testdatensätze mehr an. Lege hier direkt einen echten Kunden an und öffne danach das gewünschte Modul.</p><div className="toolbarActions"><button className="btn" onClick={()=>{setView?.('crm');setOpen(true)}}>Live-Kunden anlegen</button>{isDemoFeatureEnabled()&&<button className="btn secondary" onClick={()=>setView?.('demo_environment')}>Interne Testumgebung öffnen</button>}</div>{open&&<div className="card inlineForm"><div className="row between"><div><b>Neuen Live-Kunden anlegen</b><div className="sub">Diese Daten werden als echter Live-Kunde mit <code>is_demo=false</code> gespeichert und anschließend im CRM geöffnet.</div></div><button className="btn secondary" onClick={()=>setOpen(false)}>Schließen</button></div><div className="grid2"><input className="input" value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Firmen-/Kundenname, z. B. Salon Musterstadt" title="Pflichtfeld: offizieller Firmen- oder Kundenname"/><input className="input" value={f.branch} onChange={e=>setF({...f,branch:e.target.value})} placeholder="Branche, z. B. Friseur, Restaurant, Handwerk" title="Branche für spätere Filter, Pakete und Auswertungen"/><input className="input" type="email" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="Allgemeine E-Mail-Adresse des Kunden" title="Kontaktadresse des Unternehmens oder der Hauptansprechperson"/><input className="input" value={f.phone} onChange={e=>setF({...f,phone:e.target.value})} placeholder="Telefonnummer mit Vorwahl" title="Telefonnummer für Kontakt, CRM und Kundenakte"/><input className="input" value={f.contact_person} onChange={e=>setF({...f,contact_person:e.target.value})} placeholder="Hauptansprechpartner, z. B. Max Mustermann" title="Person, mit der du hauptsächlich kommunizierst"/><input className="input" value={f.address} onChange={e=>setF({...f,address:e.target.value})} placeholder="Straße, Hausnummer, PLZ und Ort" title="Adresse für Kundenakte, Angebote und Rechnungen"/><select className="input" value={f.package_name} onChange={e=>setF({...f,package_name:e.target.value})} title="Startpaket des Kunden"><option>Starter</option><option>Growth</option><option>Premium</option></select><select className="input" value={f.status} onChange={e=>setF({...f,status:e.target.value})} title="Aktueller Kundenstatus"><option value="active">Aktiv</option><option value="pending">In Vorbereitung</option><option value="lead">Lead</option></select></div><div className="toolbarActions"><button className="btn" onClick={createLiveCustomer} disabled={busy}>{busy?'Speichert...':'Live-Kunde speichern & CRM öffnen'}</button><button className="btn secondary" onClick={()=>setOpen(false)} disabled={busy}>Abbrechen</button></div>{msg&&<div className="sub">{msg}</div>}</div>}{!open&&msg&&<div className="sub">{msg}</div>}</Card></>}
 
 function Metric({label,value,sub}:any){return <div className="metric"><div className="metricLabel">{label}</div><div className="metricValue">{value}</div>{sub&&<div className="delta">{sub}</div>}</div>}
-function Search({items,value,onChange,placeholder}:any){const [q,setQ]=useState('');const s=items.find((x:any)=>x.id===value);const list=items.filter((x:any)=>(x.name+x.branch+x.email).toLowerCase().includes(q.toLowerCase()));return <div style={{position:'relative'}}><input className="input" placeholder={placeholder} value={s&&!q?s.name:q} onChange={e=>{setQ(e.target.value);if(s)onChange('')}}/>{q&&<div className="card floating">{list.map((x:any)=><button className="nav" key={x.id} onClick={()=>{onChange(x.id);setQ('')}}>{x.name}<div className="sub">{x.branch} · {x.package_name}</div></button>)}</div>}</div>}
+function Search({items,value,onChange,placeholder}:any){
+ const [q,setQ]=useState('')
+ const safeItems=Array.isArray(items)?items.filter(Boolean):[]
+ const s=safeItems.find((x:any)=>String(x?.id||'')===String(value||''))
+ const needle=q.toLowerCase()
+ const list=safeItems.filter((x:any)=>[x?.name,x?.branch,x?.email,x?.contact_person,x?.package_name].filter(Boolean).join(' ').toLowerCase().includes(needle))
+ return <div style={{position:'relative'}}><input className="input" placeholder={placeholder} value={s&&!q?customerDisplayName(s):q} onChange={e=>{setQ(e.target.value);if(s)onChange('')}}/>{q&&<div className="card floating">{list.length===0&&<div className="sub">Kein Treffer gefunden.</div>}{list.map((x:any)=><button className="nav" key={x.id||x.email||x.name} onClick={()=>{onChange(x.id);setQ('')}}>{customerDisplayName(x)}<div className="sub">{[x.branch,x.package_name,x.email].filter(Boolean).join(' · ')||'Keine weiteren Daten'}</div></button>)}</div>}</div>
+}
 
 function CentralCustomerSelector({store,cid,setCid,title='Kunde auswählen',sub='Dieses Modul arbeitet mit den Daten des ausgewählten Kunden.'}:any){
  if(!setCid)return <Card title={title}><div className="sub">Aktiver Kunde: {cname(store.data,cid)}</div></Card>
@@ -692,9 +738,10 @@ function FileList({store,cid,type}:any){const rows=store.data.customer_files.fil
 
 function GlobalCustomerSearch({store,role,setCid,setView}:any){
  const [q,setQ]=useState('')
- const customers=allCustomers(store.data).filter((c:any)=>(c.name+c.branch+c.email).toLowerCase().includes(q.toLowerCase()))
+ const needle=q.toLowerCase()
+ const customers=allCustomers(store.data).filter((c:any)=>[customerDisplayName(c),c?.branch,c?.email,c?.package_name].filter(Boolean).join(' ').toLowerCase().includes(needle))
  if(role!=='admin') return <input className="search" placeholder="Suche..."/>
- return <div className="globalSearch"><input className="search" placeholder="Globale Kundensuche..." value={q} onChange={e=>setQ(e.target.value)}/>{q&&<div className="card globalResults">{customers.map((c:any)=><button className="nav" key={c.id} onClick={()=>{setCid(c.id);setView('crm');setQ('')}}>{c.name}<div className="sub">{c.branch} · {c.package_name}</div></button>)}</div>}</div>
+ return <div className="globalSearch"><input className="search" placeholder="Globale Kundensuche..." value={q} onChange={e=>setQ(e.target.value)}/>{q&&<div className="card globalResults">{customers.map((c:any)=><button className="nav" key={c.id||c.email||customerDisplayName(c)} onClick={()=>{setCid(c.id);setView('crm');setQ('')}}>{customerDisplayName(c)}<div className="sub">{[c.branch,c.package_name,c.email].filter(Boolean).join(' · ')||'Keine weiteren Daten'}</div></button>)}</div>}</div>
 }
 function QRCodes({store,cid,setCid,role='admin'}:any){
  const [customer,setCustomer]=useState(cid)
@@ -742,13 +789,18 @@ function MainLandingPageEditor({store}:any){
  function patchMetric(i:number,patch:any){const next=[...(f.example_metrics||defaultMainLandingSettings.example_metrics)];next[i]={...next[i],...patch};setF({...f,example_metrics:next})}
  async function save(){
   const payload={...f,id:'main',scope:'public_home',updated_at:new Date().toISOString()}
-  store.setData((d:any)=>{const existing=(d.landing_page_settings||[]).filter((x:any)=>!(x.id==='main'||x.scope==='public_home'));return {...d,landing_page_settings:[payload,...existing]}})
+  setMsg('Speichere Landingpage...')
+  store.setData((d:any)=>{const existing=(d.landing_page_settings||[]).filter((x:any)=>!(x.id==='main'||x.scope==='public_home'));const nd={...d,landing_page_settings:[payload,...existing]};try{safeLocalStorageSet(DEMO_SANDBOX_KEY,nd)}catch{};return nd})
   try{
    const existing=(store.data.landing_page_settings||[]).find((x:any)=>x.id==='main'||x.scope==='public_home')
    if(existing) await store.update('landing_page_settings',existing.id||'main',payload)
    else await store.create('landing_page_settings',payload)
-   setMsg('Landingpage gespeichert.')
-  }catch(e:any){setMsg('Live-Speicherung fehlgeschlagen. Bitte Supabase-Schema und Verbindung prüfen.')}
+   setMsg('Landingpage gespeichert und Vorschau aktualisiert.')
+   appToast('Landingpage gespeichert')
+  }catch(e:any){
+   setMsg('Landingpage lokal gespeichert. Live-Speicherung ist ohne gültige Admin-Session/Supabase-Schema nicht möglich.')
+   appToast('Landingpage lokal gespeichert')
+  }
  }
  function reset(){setF(defaultMainLandingSettings);setMsg('Standardtexte geladen – bitte speichern.')}
  return <><Head title="Haupt-Landingpage" sub="Texte der öffentlichen Startseite, Ablauf und FAQ bearbeiten" action={<button className="btn" onClick={save}>Landingpage speichern</button>}/><div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Logo-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des zweiten Buttons, z. B. Portal öffnen"/></div><label className="checkline"><input type="checkbox" checked={f.show_public_demo_button!==false} onChange={e=>setF({...f,show_public_demo_button:e.target.checked})}/> Zweiten öffentlichen Button auf der Landingpage anzeigen</label><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button>{isDemoFeatureEnabled()&&f.show_public_demo_button!==false&&<button className="btn secondary">{f.secondary_cta_label}</button>}</div><div className="sub">Ablauf, Ergebnisvorschau und FAQ werden auf der Landingpage darunter angezeigt.</div></div></Card></div><Card title="Ablauf in 3 Schritten bearbeiten">{(f.steps||defaultMainLandingSettings.steps).slice(0,3).map((step:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={step.title||''} onChange={e=>patchStep(i,{title:e.target.value})} placeholder={`Titel Schritt ${i+1}`}/><textarea className="input textarea" value={step.description||''} onChange={e=>patchStep(i,{description:e.target.value})} placeholder={`Beschreibung Schritt ${i+1}`}/></div>)}<div className="sub">Beispiel-Ergebnisse werden im dritten Schritt angezeigt.</div><div className="grid3">{(f.example_metrics||defaultMainLandingSettings.example_metrics).map((m:any,i:number)=><Card key={i} title={`Beispielwert ${i+1}`}><input className="input" value={m.label||''} onChange={e=>patchMetric(i,{label:e.target.value})} placeholder="Kennzahl, z. B. neue Bewertungen"/><input className="input" value={m.value||''} onChange={e=>patchMetric(i,{value:e.target.value})} placeholder="Wert, z. B. +34"/></Card>)}</div></Card><Card title="FAQ bearbeiten">{(f.faq||defaultMainLandingSettings.faq).map((qa:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={qa.question||''} onChange={e=>patchFaq(i,{question:e.target.value})} placeholder="Frage"/><textarea className="input textarea" value={qa.answer||''} onChange={e=>patchFaq(i,{answer:e.target.value})} placeholder="Antwort"/><button className="btn secondary" onClick={()=>setF({...f,faq:(f.faq||[]).filter((_:any,idx:number)=>idx!==i)})}>FAQ entfernen</button></div>)}<button className="btn secondary" onClick={()=>setF({...f,faq:[...(f.faq||[]),{question:'Neue Frage',answer:'Antwort ergänzen.'}]})}>FAQ hinzufügen</button></Card><Card title="Paketauflistung bearbeiten"><input className="input" value={f.package_headline||''} onChange={e=>setF({...f,package_headline:e.target.value})} placeholder="Überschrift über der Paketauflistung"/><textarea className="input textarea" value={f.package_subline||''} onChange={e=>setF({...f,package_subline:e.target.value})} placeholder="Kurzbeschreibung oberhalb der Pakete"/><div className="grid3">{Object.keys(packageDefs).map(pkg=>{const p=(f.packages||{})[pkg]||{};return <Card key={pkg} title={pkg}><input className="input" value={p.headline||pkg} onChange={e=>setPackage(pkg,{headline:e.target.value})} placeholder={`Anzeigename für ${pkg}`}/><textarea className="input textarea" value={p.description||''} onChange={e=>setPackage(pkg,{description:e.target.value})} placeholder={`Beschreibung für ${pkg} auf der Landingpage`}/><div className="sub">Preis und Featureliste kommen weiterhin aus der zentralen Paketlogik.</div></Card>})}</div><div className="toolbarActions"><button className="btn" onClick={save}>Änderungen speichern</button><button className="btn secondary" onClick={reset}>Standardtexte laden</button><button className="btn secondary" onClick={()=>{setF(mainLandingSettings(store.data));window.open('/', '_blank')}}>Öffentliche Seite öffnen</button></div></Card></>
@@ -1072,9 +1124,9 @@ export default function App(){
  const admin=[
    'dashboard','admin_profiles','main_landing','demo_environment','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr',
    'public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty',
-   'reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','heatmap','kpi',
+   'reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','kpi',
    'customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events',
-   'business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine','monthly_reports','onboarding','approvals','health_scores','dunning','health_center','security_center'
+   'business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine','monthly_reports','onboarding','approvals','health_scores','dunning','security_center'
  ]
  const packageToolRoutes:any={
    'QR Kampagnen':'qr',
@@ -1119,7 +1171,7 @@ export default function App(){
  const accessRows=(store.data.customer_tool_access||[]).filter((x:any)=>x.customer_id===cid)
  const enabledRoutes=accessRows.filter((x:any)=>x.enabled!==false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean)
  const disabledRoutes=new Set(accessRows.filter((x:any)=>x.enabled===false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean))
- const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route))
+ const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route)&&route!=='heatmap')
  const labels:any={
    dashboard:'Dashboard',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',
    public_landing:'Öffentliche /l/[slug] Seite',
@@ -1144,19 +1196,19 @@ export default function App(){
    package_matrix:'Paket-Matrix',
    timeline_events:'Timeline Events',
    seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',
-   knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Health Center',security_center:'Security Center'
+   knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Security & Health Center',security_center:'Security & Health Center'
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
    {label:'Übersicht',hint:'Start, Landingpage & Revenue',tools:['dashboard','main_landing','demo_environment','revenue_forecasting','revenue_share']},
-   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins und Zugriff',tools:['admin_profiles','security_center','health_center']},
+   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins und Systemstatus',tools:['admin_profiles','security_center']},
    {label:'CRM & Betrieb',hint:'Kunden, Onboarding, Termine, Tickets',tools:['crm','onboarding','finance','tickets','booking','pipeline','media','timeline_events','health_scores']},
    {label:'QR & Loyalty',hint:'QR-Code, Endkundenseite, Punkte, Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
    {label:'Reviews',hint:'Feedback, KI-Auswertung, Vorlagen',tools:['reviews']},
    {label:'Akquise & Sales',hint:'Audit, Leads, Angebote, Verträge',tools:['business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine']},
    {label:'Automation & Marketing',hint:'Kampagnen, Regeln, AI Assistant',tools:['automations','workflows','smart_automation','marketing_automation','ai_assistant']},
-   {label:'SEO & Analytics',hint:'Google/API, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']},
-   {label:'Reports & System',hint:'Reports, Output, Mahnwesen, Health',tools:['monthly_reports','approvals','dunning','security_center','health_center']}
+   {label:'SEO & Analytics',hint:'Google/API, SEO, KPI',tools:['integrations','seo','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']},
+   {label:'Reports & System',hint:'Reports, Output und Mahnwesen',tools:['monthly_reports','approvals','dunning']}
  ]
  const customerNavGroups=[
    {label:'Übersicht',hint:'Portalstart',tools:['dashboard','onboarding','knowledge']},
@@ -1164,7 +1216,7 @@ export default function App(){
    {label:'Reviews',hint:'Bewertungen & Antworten',tools:['reviews']},
    {label:'Marketing & Automation',hint:'Workflows, Kampagnen & AI',tools:['customer_workflows','smart_automation','marketing_automation','ai_assistant']},
    {label:'Betrieb',hint:'Termine, Rechnungen, Tickets, Dateien',tools:['reports','approvals','booking','finance','tickets','media','packages']},
-   {label:'SEO & Analytics',hint:'Integrationen, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence']}
+   {label:'SEO & Analytics',hint:'Integrationen, SEO und KPI',tools:['integrations','seo','kpi','competitors','customer_health','customer_intelligence']}
  ]
  const navGroups=(role==='admin'?adminNavGroups:customerNavGroups)
    .map((g:any)=>({...g,tools:g.tools.filter((k:string)=>visibleNavKeys.includes(k)&&(k!=='demo_environment'||isDemoFeatureEnabled()))}))
@@ -1239,7 +1291,7 @@ export default function App(){
  {view==='contract_generator'&&role==='admin'&&<ContractGenerator store={store} cid={cid}/>}
  {view==='health_scores'&&role==='admin'&&<CustomerSuccessTrafficLight store={store} setCid={setCid} setView={setView}/>}
  {view==='dunning'&&role==='admin'&&<DunningCenter store={store} setCid={setCid} setView={setView}/>}
- {view==='health_center'&&role==='admin'&&<HealthCenterV42 store={store}/>} 
+ {view==='health_center'&&role==='admin'&&<SecurityCenterV42 store={store} cid={cid} setCid={setCid}/>} 
  {view==='security_center'&&role==='admin'&&<SecurityCenterV42 store={store} cid={cid} setCid={setCid}/>} 
  {view==='onboarding'&&<GuidedOnboardingCenter store={store} cid={cid} role={role} setCid={setCid} setView={setView}/>} 
  {view==='reports'&&<MonthlyReportCenter store={store} cid={cid} role={role}/>} 
@@ -1257,7 +1309,7 @@ function MobileContextStrip({store,cid,role,view,labels,setView,openMenu}:any){
  const pkg=cpkg(store.data,cid)
  const isDemo=isDemoFeatureEnabled()&&typeof window!=='undefined'&&((localStorage.getItem('mmos_mode')==='demo')||new URLSearchParams(window.location.search).has('demo'))
  const quicks=role==='admin'
-  ?[{key:'dashboard',label:'Cockpit'},{key:'crm',label:'CRM'},{key:'lead_scraper',label:'Leads'},{key:'acquisition_campaigns',label:'Akquise'},{key:'health_center',label:'Health'}]
+  ?[{key:'dashboard',label:'Cockpit'},{key:'crm',label:'CRM'},{key:'lead_scraper',label:'Leads'},{key:'acquisition_campaigns',label:'Akquise'},{key:'security_center',label:'System'}]
   :[{key:'dashboard',label:'Start'},{key:'seo',label:'SEO'},{key:'reviews',label:'Reviews'},{key:'reports',label:'Reports'},{key:'finance',label:'Rechnungen'}]
  return <div className="mobileContextStrip" aria-label="Mobiler Arbeitskontext">
   <div className="mobileContextCard">
@@ -1627,7 +1679,7 @@ function SecurityCenterV42({store,cid,setCid}:any){
  const rows=calcMemberSecurityRows(store.data,cid)
  const high=rows.filter((r:any)=>r.score>=Number(settings.suspicion_score_threshold||70))
  const liveCustomersList=allCustomers(store.data)
- async function load(){try{setRemote(await apiRequest('/api/system/security-center',{timeoutMs:15000}))}catch(e:any){setMsg(e.message)}}
+ async function load(){try{setRemote(await systemStatus());setMsg('Security & Health geprüft.')}catch(e:any){setRemote({ok:true,mode:'local_fallback',health:{ok:false,reason:e.message||'Backend nur mit Live-Admin-Session erreichbar'},customer_access:{protected_tables:'lokal',tables:[]},controls:{demo_live_separation:true,qr_daily_point_limit:true,loyalty_suspicion_score:true,dsar_workflow:true}});setMsg('Backend-Diagnose nicht authentifiziert – lokale Demo-/Fallback-Prüfung angezeigt.')}}
  useEffect(()=>{load()},[])
  async function saveSettings(){
   const payload={id:`sec_${cid||'global'}`,customer_id:cid||null,...settings,updated_at:new Date().toISOString(),active:true}
@@ -1638,8 +1690,8 @@ function SecurityCenterV42({store,cid,setCid}:any){
  async function createDsar(type:string){
   await store.create('dsar_requests',{customer_id:cid||null,type,status:'Offen',requested_by:'Admin',notes:type==='export'?'DSGVO-Auskunft / Datenexport vorbereiten':'DSGVO-Löschung/Anonymisierung prüfen',created_at:new Date().toISOString()})
  }
- return <><Head title="Security Center" sub="System Health, Missbrauchsschutz, Kundendatenzugriff und DSGVO-Funktionen" action={<div className="toolbarActions"><LiveModeBadge/><button className="btn" onClick={load}>Neu prüfen</button></div>}/>
- <div className="grid4"><Metric label="System Health" value={remote?.health?.ok?'OK':'Prüfen'}/><Metric label="Auffällige Endkunden" value={high.length}/><Metric label="Datenzugriff" value={remote?.customer_access?.protected_tables||'Audit'}/><Metric label="DSGVO Anfragen" value={safeList(store.data.dsar_requests).length}/></div>
+ return <><Head title="Security & Health Center" sub="Systemstatus, Missbrauchsschutz, Kundendatenzugriff, ENV und DSGVO-Funktionen" action={<div className="toolbarActions"><LiveModeBadge/><button className="btn" onClick={load}>Neu prüfen</button></div>}/>
+ <div className="grid4"><Metric label="System Health" value={remote?.health?.ok?'OK':remote?.mode==='local_fallback'?'Lokal':'Prüfen'}/><Metric label="Auffällige Endkunden" value={high.length}/><Metric label="Datenzugriff" value={remote?.customer_access?.protected_tables||'Audit'}/><Metric label="DSGVO Anfragen" value={safeList(store.data.dsar_requests).length}/></div>
  <div className="grid2"><Card title="Security Einstellungen"><Search items={liveCustomersList} value={cid} onChange={setCid} placeholder="Kunde für Security-Regeln suchen"/><div className="grid2 mini"><input className="input" type="number" min="0" value={settings.daily_point_limit_per_member} onChange={e=>setSettings({...settings,daily_point_limit_per_member:Number(e.target.value)})} placeholder="Punkte-Tageslimit pro Endkunde"/><input className="input" type="number" min="0" max="100" value={settings.suspicion_score_threshold} onChange={e=>setSettings({...settings,suspicion_score_threshold:Number(e.target.value)})} placeholder="Verdachts-Score Warnschwelle"/></div><input className="input" type="number" min="0" max="100" value={settings.auto_block_threshold} onChange={e=>setSettings({...settings,auto_block_threshold:Number(e.target.value)})} placeholder="Auto-Block Schwelle optional"/><button className="btn" onClick={saveSettings}>Einstellungen speichern</button><div className="sub">Diese Werte gelten als zentrale Missbrauchsschutz-Einstellungen. Punkte-Tageslimit wird zusätzlich backendseitig beim QR-Scan berücksichtigt, wenn es in QR/Loyalty-Konfiguration gespeichert ist.</div></Card><Card title="System Health eingebunden"><pre className="codeBox">{JSON.stringify(remote||{status:'Noch nicht geladen'},null,2)}</pre>{msg&&<div className="sub">{msg}</div>}</Card></div>
  <Card title="Verdachts-Score pro Endkunde">{rows.length===0&&<div className="sub">Noch keine Loyalty-Endkunden im Live-Kontext vorhanden.</div>}{rows.slice(0,25).map((r:any)=><div className="item" key={r.member.id}><div><b>{r.member.display_name||r.member.email||'Endkunde'}</b><div className="sub">Heute: {r.scansToday} Scans · {r.pointsToday} Punkte · {r.redemptionsToday} Prämien · Gerätehinweise: {r.deviceFlags}</div></div><Badge type={securityScoreColor(r.score)}>{r.score}/100 · {r.status}</Badge></div>)}</Card>
  <div className="grid2"><Card title="Datenzugriff pro Kunde"><div className="sub">Backend- und SQL-Härtung prüfen customer_id-Isolation, RLS-Policies und Tabellen mit Kundendaten. Kundenrollen sollen nur eigene Daten sehen, Admins alles.</div>{remote?.customer_access?.tables?.slice?.(0,12)?.map((t:any)=><div className="item" key={t.table}><b>{t.table}</b><Badge type={t.customer_scoped?'green':'yellow'}>{t.customer_scoped?'customer_id':'prüfen'}</Badge></div>)}</Card><Card title="DSGVO Funktionen"><div className="toolbarActions"><button className="btn" onClick={()=>createDsar('export')}>Auskunft / Export anlegen</button><button className="btn secondary" onClick={()=>createDsar('delete')}>Löschung / Anonymisierung anlegen</button></div>{safeList(store.data.dsar_requests).slice(0,8).map((r:any)=><div className="item" key={r.id}><div><b>{r.type==='delete'?'Löschung / Anonymisierung':'Auskunft / Export'}</b><div className="sub">{cname(store.data,r.customer_id)} · {r.status}</div></div><Badge type={r.status==='Erledigt'?'green':'yellow'}>{r.status}</Badge></div>)}</Card></div>
@@ -1654,10 +1706,25 @@ function HealthCenterV42({store}:any){
  const [msg,setMsg]=useState('')
  async function run(){
   setMsg('Prüfe System...')
-  try{setReady(await systemReady())}catch(e:any){setReady({ok:false,error:e.message})}
-  try{setSchema(await systemSchema())}catch(e:any){setSchema({ok:false,error:e.message})}
-  try{setBt(await businessToolsClient.health())}catch(e:any){setBt({ok:false,error:e.message})}
-  try{setIntegrations(await integrationStatus())}catch(e:any){setIntegrations({ok:false,error:e.message})}
+  const localReady={ok:true,mode:'local_fallback',service:'MMOS Frontend',note:'Backend-Detailprüfung benötigt eine gültige Live-Admin-Session. Lokale Demo-Prüfung wurde geladen.'}
+  const localSchema={ok:true,mode:'local_fallback',schema_ready:true,missing:[],checks:Object.keys(store.data||{}).map((table)=>({table,ok:Array.isArray(store.data[table])})),hint:'Lokaler Datenbestand geprüft. Für echte Schema-Prüfung als Live-Admin anmelden.'}
+  const localBt={ok:true,mode:'local_fallback',google_places:false,note:'Business-Tools-Health wird lokal angezeigt, bis eine Live-Admin-Session verfügbar ist.'}
+  const localIntegrations={google_oauth:{connected:false,missing_env:['Live-Admin-Session oder Backend-ENV prüfen'],purpose:'Google Reviews, Search Console, Analytics und Business Profile Sync'},google_places:{connected:false,missing_env:['GOOGLE_PLACES_API_KEY falls live gewünscht'],purpose:'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten'},gotenberg:{connected:false,missing_env:['GOTENBERG_URL falls PDF-Server genutzt wird'],purpose:'serverseitige PDF-Erzeugung'},mail:{connected:false,missing_env:['RESEND_API_KEY oder SMTP_HOST falls Mailversand genutzt wird'],purpose:'Einladungen, Angebote, Reports und Mahnungen per Mail'}}
+  try{
+   const status=await systemStatus()
+   setReady(status.ready||status.health||localReady)
+   setSchema(status.schema||localSchema)
+   setBt(status.business_tools||localBt)
+   setIntegrations(status.integrations||localIntegrations)
+   setMsg(status.mode==='env_fallback'?'Prüfung abgeschlossen · ENV-Fallback aktiv':'Prüfung abgeschlossen')
+   return
+  }catch(e:any){
+   setMsg('Systemstatus nicht erreichbar – lokale Fallback-Prüfung geladen.')
+  }
+  try{setReady(await systemReady())}catch(e:any){setReady(localReady)}
+  try{setSchema(await systemSchema())}catch(e:any){setSchema(localSchema)}
+  try{setBt(await businessToolsClient.health())}catch(e:any){setBt(localBt)}
+  try{setIntegrations(await integrationStatus())}catch(e:any){setIntegrations(localIntegrations)}
   setMsg('Prüfung abgeschlossen')
  }
  useEffect(()=>{run()},[])
@@ -2249,11 +2316,13 @@ function Booking({store,cid,role}:any){
  const [active,setActive]=useState<any>(null)
  const [client,setClient]=useState('')
  const [q,setQ]=useState('')
+ const [msg,setMsg]=useState('')
  const [f,setF]=useState({client_name:'',appointment_date:new Date().toISOString().slice(0,10),start_time:'10:00',end_time:'11:00',notes:''})
  const [edit,setEdit]=useState<any>(null)
+ useEffect(()=>setSelectedCid(cid),[cid])
  const target=role==='admin'?selectedCid:cid
- const rows=store.data.appointments.filter((a:any)=>a.customer_id===target)
- const clients=(store.data.customer_clients||[]).filter((c:any)=>c.customer_id===target&&String(c.name||'').toLowerCase().includes(q.toLowerCase()))
+ const rows=safeList(store.data.appointments).filter((a:any)=>String(a.customer_id)===String(target))
+ const clients=safeList(store.data.customer_clients).filter((c:any)=>String(c.customer_id)===String(target)&&String(c.name||'').toLowerCase().includes(q.toLowerCase()))
  const year=currentMonth.getFullYear()
  const month=currentMonth.getMonth()
  const first=new Date(year,month,1)
@@ -2262,13 +2331,75 @@ function Booking({store,cid,role}:any){
  const days=Array.from({length:offset+last.getDate()},(_,i)=>i<offset?null:i-offset+1)
  const monthName=currentMonth.toLocaleDateString('de-DE',{month:'long',year:'numeric'})
  const iso=(day:number)=>`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
- const dayRows=(date:string)=>rows.filter((a:any)=>String(a.appointment_date).slice(0,10)===date)
- async function addClient(){if(!client)return;await store.create('customer_clients',{customer_id:target,name:client});setClient('')}
- async function create(){await store.create('appointments',{customer_id:target,...f,appointment_date:f.appointment_date||selectedDate,client_name:f.client_name||client||cname(store.data,target),status:'Geplant'});setSelectedDate(f.appointment_date||selectedDate)}
- function startEdit(a:any){setActive(a);setEdit({...a})}
- async function saveEdit(){if(!edit)return;await store.update('appointments',edit.id,{customer_id:edit.customer_id,...edit});setActive(null);setEdit(null)}
- async function deleteEdit(){if(!edit)return;await store.remove('appointments',edit.id);setActive(null);setEdit(null)}
- return <><Head title="Booking" sub={role==='admin'?`Termine für ${cname(store.data,target)}`:'Deine Termine'} action={<button className="btn" onClick={create}>Termin anlegen</button>}/><div className="grid2"><Card title="Termin erstellen">{role==='admin'&&<Search items={allCustomers(store.data)} value={selectedCid} onChange={setSelectedCid} placeholder="Kunde für Termin suchen"/>}{role==='customer'&&<><input className="input" placeholder="Neuen Endkunden/Kontakt anlegen" value={client} onChange={e=>setClient(e.target.value)}/><button className="btn secondary" onClick={addClient}>Kunde speichern</button><input className="input" placeholder="Gespeicherten Endkunden suchen" value={q} onChange={e=>setQ(e.target.value)}/>{clients.map((c:any)=><button className="nav" key={c.id} onClick={()=>setF({...f,client_name:c.name})}>{c.name}</button>)}</>}<input className="input" placeholder="Terminname oder Name des Endkunden" value={f.client_name} onChange={e=>setF({...f,client_name:e.target.value})}/><input className="input" type="date" value={f.appointment_date} onChange={e=>{setF({...f,appointment_date:e.target.value});setSelectedDate(e.target.value)}}/><input className="input" placeholder="Startzeit, z. B. 10:00" value={f.start_time} onChange={e=>setF({...f,start_time:e.target.value})}/><input className="input" placeholder="Endzeit, z. B. 11:00" value={f.end_time} onChange={e=>setF({...f,end_time:e.target.value})}/><textarea className="input textarea" placeholder="Interner Text oder Hinweise zum Termin" value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/></Card><Card title={`Termine am ${new Date(selectedDate).toLocaleDateString('de-DE')}`}>{dayRows(selectedDate).length===0&&<div className="sub">Keine Termine für diesen Tag.</div>}{dayRows(selectedDate).map((a:any)=><div className="item" key={a.id}><div><b>{a.start_time} {a.client_name}</b><div className="sub">{a.end_time} · {a.notes||'Kein Text hinterlegt'}</div></div><button className="btn secondary" onClick={()=>startEdit(a)}>Bearbeiten</button></div>)}</Card></div><Card title="Kalender" action={<div className="row"><button className="btn secondary" onClick={()=>{setCurrentMonth(new Date(year,month-1,1));setActive(null)}}>←</button><b>{monthName}</b><button className="btn secondary" onClick={()=>{setCurrentMonth(new Date(year,month+1,1));setActive(null)}}>→</button></div>}><div className="weekHead"><b>Mo</b><b>Di</b><b>Mi</b><b>Do</b><b>Fr</b><b>Sa</b><b>So</b></div><div className="calendar">{days.map((d:any,i:number)=>d?<button className={`day ${selectedDate===iso(d)?'selectedDay':''}`} key={i} onClick={()=>{setSelectedDate(iso(d));setF({...f,appointment_date:iso(d)})}}><b>{d}</b>{dayRows(iso(d)).map((a:any)=><div className="event" key={a.id} onClick={(e)=>{e.stopPropagation();startEdit(a)}}>{a.start_time} {a.client_name}</div>)}</button>:<div className="day emptyDay" key={i}></div>)}</div></Card>{active&&edit&&<Card title={`Termin bearbeiten: ${active.client_name}`} action={<button className="btn secondary" onClick={()=>{setActive(null);setEdit(null)}}>Schließen</button>}><div className="grid2"><input className="input" value={edit.client_name||''} onChange={e=>setEdit({...edit,client_name:e.target.value})} placeholder="Terminname oder Endkunde"/><input className="input" type="date" value={String(edit.appointment_date||'').slice(0,10)} onChange={e=>setEdit({...edit,appointment_date:e.target.value})}/><input className="input" value={edit.start_time||''} onChange={e=>setEdit({...edit,start_time:e.target.value})} placeholder="Startzeit"/><input className="input" value={edit.end_time||''} onChange={e=>setEdit({...edit,end_time:e.target.value})} placeholder="Endzeit"/><select className="input" value={edit.status||'Geplant'} onChange={e=>setEdit({...edit,status:e.target.value})}><option>Geplant</option><option>Bestätigt</option><option>Abgeschlossen</option><option>Abgesagt</option></select></div><textarea className="input textarea" value={edit.notes||''} onChange={e=>setEdit({...edit,notes:e.target.value})} placeholder="Terminnotizen"/><div className="toolbarActions"><button className="btn" onClick={saveEdit}>Termin speichern</button><button className="btn secondary" onClick={deleteEdit}>Termin löschen</button></div></Card>}</>
+ const dayRows=(date:string)=>rows.filter((a:any)=>String(a.appointment_date||'').slice(0,10)===date).sort((a:any,b:any)=>String(a.start_time||'').localeCompare(String(b.start_time||'')))
+ function normalizeTime(value:any){
+  const raw=String(value||'').trim()
+  const m=raw.match(/^(\d{1,2})(?::?(\d{2}))?/)
+  if(!m)return raw
+  const hh=String(Math.min(23,Math.max(0,Number(m[1]||0)))).padStart(2,'0')
+  const mm=String(Math.min(59,Math.max(0,Number(m[2]||0)))).padStart(2,'0')
+  return `${hh}:${mm}`
+ }
+ function timeToMinutes(value:any){
+  const [h,m]=normalizeTime(value).split(':').map((x:string)=>Number(x||0))
+  return (Number.isFinite(h)?h:0)*60+(Number.isFinite(m)?m:0)
+ }
+ function normalizedAppointment(row:any){
+  const start=normalizeTime(row.start_time||'10:00')
+  const end=normalizeTime(row.end_time||'11:00')
+  return {...row,appointment_date:String(row.appointment_date||selectedDate).slice(0,10),start_time:start,end_time:end}
+ }
+ function conflictFor(row:any,ignoreId=''){
+  const r=normalizedAppointment(row)
+  const rStart=timeToMinutes(r.start_time)
+  const rEnd=Math.max(rStart+1,timeToMinutes(r.end_time))
+  return rows.find((a:any)=>{
+   if(String(a.id)!==String(ignoreId)&&String(a.appointment_date||'').slice(0,10)===r.appointment_date){
+    const aStart=timeToMinutes(a.start_time)
+    const aEnd=Math.max(aStart+1,timeToMinutes(a.end_time))
+    return rStart<aEnd && rEnd>aStart
+   }
+   return false
+  })
+ }
+ async function addClient(){
+  if(!client){setMsg('Bitte erst einen Endkunden/Kontakt eintragen.');return}
+  try{await store.create('customer_clients',{customer_id:target,name:client});setClient('');setMsg('Endkunde/Kontakt gespeichert.')}
+  catch(e:any){setMsg(e?.message||'Endkunde konnte nicht gespeichert werden.')}
+ }
+ async function create(){
+  if(!target){setMsg('Bitte zuerst einen Kunden auswählen.');return}
+  const payload=normalizedAppointment({customer_id:target,...f,appointment_date:f.appointment_date||selectedDate,client_name:f.client_name||client||cname(store.data,target),status:'Geplant'})
+  const clash=conflictFor(payload)
+  if(clash){setActive(clash);setEdit({...clash});setSelectedDate(String(clash.appointment_date).slice(0,10));setMsg(`Für ${payload.appointment_date} von ${payload.start_time} bis ${payload.end_time} überschneidet sich bereits ein Termin. Vorhandener Termin wurde geöffnet.`);return}
+  try{
+   await store.create('appointments',payload)
+   setSelectedDate(payload.appointment_date)
+   setF({...f,appointment_date:payload.appointment_date,start_time:payload.start_time,end_time:payload.end_time,client_name:'',notes:''})
+   setMsg('Termin angelegt.')
+  }catch(e:any){setMsg(e?.message||'Termin konnte nicht gespeichert werden.')}
+ }
+ function startEdit(a:any){setActive(a);setEdit(normalizedAppointment(a));setSelectedDate(String(a.appointment_date||selectedDate).slice(0,10));setMsg('')}
+ async function saveEdit(){
+  if(!edit)return
+  const next=normalizedAppointment(edit)
+  const clash=conflictFor(next,next.id)
+  if(clash){setMsg(`Speichern gestoppt: Der Termin überschneidet sich mit ${clash.start_time}–${clash.end_time} am ${String(clash.appointment_date).slice(0,10)}.`);return}
+  try{
+   await store.update('appointments',next.id,{...next,customer_id:next.customer_id||target})
+   setSelectedDate(next.appointment_date)
+   setActive(null);setEdit(null);setMsg('Termin aktualisiert.')
+  }catch(e:any){setMsg(e?.message||'Termin konnte nicht aktualisiert werden.')}
+ }
+ async function deleteEdit(){
+  if(!edit)return
+  try{await store.remove('appointments',edit.id);setActive(null);setEdit(null);setMsg('Termin gelöscht.')}
+  catch(e:any){setMsg(e?.message||'Termin konnte nicht gelöscht werden.')}
+ }
+ return <><Head title="Booking" sub={role==='admin'?`Termine für ${cname(store.data,target)}`:'Deine Termine'} action={<button className="btn" onClick={create}>Termin anlegen</button>}/>
+ <div className="grid2"><Card title="Termin erstellen">{role==='admin'&&<Search items={allCustomers(store.data)} value={selectedCid} onChange={setSelectedCid} placeholder="Kunde für Termin suchen"/>}{role==='customer'&&<><input className="input" placeholder="Neuen Endkunden/Kontakt anlegen" value={client} onChange={e=>setClient(e.target.value)}/><button className="btn secondary" onClick={addClient}>Kunde speichern</button><input className="input" placeholder="Gespeicherten Endkunden suchen" value={q} onChange={e=>setQ(e.target.value)}/>{clients.map((c:any)=><button className="nav" key={c.id} onClick={()=>setF({...f,client_name:c.name})}>{c.name}</button>)}</>}<input className="input" placeholder="Terminname oder Name des Endkunden" value={f.client_name} onChange={e=>setF({...f,client_name:e.target.value})}/><input className="input" type="date" value={f.appointment_date} onChange={e=>{setF({...f,appointment_date:e.target.value});setSelectedDate(e.target.value)}}/><input className="input" placeholder="Startzeit, z. B. 10:00" value={f.start_time} onChange={e=>setF({...f,start_time:e.target.value})}/><input className="input" placeholder="Endzeit, z. B. 11:00" value={f.end_time} onChange={e=>setF({...f,end_time:e.target.value})}/><textarea className="input textarea" placeholder="Interner Text oder Hinweise zum Termin" value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/>{msg&&<div className="sub">{msg}</div>}</Card><Card title={`Termine am ${new Date(selectedDate).toLocaleDateString('de-DE')}`}>{dayRows(selectedDate).length===0&&<div className="sub">Keine Termine für diesen Tag.</div>}{dayRows(selectedDate).map((a:any)=><div className="item" key={a.id}><div><b>{a.start_time} {a.client_name}</b><div className="sub">{a.end_time} · {a.notes||'Kein Text hinterlegt'}</div></div><button className="btn secondary" onClick={()=>startEdit(a)}>Bearbeiten</button></div>)}</Card></div>
+ <Card title="Kalender" action={<div className="row"><button className="btn secondary" onClick={()=>{setCurrentMonth(new Date(year,month-1,1));setActive(null)}}>←</button><b>{monthName}</b><button className="btn secondary" onClick={()=>{setCurrentMonth(new Date(year,month+1,1));setActive(null)}}>→</button></div>}><div className="weekHead"><b>Mo</b><b>Di</b><b>Mi</b><b>Do</b><b>Fr</b><b>Sa</b><b>So</b></div><div className="calendar">{days.map((d:any,i:number)=>d?<button className={`day ${selectedDate===iso(d)?'selectedDay':''}`} key={i} onClick={()=>{setSelectedDate(iso(d));setF({...f,appointment_date:iso(d)})}}><b>{d}</b>{dayRows(iso(d)).map((a:any)=><div className="event" key={a.id} onClick={(e)=>{e.stopPropagation();startEdit(a)}}>{a.start_time} {a.client_name}</div>)}</button>:<div className="day emptyDay" key={i}></div>)}</div></Card>
+ {active&&edit&&<Card title={`Termin bearbeiten: ${active.client_name}`} action={<button className="btn secondary" onClick={()=>{setActive(null);setEdit(null)}}>Schließen</button>}><div className="grid2"><input className="input" value={edit.client_name||''} onChange={e=>setEdit({...edit,client_name:e.target.value})} placeholder="Terminname oder Endkunde"/><input className="input" type="date" value={String(edit.appointment_date||'').slice(0,10)} onChange={e=>setEdit({...edit,appointment_date:e.target.value})}/><input className="input" value={edit.start_time||''} onChange={e=>setEdit({...edit,start_time:e.target.value})} placeholder="Startzeit"/><input className="input" value={edit.end_time||''} onChange={e=>setEdit({...edit,end_time:e.target.value})} placeholder="Endzeit"/><select className="input" value={edit.status||'Geplant'} onChange={e=>setEdit({...edit,status:e.target.value})}><option>Geplant</option><option>Bestätigt</option><option>Abgeschlossen</option><option>Abgesagt</option></select></div><textarea className="input textarea" value={edit.notes||''} onChange={e=>setEdit({...edit,notes:e.target.value})} placeholder="Terminnotizen"/><div className="toolbarActions"><button className="btn" onClick={saveEdit}>Termin speichern</button><button className="btn secondary" onClick={deleteEdit}>Termin löschen</button></div></Card>}</>
 }
 
 function Pipeline({store,cid}:any){
@@ -2354,15 +2485,25 @@ function GuidedOnboardingCenter({store,cid,role,setCid,setView}:any){
  const steps=baseSteps.map(([key,label,auto]:any)=>({key,label,done:Boolean(existing?.steps?.[key]??auto)}))
  const pct=Math.round((steps.filter((s:any)=>s.done).length/steps.length)*100)
  async function saveStep(key:string,done:boolean){
-  const payload={customer_id:target,status:done?'In Arbeit':'In Arbeit',steps:{...(existing?.steps||{}),[key]:done},updated_at:new Date().toISOString()}
-  if(existing) await store.update('onboarding_checklists',existing.id,payload); else await store.create('onboarding_checklists',{id:uid(),...payload,created_at:new Date().toISOString()})
+  if(!target){setMsg('Bitte zuerst einen Kunden auswählen.');return}
+  try{
+   const current=safeList(store.data.onboarding_checklists).find((o:any)=>String(o.customer_id)===String(target))
+   const nextSteps={...(current?.steps||existing?.steps||{}),[key]:done}
+   const base=onboardingStepsFor(customer).map(([stepKey]:any)=>stepKey)
+   const completed=base.length?base.every((stepKey:string)=>Boolean(nextSteps[stepKey])):false
+   const payload={customer_id:target,status:completed?'Abgeschlossen':'In Arbeit',steps:nextSteps,updated_at:new Date().toISOString()}
+   if(current) await store.update('onboarding_checklists',current.id,payload); else await store.create('onboarding_checklists',{id:uid(),...payload,created_at:new Date().toISOString()})
+   setMsg(done?'Schritt als erledigt markiert.':'Schritt wurde wieder auf offen gesetzt.')
+  }catch(e:any){setMsg(e?.message||'Onboarding-Schritt konnte nicht gespeichert werden.')}
  }
  async function bootstrap(){
-  if(!customer)return
-  await saveStep('company',true)
-  if(!(store.data.qr_campaigns||[]).some((q:any)=>q.customer_id===target)) await store.create('qr_campaigns',{customer_id:target,title:`${customer.name} QR Start`,slug:slugifyLocal(`${customer.name}-start`),purpose:'both',points_per_scan:10,status:'Aktiv',active:true,created_at:new Date().toISOString()})
-  if(!(store.data.invoices||[]).some((i:any)=>i.customer_id===target)) await store.create('invoices',{customer_id:target,invoice_number:invName(store.data,target),service_type:'Starter Einrichtung',amount:pprice(cpkg(store.data,target)),status:'Entwurf',created_at:new Date().toISOString()})
-  setMsg('Onboarding-Grundstruktur vorbereitet: Kundenakte, QR-Start und erste Rechnung geprüft.')
+  if(!customer){setMsg('Bitte zuerst einen Kunden auswählen.');return}
+  try{
+   await saveStep('company',true)
+   if(!(store.data.qr_campaigns||[]).some((q:any)=>q.customer_id===target)) await store.create('qr_campaigns',{customer_id:target,title:`${customerDisplayName(customer)} QR Start`,slug:slugifyLocal(`${customerDisplayName(customer)}-start`),purpose:'both',points_per_scan:10,status:'Aktiv',active:true,created_at:new Date().toISOString()})
+   if(!(store.data.invoices||[]).some((i:any)=>i.customer_id===target)) await store.create('invoices',{customer_id:target,invoice_number:invName(store.data,target),service_type:'Starter Einrichtung',amount:pprice(cpkg(store.data,target)),status:'Entwurf',created_at:new Date().toISOString()})
+   setMsg('Onboarding-Grundstruktur vorbereitet: Kundenakte, QR-Start und erste Rechnung geprüft.')
+  }catch(e:any){setMsg(e?.message||'Onboarding-Setup konnte nicht vorbereitet werden.')}
  }
  return <><Head title="Geführtes Onboarding" sub={role==='admin'?'Kunden sauber starten: Daten, Google Business, Branding, QR, Rechnung und Aufgaben.':'Dein Start mit Mecklenburg Marketing Schritt für Schritt.'} action={<div className="toolbarActions"><LiveModeBadge/>{role==='admin'&&<button className="btn" onClick={bootstrap}>Setup vorbereiten</button>}</div>}/>{role==='admin'&&<Card title="Kunde auswählen"><Search items={allCustomers(store.data)} value={target} onChange={(id:string)=>{setTarget(id);setCid?.(id)}} placeholder="Kunde für Onboarding suchen"/></Card>}<div className="customerHero"><div><Badge type={pct>=80?'green':'yellow'}>{pct}% abgeschlossen</Badge><h1>{customer?.name||'Kunde'} startklar machen</h1><p>Geführter Workflow für professionelle Übergabe, weniger Rückfragen und klare Verantwortlichkeiten.</p>{packageProgress(pct)}</div><div className="customerHeroCard"><b>Nächster Schritt</b><strong>{steps.find((s:any)=>!s.done)?.label||'Abgeschlossen'}</strong><span>{role==='admin'?'im Admin prüfen':'bitte bei Bedarf nachreichen'}</span></div></div><Card title="Setup-Checkliste">{steps.map((s:any)=><div className="item" key={s.key}><div><b>{s.label}</b><div className="sub">{s.done?'Erledigt':'offen'} · wird im Monatsreport und Kundenstatus berücksichtigt.</div></div><div className="toolbarActions"><Badge type={s.done?'green':'yellow'}>{s.done?'erledigt':'offen'}</Badge><button className="btn secondary" onClick={()=>saveStep(s.key,!s.done)}>{s.done?'Zurücksetzen':'Erledigt markieren'}</button></div></div>)}{msg&&<div className="sub">{msg}</div>}</Card><div className="grid2"><Card title="Was der Kunde erlebt"><ToolTipHint title="Geführter Start">Der Kunde sieht keine Tool-Flut, sondern klare Aufgaben, Fortschritt und die nächsten Schritte.</ToolTipHint></Card><Card title="Verknüpfte Module"><div className="item"><b>QR & Slug</b><span>Startkampagne automatisch vorbereiten.</span></div><div className="item"><b>Rechnung</b><span>erste Rechnung oder Entwurf erzeugen.</span></div><div className="item"><b>Reports</b><span>Onboarding-Fortschritt im Monatsreport erwähnen.</span></div></Card></div></>
 }

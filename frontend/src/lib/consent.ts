@@ -13,7 +13,7 @@ export type ConsentState = {
   marketing: boolean
 }
 
-export const CONSENT_VERSION = 1
+export const CONSENT_VERSION = 2
 const COOKIE_NAME = 'mmos_consent_v1'
 const COOKIE_MAX_AGE_DAYS = 365
 

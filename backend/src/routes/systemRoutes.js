@@ -150,6 +150,68 @@ function systemRoutes(supabaseAdmin) {
     res.json({ ok: true, time: new Date().toISOString(), diagnostics: envDiagnostics() })
   })
 
+
+  router.get('/status', async (_, res) => {
+    const missing = missingEnv(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
+    const tables = [...CORE_TABLES, ...OPTIONAL_TABLES]
+    let checks = []
+    if (supabaseAdmin && missing.length === 0) {
+      checks = await Promise.all(tables.map((table) => checkTable(supabaseAdmin, table)))
+    } else {
+      checks = tables.map((table) => ({ table, ok: false, skipped: true, error: 'Supabase ENV fehlt oder Backend nicht konfiguriert.' }))
+    }
+    const missingSchema = checks.filter((check) => !check.ok && !check.skipped).map((check) => check.table)
+    const diagnostics = envDiagnostics()
+    const integrations = {
+      google_oauth: { connected: diagnostics.google_oauth.configured, missing_env: diagnostics.google_oauth.missing_env, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
+      google_places: { connected: diagnostics.google_places.present, missing_env: diagnostics.google_places.present ? [] : ['GOOGLE_PLACES_API_KEY'], purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
+      gotenberg: { connected: Boolean(process.env.GOTENBERG_URL), missing_env: process.env.GOTENBERG_URL ? [] : ['GOTENBERG_URL'], purpose: 'serverseitige PDF-Erzeugung' },
+      mail: { connected: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST), missing_env: (process.env.RESEND_API_KEY || process.env.SMTP_HOST) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
+    }
+    res.json({
+      ok: true,
+      service: 'MMOS System Center',
+      time: new Date().toISOString(),
+      mode: missing.length ? 'env_fallback' : 'live_probe',
+      health: {
+        ok: Boolean(supabaseAdmin) && missing.length === 0,
+        supabase_configured: Boolean(supabaseAdmin),
+        missing_env: missing,
+        google_places: diagnostics.google_places.present,
+        google_oauth: diagnostics.google_oauth.configured,
+        mail: integrations.mail.connected,
+        gotenberg: integrations.gotenberg.connected
+      },
+      ready: {
+        ok: Boolean(supabaseAdmin) && missing.length === 0,
+        ready: Boolean(supabaseAdmin) && missing.length === 0,
+        missing_env: missing,
+        note: missing.length ? 'Öffentlicher Safe-Status: Details ohne Auth nur maskiert.' : 'Backend und Supabase ENV sind vorhanden.'
+      },
+      schema: {
+        ok: true,
+        schema_ready: missingSchema.length === 0 && !missing.length,
+        checks,
+        missing: missingSchema,
+        hint: missing.length ? 'Schema-Detailprüfung benötigt SUPABASE_URL und SERVICE_ROLE im Railway Backend.' : (missingSchema.length ? 'Einige optionale Tabellen fehlen oder sind nicht erreichbar.' : 'Geprüfte Tabellen erreichbar.')
+      },
+      business_tools: {
+        ok: true,
+        google_places: diagnostics.google_places.present,
+        pdf: Boolean(process.env.GOTENBERG_URL),
+        mail: integrations.mail.connected,
+        note: diagnostics.google_places.present ? 'Live Lead-Suche kann Places-Daten nutzen.' : 'GOOGLE_PLACES_API_KEY fehlt; Lead-Suche nutzt keine echten Places-Daten.'
+      },
+      integrations,
+      customer_access: {
+        strategy: 'RLS + Backend customer_id checks + admin/service-role bypass',
+        protected_tables: checks.filter((check) => check.ok).length,
+        tables: checks.map((check) => ({ table: check.table, customer_scoped: OPTIONAL_TABLES.includes(check.table) || CORE_TABLES.includes(check.table), ok: check.ok })).slice(0, 100)
+      },
+      diagnostics
+    })
+  })
+
   router.get('/ready', async (_, res) => {
     const missing = missingEnv(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
     if (!supabaseAdmin || missing.length) {

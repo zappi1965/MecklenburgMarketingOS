@@ -1,28 +1,53 @@
 import { API_BASE } from './config'
 import { apiRequest, providerToApiKey } from './apiRequest'
+import { getCurrentSession } from './authClient'
+
+async function authHeaders(): Promise<Record<string, string>> {
+  try {
+    const session = await getCurrentSession()
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
+async function systemRequest(path: string, options: any = {}) {
+  return apiRequest(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...(await authHeaders()), ...(options.headers || {}) }
+  })
+}
 
 export async function apiReadyHealth() {
-  return apiRequest(`${API_BASE}/api/hardening/health`)
+  return systemRequest('/api/hardening/health')
 }
 
 export async function systemReady() {
-  return apiRequest(`${API_BASE}/api/system/ready`)
+  return systemRequest('/api/system/ready')
+}
+
+export async function systemStatus() {
+  return systemRequest('/api/system/status')
 }
 
 export async function systemSchema() {
-  return apiRequest(`${API_BASE}/api/system/schema`)
+  return systemRequest('/api/system/schema')
 }
 
 export async function integrationStatus() {
-  return apiRequest(`${API_BASE}/api/system/integration-status`)
+  return systemRequest('/api/system/integration-status')
+}
+
+export async function systemSecurityCenter() {
+  return systemRequest('/api/system/security-center', { timeoutMs: 15000 })
 }
 
 export async function googleHealth() {
-  return apiRequest(`${API_BASE}/api/google/health`)
+  return systemRequest('/api/google/health')
 }
 
 export async function googleAuthUrl(customerId: string) {
-  return apiRequest(`${API_BASE}/api/google/auth-url/${customerId}`)
+  return systemRequest(`/api/google/auth-url/${customerId}`)
 }
 
 export async function startGoogleAuth(customerId: string) {
@@ -33,7 +58,7 @@ export async function startGoogleAuth(customerId: string) {
 
 export async function syncGoogleProvider(provider: string, customerId: string, payload: any = {}) {
   const providerKey = providerToApiKey(provider)
-  return apiRequest(`${API_BASE}/api/google/sync/${providerKey}/${customerId}`, {
+  return systemRequest(`/api/google/sync/${providerKey}/${customerId}`, {
     method: 'POST',
     body: JSON.stringify(payload),
     timeoutMs: 20000
