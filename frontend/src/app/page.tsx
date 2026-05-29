@@ -8,7 +8,7 @@ import { opsClient, openBase64Pdf, openQrWindow } from '@/lib/opsClient'
 import { enterpriseClient } from '@/lib/enterpriseClient'
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { supabaseAuth, getCurrentUserProfile } from '@/lib/authClient'
+import { supabaseAuth, getCurrentSession, getCurrentUserProfile } from '@/lib/authClient'
 import { DEMO_SANDBOX_KEY, markDemoMode, markLiveMode, clearDemoSandbox, isDemoMode, isDemoFeatureEnabled } from '@/lib/demoSandbox'
 import { demoToolsClient, openPdfBase64, openQrCampaign } from '@/lib/demoToolsClient'
 import { API_BASE, hasSupabase, supabase } from '@/lib/supabase'
@@ -358,8 +358,9 @@ function allowLocalWriteFallback(){
   if(isDemoMode())return true
   if(typeof window!=='undefined'&&new URLSearchParams(window.location.search).has('demo'))return true
  }catch{}
- return process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE==='true'
+ return process.env.NEXT_PUBLIC_ENABLE_LOCAL_WRITE_FALLBACK==='true'
 }
+function liveWriteUnavailableMessage(table:string){return `Live-Speicherung für ${table} nicht möglich: Backend/Supabase nicht erreichbar oder keine gültige Session.`}
 
 function useStore(){
  const [data,setData]=useState<any>(seed)
@@ -379,10 +380,21 @@ function useStore(){
   return ()=>{ if(typeof window!=='undefined') window.removeEventListener('mmos:toast',onGlobalToast as any) }
  },[])
  async function load(){
-  if(!hasSupabase||!supabase)return
   const r:any={}
   const demoActive=isDemoMode()
+  const session=await getCurrentSession().catch(()=>null as any)
+  const preferBackend=Boolean(session?.access_token)&&!allowLocalWriteFallback()
   for(const t of tables){
+   if(preferBackend){
+    try{
+     const remote=await storeClient.list(t,{limit:1000})
+     r[t]=remote.data||[]
+     continue
+    }catch(e){
+     console.warn(`[MMOS] Backend list failed for ${t}`,e)
+    }
+   }
+   if(!hasSupabase||!supabase){r[t]=[];continue}
    try{
     let q:any=supabase.from(t).select('*')
     if(!demoActive&&demoScopedTables.has(t)) q=q.or('is_demo.is.false,is_demo.is.null')
@@ -396,8 +408,10 @@ function useStore(){
   setData((p:any)=>({...p,...r}))
  }
  useEffect(()=>{
-  const cached=safeLocalStorageGet(DEMO_SANDBOX_KEY,null as any)
-  if(cached&&typeof cached==='object') setData((p:any)=>({...p,...cached}))
+  if(allowLocalWriteFallback()){
+   const cached=safeLocalStorageGet(DEMO_SANDBOX_KEY,null as any)
+   if(cached&&typeof cached==='object') setData((p:any)=>({...p,...cached}))
+  }
   load()
  },[])
  function addActivity(action:string,table:string,refId:string,extra:any={}){
@@ -424,7 +438,8 @@ function useStore(){
    const viaBackend=await backendWrite('create',table,payload)
    if(viaBackend){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
-   else setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+   else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+   else throw new Error(liveWriteUnavailableMessage(table))
    addActivity('create',table,payload.id,{live:hasSupabase})
    notify('Gespeichert')
   }catch(e:any){
@@ -446,7 +461,8 @@ function useStore(){
    const viaBackend=await backendWrite('update',table,normalized,id)
    if(viaBackend){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
-   else setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
+   else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
+   else throw new Error(liveWriteUnavailableMessage(table))
    addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
    notify('Aktualisiert')
   }catch(e:any){
@@ -467,7 +483,8 @@ function useStore(){
    const viaBackend=await backendWrite('remove',table,null,id)
    if(viaBackend){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
-   else setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
+   else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
+   else throw new Error(liveWriteUnavailableMessage(table))
    addActivity('delete',table,id,{live:hasSupabase})
    notify('Gelöscht')
   }catch(e:any){
@@ -780,6 +797,10 @@ function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
    const r=await fetch(`${API_BASE}/api/public/package-inquiry`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({package_name:inquiry,contact_name:inquiryForm.name,company_name:inquiryForm.company,email:inquiryForm.email,phone:inquiryForm.phone,message:inquiryForm.message,source:'public_landingpage'})})
    const j=await r.json().catch(()=>({}))
    if(!r.ok||j?.ok===false) throw new Error(j?.error||'Anfrage konnte nicht gesendet werden')
+   if(j?.mail_status&&j.mail_status!=='sent'){
+    setInquiryMsg(`Anfrage wurde gespeichert, aber die E-Mail wurde nicht versendet: ${j.mail_error||j.mail_status}. Bitte Mail-ENV im Backend prüfen.`)
+    return
+   }
    setInquiryMsg(lp.package_form_success||defaultMainLandingSettings.package_form_success)
    setTimeout(()=>{setInquiry(null);setInquiryForm({name:'',company:'',email:'',phone:'',message:''});setInquiryMsg('')},1400)
   }catch(err:any){setInquiryMsg(err?.message||'Anfrage konnte nicht gesendet werden. Bitte später erneut versuchen.')}
@@ -980,7 +1001,7 @@ function MainLandingPageEditor({store}:any){
  async function save(){
   const payload={...f,id:'main',scope:'public_home',updated_at:new Date().toISOString()}
   setMsg('Speichere Landingpage...')
-  store.setData((d:any)=>{const existing=(d.landing_page_settings||[]).filter((x:any)=>!(x.id==='main'||x.scope==='public_home'));const nd={...d,landing_page_settings:[payload,...existing]};try{safeLocalStorageSet(DEMO_SANDBOX_KEY,nd)}catch{};return nd})
+  store.setData((d:any)=>{const existing=(d.landing_page_settings||[]).filter((x:any)=>!(x.id==='main'||x.scope==='public_home'));const nd={...d,landing_page_settings:[payload,...existing]};try{if(allowLocalWriteFallback())safeLocalStorageSet(DEMO_SANDBOX_KEY,nd)}catch{};return nd})
   try{
    const existing=(store.data.landing_page_settings||[]).find((x:any)=>x.id==='main'||x.scope==='public_home')
    if(existing) await store.update('landing_page_settings',existing.id||'main',payload)
@@ -988,8 +1009,9 @@ function MainLandingPageEditor({store}:any){
    setMsg('Landingpage gespeichert und Vorschau aktualisiert.')
    appToast('Landingpage gespeichert')
   }catch(e:any){
-   setMsg('Landingpage lokal gespeichert. Live-Speicherung ist ohne gültige Admin-Session/Supabase-Schema nicht möglich.')
-   appToast('Landingpage lokal gespeichert')
+   const message=e?.message||'Live-Speicherung fehlgeschlagen.'
+   setMsg(`Live-Speicherung fehlgeschlagen: ${message}`)
+   appToast('Live-Speicherung fehlgeschlagen')
   }
  }
  function reset(){setF(defaultMainLandingSettings);setMsg('Standardtexte geladen – bitte speichern.')}
@@ -1120,17 +1142,35 @@ function applyDemoSandboxStorePatch(store:any){
  store.create=async(table:string,row:any)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localCreate(table,row)
-   try{return oldCreate?await oldCreate(table,row):await localCreate(table,row)}catch(e){return localCreate(table,row)}
+   try{
+    if(!oldCreate) throw new Error('Live Store create nicht verfügbar')
+    return await oldCreate(table,row)
+   }catch(e){
+    if(allowLocalWriteFallback()) return localCreate(table,row)
+    throw e
+   }
  }
  store.update=async(table:string,rowId:string,patch:any)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localUpdate(table,rowId,patch)
-   try{return oldUpdate?await oldUpdate(table,rowId,patch):await localUpdate(table,rowId,patch)}catch(e){return localUpdate(table,rowId,patch)}
+   try{
+    if(!oldUpdate) throw new Error('Live Store update nicht verfügbar')
+    return await oldUpdate(table,rowId,patch)
+   }catch(e){
+    if(allowLocalWriteFallback()) return localUpdate(table,rowId,patch)
+    throw e
+   }
  }
  store.remove=async(table:string,rowId:string)=>{
    const mode=safeLocalStorageText('mmos_mode','')
    if(mode==='demo') return localRemove(table,rowId)
-   try{return oldRemove?await oldRemove(table,rowId):await localRemove(table,rowId)}catch(e){return localRemove(table,rowId)}
+   try{
+    if(!oldRemove) throw new Error('Live Store remove nicht verfügbar')
+    return await oldRemove(table,rowId)
+   }catch(e){
+    if(allowLocalWriteFallback()) return localRemove(table,rowId)
+    throw e
+   }
  }
  store.delete=store.remove
  return store
@@ -2399,7 +2439,7 @@ function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
  }
  const todayFollowUps=(store.data.acquisition_campaigns||[]).filter((c:any)=>String(c.follow_up_at||'').slice(0,10)<=new Date().toISOString().slice(0,10)&&!['Gewonnen','Verloren','Archiviert'].includes(c.stage||c.status))
  const redCustomers=(store.data.customer_health_scores||[]).filter((h:any)=>h.status==='Rot'||Number(h.score||0)<55)
- return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne ausgeblendete Testkunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><Card title="Arbeitsmodus"><div className="grid4 portalFocusGrid"><div><b>Kunden mit Handlungsbedarf</b><span>Health, Tickets und offene Aufgaben zuerst prüfen.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div><b>Leads nachfassen</b><span>Follow-ups und Kampagnen ohne Suche bearbeiten.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Leads</button></div><div><b>Reports fällig</b><span>Monatsreports vorbereiten und Kundenwert sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div><div><b>Systemstatus</b><span>Backend, Syncs und Services im Blick behalten.</span><button className="btn secondary" onClick={()=>setView('health_center')}>Status</button></div></div></Card><div className="grid2"><Card title="Revenue Übersicht"><div className="item"><b>Revenue Forecasting</b><span>MRR, Pipeline und Umsatzpotenzial zentral sichtbar.</span><button className="btn secondary" onClick={()=>setView('revenue_forecasting')}>Forecast öffnen</button></div><div className="item"><b>Revenue Share</b><span>Beteiligung, Add-ons und Revenue-Modelle prüfen.</span><button className="btn secondary" onClick={()=>setView('revenue_share')}>Revenue Share öffnen</button></div></Card><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=>{const publicName=p.company_name||p.company||p.contact_name||p.requested_by||cname(store.data,p.customer_id);return <div className="item" key={p.id}><div><b>{publicName} möchte {p.package_name}</b><div className="sub">{p.email||p.contact_email||'keine E-Mail'}{p.phone?` · ${p.phone}`:''}{p.billing_interval?` · ${p.billing_interval}`:''}</div>{p.message&&<p className="sub">{p.message}</p>}<Badge type={p.customer_id?'purple':'blue'}>{p.customer_id?'Kundenportal':'Website-Anfrage'}</Badge></div><div className="toolbarActions">{p.customer_id&&<button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button>}{(p.email||p.contact_email)&&<button className="btn secondary" onClick={()=>{window.location.href=`mailto:${p.email||p.contact_email}?subject=Mecklenburg Marketing Anfrage ${p.package_name}`}}>Antworten</button>}</div></div>})}</Card>}</>
+ return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne ausgeblendete Testkunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><Card title="Arbeitsmodus"><div className="grid4 portalFocusGrid"><div><b>Kunden mit Handlungsbedarf</b><span>Health, Tickets und offene Aufgaben zuerst prüfen.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div><b>Leads nachfassen</b><span>Follow-ups und Kampagnen ohne Suche bearbeiten.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Leads</button></div><div><b>Reports fällig</b><span>Monatsreports vorbereiten und Kundenwert sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div><div><b>Systemstatus</b><span>Backend, Syncs und Services im Blick behalten.</span><button className="btn secondary" onClick={()=>setView('health_center')}>Status</button></div></div></Card><div className="grid2"><Card title="Revenue Übersicht"><div className="item"><b>Revenue Forecasting</b><span>MRR, Pipeline und Umsatzpotenzial zentral sichtbar.</span><button className="btn secondary" onClick={()=>setView('revenue_forecasting')}>Forecast öffnen</button></div><div className="item"><b>Revenue Share</b><span>Beteiligung, Add-ons und Revenue-Modelle prüfen.</span><button className="btn secondary" onClick={()=>setView('revenue_share')}>Revenue Share öffnen</button></div></Card><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=>{const publicName=p.company_name||p.company||p.contact_name||p.requested_by||cname(store.data,p.customer_id);return <div className="item" key={p.id}><div><b>{publicName} möchte {p.package_name}</b><div className="sub">{p.email||p.contact_email||'keine E-Mail'}{p.phone?` · ${p.phone}`:''}{p.billing_interval?` · ${p.billing_interval}`:''}</div>{p.message&&<p className="sub">{p.message}</p>}<Badge type={p.customer_id?'purple':'blue'}>{p.customer_id?'Kundenportal':'Website-Anfrage'}</Badge>{p.mail_status&&<Badge type={p.mail_status==='sent'?'green':'yellow'}>Mail: {p.mail_status}</Badge>}</div><div className="toolbarActions">{p.customer_id&&<button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button>}{(p.email||p.contact_email)&&<button className="btn secondary" onClick={()=>{window.location.href=`mailto:${p.email||p.contact_email}?subject=Mecklenburg Marketing Anfrage ${p.package_name}`}}>Antworten</button>}</div></div>})}</Card>}</>
 }
 
 
@@ -2805,7 +2845,7 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
  const [verifyResult,setVerifyResult]=useState<any>(null)
 
  useEffect(()=>{
-  const initial=safeLocalStorageGet(v33LocalKey(view,cid),[])
+  const initial=allowLocalWriteFallback()?safeLocalStorageGet(v33LocalKey(view,cid),[]):[]
   setItems(initial)
   const f:any={}
   cfg.fields.forEach((k:string)=>f[k]=defaultFormValue(view,k,cfg.title))
@@ -2814,13 +2854,13 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
   v33FunctionalClient.listRecords(cfg.resource,cid)
    .then((r:any)=>{
     const serverItems=(r.records||[]).map((x:any)=>({id:x.local_id||x.id,customer_id:x.customer_id,...(x.payload||{})}))
-    if(serverItems.length){setItems(serverItems);safeLocalStorageSet(v33LocalKey(view,cid),serverItems)}
+    if(serverItems.length){setItems(serverItems);if(allowLocalWriteFallback())safeLocalStorageSet(v33LocalKey(view,cid),serverItems)}
    })
    .catch(()=>null)
    .finally(()=>setLoading(false))
  },[view,cid])
 
- function persist(next:any[]){setItems(next);safeLocalStorageSet(v33LocalKey(view,cid),next)}
+ function persist(next:any[]){setItems(next);if(allowLocalWriteFallback())safeLocalStorageSet(v33LocalKey(view,cid),next)}
  function add(){
   const row={id:uid(),customer_id:cid,...form,active:true}
   const next=[row,...items]

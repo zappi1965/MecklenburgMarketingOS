@@ -3498,3 +3498,44 @@ body .packageLandingCard .packagePrice span{color:#94a3b8!important}
 body .packageLandingCard .packageCardBtn{background:rgba(15,23,42,.82)!important;border-color:rgba(148,163,184,.24)!important;color:#e5edf8!important}
 .v42PackageEdit,.inlineForm,.packageEditorGrid .card,.formField,.toolEditRow,.ruleBox{min-width:0;color:#f8fafc}.v42PackageEdit,.inlineForm{background:linear-gradient(180deg,rgba(15,23,42,.84),rgba(9,14,24,.90))!important;border-color:rgba(148,163,184,.18)!important}.v42PackageEdit .input,.inlineForm .input,.packageEditorGrid .input,.formField .input{background:#0a1019!important;color:#fff!important;border-color:rgba(148,163,184,.24)!important}.v42PackageEdit .textarea,.inlineForm .textarea,.packageEditorGrid .textarea,.formField .textarea{min-height:118px!important}.v42PackageEdit .sub,.inlineForm .sub,.packageEditorGrid .sub,.formField .fieldHelp{color:#aeb8c8!important}.packageEditorGrid{align-items:start}.packageEditorGrid .card{overflow:hidden}.toolEditRow{grid-template-columns:minmax(0,1fr) 42px!important}.toolEditRow .input{min-width:0}
 .publicInquiryOverlay{position:fixed;inset:0;background:rgba(2,6,23,.72);backdrop-filter:blur(12px);display:grid;place-items:center;z-index:200;padding:22px}.publicInquiryModal{width:min(720px,96vw);max-height:90dvh;overflow:auto;border:1px solid rgba(148,163,184,.22);border-radius:26px;background:linear-gradient(180deg,rgba(18,27,42,.98),rgba(8,13,23,.98));box-shadow:0 30px 120px rgba(0,0,0,.62);padding:24px;color:#f8fafc;text-align:left}.publicInquiryModal h2{font-size:32px;letter-spacing:-.06em;margin:4px 0 0}.publicInquiryModal p{color:#cbd5e1;line-height:1.55}.publicInquiryModal .input{background:#0a1019!important;color:#fff!important;border-color:rgba(148,163,184,.24)!important}.publicInquiryModal .textarea{min-height:132px!important}.inquiryStatus{margin-top:10px;color:#bfdbfe!important}@media(max-width:760px){.publicInquiryModal .grid2{grid-template-columns:1fr!important}.publicInquiryModal{padding:18px}.publicInquiryModal .row.between{display:grid}.publicInquiryModal .row.between .btn{width:100%}}
+
+
+/* v0.60 contrast and public inquiry stability */
+.landingPackages .packageLandingCard,
+.proLanding .packageLandingCard,
+.packageCardsCompact > .packageLandingCard{
+  background:linear-gradient(180deg,rgba(18,27,42,.98),rgba(9,14,24,.99))!important;
+  color:#f8fafc!important;
+  border-color:rgba(148,163,184,.24)!important;
+  opacity:1!important;
+  filter:none!important;
+}
+.proLanding .packageLandingCard *{color:inherit}
+.proLanding .packageLandingCard .packageEyebrow{color:#bfdbfe!important}
+.proLanding .packageLandingCard .packagePrice{color:#fff!important}
+.proLanding .packageLandingCard .packagePrice span{color:#cbd5e1!important}
+.proLanding .packageLandingCard .packageBenefit,
+.proLanding .packageLandingCard .packageFeatureList li{color:#dbeafe!important}
+.proLanding .packageLandingCard .packageFeatureList li::before{color:#86efac!important}
+.proLanding .packageLandingCard .packageCardBtn{background:rgba(15,23,42,.88)!important;color:#f8fafc!important;border:1px solid rgba(148,163,184,.30)!important}
+.proLanding .packageLandingCard .packageCardBtn:hover{background:rgba(124,58,237,.88)!important;border-color:rgba(196,181,253,.44)!important}
+.packageEditorGrid .card,
+.v42PackageEdit,
+.inlineForm,
+.card .inlineForm,
+.card .v42PackageEdit{
+  background:linear-gradient(180deg,rgba(15,23,42,.92),rgba(9,14,24,.96))!important;
+  color:#f8fafc!important;
+  border-color:rgba(148,163,184,.22)!important;
+  overflow:hidden;
+}
+.packageEditorGrid .card *,.v42PackageEdit *,.inlineForm *{color:inherit}
+.packageEditorGrid .sub,.v42PackageEdit .sub,.inlineForm .sub{color:#aeb8c8!important}
+.packageEditorGrid .input,.v42PackageEdit .input,.inlineForm .input,.card .grid3 .input{
+  background:#0a1019!important;
+  color:#fff!important;
+  border-color:rgba(148,163,184,.28)!important;
+}
+.packageEditorGrid .textarea,.v42PackageEdit .textarea,.inlineForm .textarea{min-height:116px!important;color:#fff!important}
+.toolEditRow,.card .grid3{min-width:0}.toolEditRow .input,.card .grid3 .input{min-width:0}.card .grid3 .row{min-width:0;flex-wrap:nowrap}.card .grid3 .row .input{flex:1 1 auto}.card .grid3 .row .btn{flex:0 0 auto}
+.publicInquiryModal{color:#f8fafc!important}.publicInquiryModal *{color:inherit}.publicInquiryModal p,.publicInquiryModal .sub{color:#cbd5e1!important}.publicInquiryModal .inquiryStatus{color:#bfdbfe!important;white-space:pre-wrap}.publicInquiryModal .input{color:#fff!important}

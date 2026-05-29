@@ -18,6 +18,11 @@ const ALLOWLIST = {
   // Branding + Landing
   landing_page_settings:           { scope: 'admin' },
   public_landing_pages:            { scope: 'admin' },
+  user_profiles:                   { scope: 'admin' },
+  customer_users:                  { scope: 'admin' },
+  customer_invites:                { scope: 'admin' },
+  customer_registrations:          { scope: 'admin' },
+  oauth_tokens:                    { scope: 'admin' },
 
   // Loyalty
   qr_campaigns:                    { scope: 'customer' },
@@ -31,6 +36,7 @@ const ALLOWLIST = {
   customer_notes:                  { scope: 'customer' },
   customer_files:                  { scope: 'customer' },
   customer_service_categories:     { scope: 'customer' },
+  ticket_messages:                 { scope: 'customer' },
   customer_seo_metrics:            { scope: 'customer' },
   review_funnel_stats:             { scope: 'customer' },
   invoices:                        { scope: 'customer' },
@@ -58,9 +64,15 @@ const ALLOWLIST = {
   onboarding_checklists:           { scope: 'customer' },
   approval_requests:               { scope: 'customer' },
   output_documents:                { scope: 'customer' },
+  dsar_requests:                   { scope: 'customer' },
+  loyalty_member_security_scores:  { scope: 'customer' },
 
   // Knowledge & Integrationen
   knowledge_articles:              { scope: 'admin' },
+  api_usage_cache:                 { scope: 'admin' },
+  data_integrity_checks:           { scope: 'admin' },
+  security_events:                 { scope: 'admin' },
+  activity_logs:                   { scope: 'admin' },
   integrations:                    { scope: 'customer' },
 
   // Monolith-CRUD (useStore) — customer-scoped Datensaetze
