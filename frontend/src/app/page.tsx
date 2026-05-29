@@ -701,6 +701,8 @@ function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
  const steps=Array.isArray(lp.steps)&&lp.steps.length?lp.steps:defaultMainLandingSettings.steps
  const faq=Array.isArray(lp.faq)&&lp.faq.length?lp.faq:defaultMainLandingSettings.faq
  const metrics=Array.isArray(lp.example_metrics)&&lp.example_metrics.length?lp.example_metrics:defaultMainLandingSettings.example_metrics
+ const heroTitle=String(lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.')
+ const heroTitleLines=heroTitle.split(/(?<=\.)\s+/).map((s:string)=>s.trim()).filter(Boolean)
  const heroMetrics=[
   {label:'Live-KPIs',value:'bereit'},
   {label:'Reviews',value:'sync'},
@@ -724,8 +726,8 @@ function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
    <div className="proHeroBackdrop" />
    <div className="proHeroContent">
     <Badge>Lokales Marketing-Betriebssystem</Badge>
-    <h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1>
-    <p>{lp.hero_subline}</p>
+    <h1 className="heroTitleLines">{heroTitleLines.length?heroTitleLines.map((line:string,i:number)=><span key={`${line}-${i}`} className="heroTitleLine">{line}</span>):(lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.')}</h1>
+    <div className="heroSublinePanel"><p>{lp.hero_subline}</p></div>
     <div className="landingCtas heroCenteredCtas">
      <button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.secondary_cta_label||'Portal öffnen'}</button>
      {isDemoFeatureEnabled()&&lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.primary_cta_label||'Interne Testansicht öffnen'}</button>}
