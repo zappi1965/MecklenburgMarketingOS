@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=20 <23"
+    "node": "22.x"
   },
   "scripts": {
     "start": "node src/server.js",
@@ -43,6 +43,7 @@
     "resend": "4.8.0",
     "stripe": "22.1.1",
     "uuid": "10.0.0",
+    "ws": "8.18.3",
     "zod": "3.25.76"
   }
 }
