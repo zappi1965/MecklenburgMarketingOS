@@ -103,13 +103,16 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
   const router = express.Router()
   const gotenberg = new GotenbergService(supabaseAdmin)
 
-  router.get('/health', (req, res) => {
+  router.get('/health', async (req, res) => {
     const hasPlaces = Boolean(process.env.GOOGLE_PLACES_API_KEY)
+    const gotenbergHealth = await gotenberg.health()
     res.json({
       ok: true,
       service: 'MMOS Business Tools',
       google_places: hasPlaces,
-      gotenberg: Boolean(process.env.GOTENBERG_URL),
+      gotenberg: gotenbergHealth.connected,
+      gotenberg_configured: gotenbergHealth.configured,
+      gotenberg_status: gotenbergHealth,
       mode: hasPlaces ? 'live_google_places' : 'live_google_places_required',
       timestamp: new Date().toISOString(),
       features: ['google_business_audit','lead_search','acquisition_campaign_center','data_integrity','places_cache','places_rate_limit','gotenberg_pdf_render'],

@@ -96,6 +96,7 @@ const PUBLIC_PATHS = [
   /^\/api\/health$/,
   /^\/api\/system\/health$/,
   /^\/api\/system\/status$/,
+  /^\/api\/v33-functional\/v42\/health$/,
   /^\/api\/auth\//,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/status$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/join-or-scan$/,

@@ -3,7 +3,7 @@ const allowedTables = [
   'customers','invoices','tickets','seo_snapshots','appointments','offers',
   'recurring_invoices','payments','notifications','automations','integrations',
   'package_requests','customer_tool_access','contracts','reports','activity_logs',
-  'workflow_runs','customer_files','notification_queue','worker_jobs'
+  'workflow_runs','customer_files','notification_queue','worker_jobs','oauth_tokens','api_usage_cache','data_integrity_checks','user_profiles'
 ]
 
 const requiredFields = {

@@ -76,7 +76,7 @@ function envDiagnostics() {
   const recommendations = []
   if (!supabaseUrl || !serviceRole) recommendations.push('Railway Backend: SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY setzen.')
   if (supabaseUrl && !supabaseInfo.looks_like_supabase_project) recommendations.push('SUPABASE_URL sollte exakt wie https://<project-ref>.supabase.co aussehen, ohne /rest/v1 oder anon/public Pfad.')
-  if (serviceRole && !serviceRole.startsWith('eyJ')) recommendations.push('SUPABASE_SERVICE_ROLE_KEY sieht nicht wie ein Supabase JWT aus. Prüfe, ob versehentlich anon key/secret falsch kopiert wurde.')
+  if (serviceRole && !(serviceRole.startsWith('eyJ') || serviceRole.startsWith('sb_secret_') || serviceRole.startsWith('sb_sec'))) recommendations.push('SUPABASE_SERVICE_ROLE_KEY sieht ungewöhnlich aus. Akzeptiert werden klassische JWT-Service-Role-Keys oder neue Supabase Secret Keys (sb_secret_...).')
   if (!placesKey) recommendations.push('GOOGLE_PLACES_API_KEY fehlt: Lead-Suche und Google-Business-Audit laufen dann nicht live.')
   if (placesKey && !/^AIza/.test(placesKey)) recommendations.push('GOOGLE_PLACES_API_KEY sieht ungewöhnlich aus. Google Maps API Keys beginnen häufig mit AIza.')
   if (googleOauthMissing.length) recommendations.push(`Google OAuth fehlt für GBP/Search Console/Analytics Sync: ${googleOauthMissing.join(', ')}.`)
@@ -119,18 +119,91 @@ async function listCustomerScopedTables(supabaseAdmin) {
 
 async function checkTable(supabaseAdmin, table) {
   try {
-    const { error } = await supabaseAdmin.from(table).select('*').limit(1)
-    return { table, ok: !error, error: error ? error.message : null }
+    const { count, error } = await supabaseAdmin.from(table).select('*', { count: 'exact', head: true })
+    return { table, ok: !error, count: error ? null : (count || 0), error: error ? error.message : null }
   } catch (error) {
-    return { table, ok: false, error: error.message || String(error) }
+    return { table, ok: false, count: null, error: error.message || String(error) }
+  }
+}
+
+function maskUrl(value = '') {
+  try {
+    const url = new URL(String(value || '').trim())
+    return `${url.protocol}//${url.host}`
+  } catch (_) {
+    return value ? 'ungueltige-url' : null
+  }
+}
+
+function describeFetchError(error) {
+  if (!error) return 'Unbekannter Fehler'
+  if (error.name === 'AbortError') return 'Zeitüberschreitung beim Verbindungsaufbau'
+  return error.message || String(error)
+}
+
+async function checkGotenbergRuntime() {
+  const raw = String(process.env.GOTENBERG_URL || '').trim().replace(/\/+$/, '')
+  if (!raw) {
+    return {
+      configured: false,
+      connected: false,
+      ok: false,
+      missing_env: ['GOTENBERG_URL'],
+      error: 'GOTENBERG_URL fehlt.',
+      hint: 'PDF-Erzeugung nutzt HTML-/Druckansicht als Fallback.'
+    }
+  }
+
+  let base
+  try {
+    base = new URL(raw).origin
+  } catch (_) {
+    return {
+      configured: true,
+      connected: false,
+      ok: false,
+      missing_env: [],
+      url_masked: 'ungueltige-url',
+      error: 'GOTENBERG_URL ist keine gültige URL.',
+      hint: 'Setze z. B. die öffentliche URL deines Gotenberg-Services, nicht localhost und nicht eine private Browser-URL.'
+    }
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), Number(process.env.GOTENBERG_HEALTH_TIMEOUT_MS || 5000))
+  try {
+    const res = await fetch(`${base}/health`, { signal: controller.signal, cache: 'no-store' })
+    return {
+      configured: true,
+      connected: res.ok,
+      ok: res.ok,
+      missing_env: [],
+      status: res.status,
+      url_masked: maskUrl(base),
+      error: res.ok ? null : `Gotenberg Healthcheck antwortet mit HTTP ${res.status}.`,
+      hint: res.ok ? 'Gotenberg ist erreichbar.' : 'Prüfe, ob der Gotenberg-Service läuft und von Railway aus erreichbar ist.'
+    }
+  } catch (error) {
+    return {
+      configured: true,
+      connected: false,
+      ok: false,
+      missing_env: [],
+      url_masked: maskUrl(base),
+      error: describeFetchError(error),
+      hint: 'GOTENBERG_URL ist gesetzt, aber vom Backend nicht erreichbar. Nutze die öffentliche Service-URL oder Railway private networking nur, wenn beide Services im selben Railway-Projekt/Netz sind.'
+    }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 function systemRoutes(supabaseAdmin) {
   const router = express.Router()
 
-  router.get('/health', (_, res) => {
+  router.get('/health', async (_, res) => {
     const missing = missingEnv(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
+    const gotenbergRuntime = await checkGotenbergRuntime()
     res.json({
       ok: true,
       service: 'MMOS Core Backend',
@@ -138,7 +211,9 @@ function systemRoutes(supabaseAdmin) {
       supabase_configured: Boolean(supabaseAdmin),
       supabase: Boolean(supabaseAdmin),
       resend: Boolean(process.env.RESEND_API_KEY),
-      gotenberg: Boolean(process.env.GOTENBERG_URL),
+      gotenberg: gotenbergRuntime.connected,
+      gotenberg_configured: gotenbergRuntime.configured,
+      gotenberg_status: gotenbergRuntime,
       google_oauth: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI),
       google_places: Boolean(process.env.GOOGLE_PLACES_API_KEY),
       missing_env: missing
@@ -162,10 +237,11 @@ function systemRoutes(supabaseAdmin) {
     }
     const missingSchema = checks.filter((check) => !check.ok && !check.skipped).map((check) => check.table)
     const diagnostics = envDiagnostics()
+    const gotenbergRuntime = await checkGotenbergRuntime()
     const integrations = {
       google_oauth: { connected: diagnostics.google_oauth.configured, missing_env: diagnostics.google_oauth.missing_env, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
       google_places: { connected: diagnostics.google_places.present, missing_env: diagnostics.google_places.present ? [] : ['GOOGLE_PLACES_API_KEY'], purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
-      gotenberg: { connected: Boolean(process.env.GOTENBERG_URL), missing_env: process.env.GOTENBERG_URL ? [] : ['GOTENBERG_URL'], purpose: 'serverseitige PDF-Erzeugung' },
+      gotenberg: { connected: gotenbergRuntime.connected, configured: gotenbergRuntime.configured, missing_env: gotenbergRuntime.missing_env || [], error: gotenbergRuntime.error, hint: gotenbergRuntime.hint, status: gotenbergRuntime.status, url_masked: gotenbergRuntime.url_masked, purpose: 'serverseitige PDF-Erzeugung' },
       mail: { connected: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST), missing_env: (process.env.RESEND_API_KEY || process.env.SMTP_HOST) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
     }
     res.json({
@@ -198,7 +274,7 @@ function systemRoutes(supabaseAdmin) {
       business_tools: {
         ok: true,
         google_places: diagnostics.google_places.present,
-        pdf: Boolean(process.env.GOTENBERG_URL),
+        pdf: integrations.gotenberg.connected,
         mail: integrations.mail.connected,
         note: diagnostics.google_places.present ? 'Live Lead-Suche kann Places-Daten nutzen.' : 'GOOGLE_PLACES_API_KEY fehlt; Lead-Suche nutzt keine echten Places-Daten.'
       },
@@ -280,14 +356,15 @@ function systemRoutes(supabaseAdmin) {
   })
 
 
-  router.get('/integration-status', (_, res) => {
+  router.get('/integration-status', async (_, res) => {
     const googleOauthMissing = missingEnv(['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI'])
     const googlePlacesMissing = missingEnv(['GOOGLE_PLACES_API_KEY'])
+    const gotenbergRuntime = await checkGotenbergRuntime()
     res.json({
       ok: true,
       google_oauth: { connected: googleOauthMissing.length === 0, missing_env: googleOauthMissing, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
       google_places: { connected: googlePlacesMissing.length === 0, missing_env: googlePlacesMissing, purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
-      gotenberg: { connected: Boolean(process.env.GOTENBERG_URL), missing_env: process.env.GOTENBERG_URL ? [] : ['GOTENBERG_URL'], purpose: 'serverseitige PDF-Erzeugung' },
+      gotenberg: { connected: gotenbergRuntime.connected, configured: gotenbergRuntime.configured, missing_env: gotenbergRuntime.missing_env || [], error: gotenbergRuntime.error, hint: gotenbergRuntime.hint, status: gotenbergRuntime.status, url_masked: gotenbergRuntime.url_masked, purpose: 'serverseitige PDF-Erzeugung' },
       mail: { connected: Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST), missing_env: (process.env.RESEND_API_KEY || process.env.SMTP_HOST) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
     })
   })

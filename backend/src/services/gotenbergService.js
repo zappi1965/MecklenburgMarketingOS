@@ -1,11 +1,50 @@
 
 const FormData = require('form-data')
 
+function describeFetchError(error) {
+  if (!error) return 'Unbekannter Fehler'
+  if (error.name === 'AbortError') return 'Zeitüberschreitung beim Verbindungsaufbau'
+  return error.message || String(error)
+}
+
+function maskGotenbergUrl(value = '') {
+  try {
+    const url = new URL(String(value || '').trim())
+    return `${url.protocol}//${url.host}`
+  } catch (_) {
+    return value ? 'ungueltige-url' : null
+  }
+}
+
 class GotenbergService {
   constructor(supabase) {
     this.url = process.env.GOTENBERG_URL
     this.enabled = Boolean(this.url)
     this.supabase = supabase
+  }
+
+  async health() {
+    if (!this.enabled) {
+      return { ok: false, connected: false, configured: false, error: 'GOTENBERG_URL fehlt.', hint: 'PDF nutzt HTML-/Druckansicht als Fallback.' }
+    }
+
+    let base
+    try {
+      base = new URL(String(this.url || '').trim().replace(/\/+$/, '')).origin
+    } catch (_) {
+      return { ok: false, connected: false, configured: true, url_masked: 'ungueltige-url', error: 'GOTENBERG_URL ist keine gültige URL.', hint: 'Setze eine erreichbare http(s)-URL.' }
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), Number(process.env.GOTENBERG_HEALTH_TIMEOUT_MS || 5000))
+    try {
+      const res = await fetch(`${base}/health`, { signal: controller.signal, cache: 'no-store' })
+      return { ok: res.ok, connected: res.ok, configured: true, status: res.status, url_masked: maskGotenbergUrl(base), error: res.ok ? null : `Gotenberg Healthcheck antwortet mit HTTP ${res.status}.`, hint: res.ok ? 'Gotenberg erreichbar.' : 'Prüfe Gotenberg Service/URL.' }
+    } catch (error) {
+      return { ok: false, connected: false, configured: true, url_masked: maskGotenbergUrl(base), error: describeFetchError(error), hint: 'GOTENBERG_URL ist gesetzt, aber vom Backend nicht erreichbar.' }
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   async convertOfficeToPdf(buffer, filename = 'template.docx') {
@@ -62,10 +101,24 @@ class GotenbergService {
       }
       if (typeof form.getHeaders === 'function') init.headers = form.getHeaders()
       res = await fetch(`${this.url.replace(/\/$/,'')}/forms/chromium/convert/html`, init)
+    } catch (error) {
+      const wrapped = new Error(`Gotenberg nicht erreichbar (${maskGotenbergUrl(this.url)}): ${describeFetchError(error)}`)
+      wrapped.status = 503
+      wrapped.statusCode = 503
+      wrapped.code = 'GOTENBERG_UNREACHABLE'
+      wrapped.hint = 'Prüfe GOTENBERG_URL in Railway. Nutze eine öffentliche Service-URL oder eine Railway-private URL nur, wenn der Backend-Service sie erreichen kann.'
+      throw wrapped
     } finally {
       clearTimeout(timer)
     }
-    if (!res.ok) throw new Error(`Gotenberg HTML→PDF Fehler: ${res.status} ${await res.text()}`)
+    if (!res.ok) {
+      const wrapped = new Error(`Gotenberg HTML→PDF Fehler: ${res.status} ${await res.text()}`)
+      wrapped.status = 503
+      wrapped.statusCode = 503
+      wrapped.code = 'GOTENBERG_RENDER_FAILED'
+      wrapped.hint = 'Gotenberg ist erreichbar, konnte das HTML aber nicht rendern.'
+      throw wrapped
+    }
     const arr = await res.arrayBuffer()
     return Buffer.from(arr)
   }

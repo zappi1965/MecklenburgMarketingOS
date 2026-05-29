@@ -3423,3 +3423,32 @@ input,select,textarea{font-size:16px} /* iOS Auto-Zoom verhindern */
 .opsWarn{color:#fde68a}
 .opsAlertList{list-style:disc;padding-left:18px;margin:6px 0 0;font-size:13px}
 @media(max-width:640px){.opsStatsRow{grid-template-columns:1fr 1fr}}
+
+
+/* v0.55 Landingpage desktop hero refresh */
+.proHeroDesktopFrame{position:relative;max-width:1240px;margin:38px auto 42px;padding:34px 36px 40px;min-height:560px;border-radius:34px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(180deg,rgba(9,15,29,.92),rgba(8,12,22,.96));box-shadow:0 30px 120px rgba(0,0,0,.52);overflow:hidden;display:flex;align-items:flex-start;justify-content:center;text-align:center}
+.proHeroBackdrop{position:absolute;inset:0;background:radial-gradient(circle at 18% 22%,rgba(124,58,237,.28),transparent 34%),radial-gradient(circle at 80% 18%,rgba(59,130,246,.18),transparent 26%),linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));pointer-events:none}
+.proHeroContent{position:relative;z-index:3;max-width:920px;margin:12px auto 0;display:grid;justify-items:center}
+.proHeroDesktopFrame h1{font-size:clamp(54px,6vw,86px);line-height:.96;letter-spacing:-.08em;max-width:860px;margin:18px auto 14px}
+.proHeroDesktopFrame p{max-width:760px;color:#d4d9e3;font-size:20px;line-height:1.55;margin:0 auto}
+.heroCenteredCtas{justify-content:center;margin-top:24px}
+.proHeroMockShell{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:min(1040px,90%);height:320px;z-index:2}
+.proHeroMockPrimary{position:absolute;left:50%;top:0;transform:translateX(-50%);width:min(740px,72%);padding:18px 18px 22px;border-radius:26px;background:linear-gradient(180deg,rgba(15,23,42,.86),rgba(13,20,32,.96));backdrop-filter:blur(16px);border:1px solid rgba(148,163,184,.20)}
+.proHeroMockHead{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+.proHeroMockBrand{display:flex;align-items:center;gap:12px;text-align:left}.proHeroMockBrandMark{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--purple),var(--purple2));display:grid;place-items:center;font-weight:900}
+.proHeroMetricRow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.proHeroMetricTile{border:1px solid rgba(148,163,184,.14);background:rgba(10,16,25,.64);border-radius:16px;padding:10px 12px;text-align:left}.proHeroMetricTile span{display:block;color:#93a0b4;font-size:11px;font-weight:800;margin-bottom:6px}.proHeroMetricTile strong{display:block;font-size:20px;letter-spacing:-.05em}
+.proHeroChart{margin:0;height:162px;align-items:end}
+.proHeroChart span{background:linear-gradient(180deg,rgba(56,189,248,.92),rgba(124,58,237,.95));border-radius:999px 999px 8px 8px;opacity:.96}
+.proHeroFloatingCard{position:absolute;display:grid;gap:6px;width:290px;padding:18px 18px 20px;border-radius:22px;border:1px solid rgba(148,163,184,.18);background:linear-gradient(180deg,rgba(11,18,32,.92),rgba(12,20,34,.98));box-shadow:0 22px 60px rgba(0,0,0,.35);backdrop-filter:blur(14px);text-align:left;color:#f3f6fb}
+.proHeroFloatingCard strong{font-size:28px;line-height:1.05;letter-spacing:-.05em;font-size:23px}
+.proHeroFloatingCard span{color:#c2ccda;line-height:1.45;font-size:15px}.proHeroFloatingLabel{font-size:12px;font-weight:800;color:#8ebcff;text-transform:uppercase;letter-spacing:.08em}
+.recommendationCard{left:14px;bottom:8px}.analyticsCard{right:14px;top:84px}
+.proStepsSection{max-width:960px;margin-top:10px}.proStepsSection h2{text-align:center;margin-bottom:18px}
+.proStepsList{display:grid;gap:14px;max-width:860px;margin:0 auto}.proStepRow{display:grid;grid-template-columns:72px 1fr;gap:18px;align-items:stretch}
+.proStepRail{position:relative;display:flex;flex-direction:column;align-items:center;padding-top:2px}.proStepIcon{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(124,58,237,.95),rgba(91,33,182,.75));border:1px solid rgba(196,181,253,.22);font-size:20px;font-weight:900;box-shadow:0 12px 28px rgba(76,29,149,.30)}.proStepNumber{margin-top:10px;font-size:24px;font-weight:900;color:#e7eefb;line-height:1}.proStepConnector{flex:1;width:2px;margin-top:10px;background:linear-gradient(180deg,rgba(124,58,237,.85),rgba(124,58,237,.08))}
+.proStepCard{display:flex;align-items:center;border:1px solid rgba(148,163,184,.18);border-radius:20px;background:linear-gradient(180deg,rgba(18,27,42,.96),rgba(13,20,32,.96));padding:22px 26px;min-height:118px;box-shadow:var(--shadow)}
+.proStepText h3{margin:0 0 8px;font-size:21px;letter-spacing:-.04em}.proStepText p{margin:0;color:#c2ccda;font-size:15px;line-height:1.55}
+.proStepMetricsInline{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}.proInlineMetric{display:flex;gap:8px;align-items:baseline;padding:8px 12px;border-radius:999px;background:rgba(16,185,129,.09);border:1px solid rgba(16,185,129,.12)}.proInlineMetric strong{color:#6ee7b7;font-size:16px}.proInlineMetric span{color:#c7d2e0;font-size:12px}
+@media(max-width:1100px){.proHeroDesktopFrame{min-height:640px;padding:28px 22px 34px}.proHeroMockShell{width:min(960px,92%);height:330px}.proHeroMockPrimary{width:min(680px,74%)}.proHeroFloatingCard{width:260px}.proHeroDesktopFrame h1{font-size:clamp(48px,7vw,74px)}}
+@media(max-width:980px){.proHeroDesktopFrame{display:block;text-align:left;min-height:auto;padding:24px}.proHeroContent{justify-items:flex-start;max-width:none}.heroCenteredCtas{justify-content:flex-start}.proHeroMockShell{position:relative;left:auto;bottom:auto;transform:none;width:100%;height:auto;margin-top:26px}.proHeroMockPrimary{position:relative;left:auto;top:auto;transform:none;width:100%}.proHeroFloatingCard{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:100%;margin-top:14px}.proStepRow{grid-template-columns:1fr}.proStepRail{flex-direction:row;justify-content:flex-start;gap:12px}.proStepConnector{display:none}.proStepNumber{margin-top:0}.proStepCard{min-height:0}.proHeroMetricRow{grid-template-columns:repeat(2,1fr)}}

@@ -254,6 +254,7 @@ const seed:any={
  activity_logs:[],
  customer_notes:[],
  integrations:[],
+ oauth_tokens:[],
  seo_snapshots:[],
  customer_files:[],
  qr_campaigns:[],
@@ -268,6 +269,8 @@ const seed:any={
  generated_contracts:[],
  dunning_cases:[],
  acquisition_campaigns:[],
+ api_usage_cache:[],
+ data_integrity_checks:[],
  customer_health_scores:[],
  onboarding_checklists:[],
  monthly_reports:[],
@@ -276,6 +279,7 @@ const seed:any={
  customer_registrations:[],
  customer_invites:[],
  customer_users:[],
+ user_profiles:[],
  loyalty_customers:[],
  loyalty_transactions:[],
  loyalty_reward_redemptions:[],
@@ -294,7 +298,7 @@ const seed:any={
 }
 
 const demoScopedTables=new Set([
- 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','competitor_benchmarks','google_business_audits','mini_audits','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_member_security_scores','security_events','dsar_requests'
+ 'customers','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','customer_notes','integrations','oauth_tokens','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','competitor_benchmarks','google_business_audits','mini_audits','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','api_usage_cache','data_integrity_checks','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','user_profiles','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_member_security_scores','security_events','dsar_requests'
 ])
 function withModeScope(table:string,payload:any){
  const scoped={...payload}
@@ -316,7 +320,7 @@ function allowLocalWriteFallback(){
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
- const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes']
+ const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','oauth_tokens','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','api_usage_cache','data_integrity_checks','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','user_profiles','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes']
  function notify(m:string){setToast(m);setTimeout(()=>setToast(''),3200)}
  function persistLocal(updater:(p:any)=>any){
   setData((p:any)=>{
@@ -674,7 +678,11 @@ async function openPdfDocument(title:string, subtitle:string, body:string, meta:
   window.open(url,'_blank')
   setTimeout(()=>URL.revokeObjectURL(url),60000)
  }catch(e:any){
-  appToast(`PDF-Erzeugung über Gotenberg nicht möglich: ${e.message || e}. HTML-/Druckansicht wird geöffnet.`)
+  const msg=String(e?.message||e||'PDF-Service nicht erreichbar')
+  const friendly=msg.includes('Gotenberg')||msg.includes('fetch failed')||msg.includes('GOTENBERG')
+   ? 'PDF-Service ist aktuell nicht erreichbar. HTML-/Druckansicht wird geöffnet.'
+   : `PDF konnte nicht erzeugt werden: ${msg}. HTML-/Druckansicht wird geöffnet.`
+  appToast(friendly)
   openBrandDocument(title,subtitle,body,meta)
  }
 }
@@ -693,8 +701,93 @@ function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
  const steps=Array.isArray(lp.steps)&&lp.steps.length?lp.steps:defaultMainLandingSettings.steps
  const faq=Array.isArray(lp.faq)&&lp.faq.length?lp.faq:defaultMainLandingSettings.faq
  const metrics=Array.isArray(lp.example_metrics)&&lp.example_metrics.length?lp.example_metrics:defaultMainLandingSettings.example_metrics
- return <div className="landing proLanding"><div className="landingNav proLandingNav"><div className={lp.logo_url?'logo hasImage':'logo'}>{lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}{lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||'Mecklenburg Marketing'}</span>}</div><div className="row"><button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button>{isDemoFeatureEnabled()&&lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Interne Testansicht'}</button>}</div></div><section className="hero proHero"><div><Badge>Lokales Marketing-Betriebssystem</Badge><h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1><p>{lp.hero_subline}</p><div className="landingCtas"><button className="btn" onClick={()=>{window.location.href='/auth'}}>Portal öffnen</button>{isDemoFeatureEnabled()&&lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Interne Testansicht öffnen'}</button>}</div></div><div className="proMock"><div className="mockTop"><span></span><span></span><span></span></div><div className="grid4"><Metric label="Live-KPIs" value="bereit"/><Metric label="Reviews" value="sync"/><Metric label="Leads" value="sync"/><Metric label="Health" value="sync"/></div><div className="chartLine">{Array.from({length:14},(_,i)=><span key={i} style={{height:`${22+(i*9)%70}px`}} />)}</div><div className="item"><b>Nächste Empfehlung</b><span>Google Business Fotos aktualisieren und Bewertungs-Booster starten.</span></div></div></section><section className="proSection"><h2>Ablauf in 3 Schritten</h2><div className="grid3">{steps.slice(0,3).map((s:any,i:number)=><Card key={`${s.title}-${i}`} title={`${i+1}. ${s.title}`}><p className="sub">{s.description}</p>{i===2&&<div className="miniMetrics">{metrics.map((m:any)=><Metric key={m.label} label={m.label} value={m.value}/>)}</div>}</Card>)}</div></section><section className="landingPackages proSection"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section><section className="proSection"><Card title="FAQ">{faq.map((f:any,i:number)=><div className="item" key={`${f.question}-${i}`}><b>{f.question}</b><span>{f.answer}</span></div>)}</Card></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
+ const heroMetrics=[
+  {label:'Live-KPIs',value:'bereit'},
+  {label:'Reviews',value:'sync'},
+  {label:'Leads',value:'sync'},
+  {label:'Health',value:'sync'}
+ ]
+ const stepIcons=['⌕','➜','▣']
+ return <div className="landing proLanding">
+  <div className="landingNav proLandingNav">
+   <div className={lp.logo_url?'logo hasImage':'logo'}>
+    {lp.logo_url?<img className="brandLogoImg" src={lp.logo_url} alt={lp.logo_alt||lp.nav_title||lp.brand_name||'Mecklenburg Marketing Logo'}/>:<div className="mark">{lp.logo_mark_text||'M'}</div>}
+    {lp.logo_show_text!==false&&<span className="brandLogoText">{lp.nav_title||'Mecklenburg Marketing'}</span>}
+   </div>
+   <div className="row">
+    <button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.primary_cta_label||'Anmelden'}</button>
+    {isDemoFeatureEnabled()&&lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.secondary_cta_label||'Interne Testansicht'}</button>}
+   </div>
+  </div>
+
+  <section className="hero proHeroDesktopFrame">
+   <div className="proHeroBackdrop" />
+   <div className="proHeroContent">
+    <Badge>Lokales Marketing-Betriebssystem</Badge>
+    <h1>{lp.hero_title||'Mehr Sichtbarkeit. Mehr Bewertungen. Mehr Kunden.'}</h1>
+    <p>{lp.hero_subline}</p>
+    <div className="landingCtas heroCenteredCtas">
+     <button className="btn" onClick={()=>{window.location.href='/auth'}}>{lp.secondary_cta_label||'Portal öffnen'}</button>
+     {isDemoFeatureEnabled()&&lp.show_public_demo_button!==false&&<button className="btn secondary" onClick={()=>{markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM')}}>{lp.primary_cta_label||'Interne Testansicht öffnen'}</button>}
+    </div>
+   </div>
+
+   <div className="proHeroMockShell">
+    <div className="proMock proHeroMockPrimary">
+     <div className="mockTop"><span></span><span></span><span></span></div>
+     <div className="proHeroMockHead">
+      <div className="proHeroMockBrand">
+       <div className="proHeroMockBrandMark">M</div>
+       <div>
+        <b>Analytics</b>
+        <div className="sub">Live-Dashboard</div>
+       </div>
+      </div>
+      <Badge>Auswertung</Badge>
+     </div>
+     <div className="proHeroMetricRow">
+      {heroMetrics.map((m:any)=><div className="proHeroMetricTile" key={m.label}><span>{m.label}</span><strong>{m.value}</strong></div>)}
+     </div>
+     <div className="chartLine proHeroChart">{Array.from({length:14},(_,i)=><span key={i} style={{height:`${28+(i*9)%82}px`}} />)}</div>
+    </div>
+
+    <div className="proHeroFloatingCard recommendationCard">
+      <div className="proHeroFloatingLabel">Nächste Empfehlung</div>
+      <strong>Google Business Fotos aktualisieren</strong>
+      <span>Neue Bilder ergänzen und Bewertungs-Booster für mehr Vertrauen starten.</span>
+    </div>
+
+    <div className="proHeroFloatingCard analyticsCard">
+      <div className="proHeroFloatingLabel">Analytics</div>
+      <strong>Performance im Blick</strong>
+      <span>Sichtbarkeit, Leads und Bewertungen zentral auswerten und aktualisieren.</span>
+    </div>
+   </div>
+  </section>
+
+  <section className="proSection proStepsSection">
+   <h2>Ablauf in 3 Schritten</h2>
+   <div className="proStepsList">
+    {steps.slice(0,3).map((s:any,i:number)=><div className="proStepRow" key={`${s.title}-${i}`}>
+      <div className="proStepRail">
+       <div className="proStepIcon">{stepIcons[i]||String(i+1)}</div>
+       <div className="proStepNumber">{i+1}</div>
+       {i<2&&<div className="proStepConnector"/>}
+      </div>
+      <div className="proStepCard">
+       <div className="proStepText">
+        <h3>{s.title}</h3>
+        <p>{s.description}</p>
+        {i===2&&<div className="proStepMetricsInline">{metrics.map((m:any)=><div className="proInlineMetric" key={m.label}><strong>{m.value}</strong><span>{m.label}</span></div>)}</div>}
+       </div>
+      </div>
+    </div>)}
+   </div>
+  </section>
+
+  <section className="landingPackages proSection"><h2>{lp.package_headline}</h2><p className="sub">{lp.package_subline}</p><div className="grid3 packageGrid">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};return <Card key={p} title={po.headline||p}><div className="metricValue">{eur(pprice(p))}</div><div className="sub">monatlich</div>{po.description&&<p className="sub">{po.description}</p>}<FeatureList pkg={p}/></Card>})}</div></section><section className="proSection"><Card title="FAQ">{faq.map((f:any,i:number)=><div className="item" key={`${f.question}-${i}`}><b>{f.question}</b><span>{f.answer}</span></div>)}</Card></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}</div>
 }
+
 
 function Avatar({name,src,size=34}:any){return src?<img className="avatar" style={{width:size,height:size}} src={src}/>:<div className="avatar fallback" style={{width:size,height:size}}>{String(name||'?').slice(0,1)}</div>}
 function NotificationBell({store,cid,role,activeAdmin,adminAvatars}:any){
@@ -882,8 +975,17 @@ function V42PublicLandingManager({store,cid}:any){
 
 function ProductionStatusCard(){
  const [health,setHealth]=useState<any>(null)
- useEffect(()=>{v33FunctionalClient.health().then(setHealth).catch((e:any)=>setHealth({ok:false,error:e.message||'Backend nicht erreichbar'}))},[])
- return <Card title="Production Status"><div className="item"><b>Backend</b><Badge type={health?.ok?'green':'red'}>{health?.ok?'Verbunden':'Nicht verbunden'}</Badge></div><div className="sub">Service: {health?.service||health?.error||'Prüfe Verbindung...'}</div><div className="sub">Worker, API-Syncs, PDF- und QR-Services sind backendseitig vorbereitet.</div></Card>
+ useEffect(()=>{
+  let alive=true
+  systemStatus()
+   .then((r:any)=>{if(alive)setHealth({ok:!!(r?.ok&&r?.ready?.ok!==false),service:r?.service||'MMOS System Center',status:r})})
+   .catch((e:any)=>setHealth({ok:false,error:e.message||'Backend nicht erreichbar'}))
+  return()=>{alive=false}
+ },[])
+ const gotenberg=health?.status?.integrations?.gotenberg
+ const gotenbergOk=gotenberg?.connected===true
+ const gotenbergNote=gotenberg?.error||gotenberg?.hint||(!gotenbergOk?'Gotenberg ist nicht live erreichbar; HTML-/Druckansicht bleibt als Fallback aktiv.':'PDF-Service erreichbar')
+ return <Card title="Production Status"><div className="item"><b>Backend</b><Badge type={health?.ok?'green':'red'}>{health?.ok?'Verbunden':'Nicht verbunden'}</Badge></div><div className="sub">Service: {health?.service||health?.error||'Prüfe Verbindung...'}</div><div className="item"><b>PDF / Gotenberg</b><Badge type={gotenbergOk?'green':'yellow'}>{gotenbergOk?'Erreichbar':'Fallback aktiv'}</Badge></div><div className="sub">{gotenbergNote}</div><div className="sub">Worker, API-Syncs, PDF- und QR-Services sind backendseitig vorbereitet.</div></Card>
 }
 
 
@@ -1743,12 +1845,21 @@ function HealthCenterV42({store}:any){
  const missing=Array.isArray(schema?.missing)?schema.missing:[]
  const migrationRows=migrations.map(m=>({...m,missing:m.tables.filter(t=>missing.includes(t)),local:m.tables.every(t=>Array.isArray(store.data[t]))}))
  const localTables=Array.from(new Set(migrations.flatMap(m=>m.tables)))
+ const liveCheckByTable=new Map(safeList(schema?.checks).map((x:any)=>[x.table,x]))
+ const tableCountRows=localTables.map((t:any)=>{
+  const check:any=liveCheckByTable.get(t)
+  const localLoaded=Array.isArray(store.data[t])
+  const count=localLoaded?safeList(store.data[t]).length:(check?.ok&&typeof check.count==='number'?check.count:0)
+  const badgeType=localLoaded||check?.ok?'green':'yellow'
+  const label=localLoaded?'lokal verfügbar':check?.ok?'live gezählt':'nicht geladen'
+  return <div className="item" key={t}><b>{t}</b><span>{count} Einträge</span><Badge type={badgeType}>{label}</Badge></div>
+ })
  const activity=safeList(store.data.activity_logs).slice(0,8)
  return <><Head title="Health Center" sub="Systemstatus, Migrationen, Live/Lokal-Status, API-Keys und Datenintegrität" action={<div className="toolbarActions"><LocalLiveBadge/><button className="btn" onClick={run}>Neu prüfen</button></div>}/>
  <div className="grid4"><Metric label="Backend" value={ready?.ok?'OK':'Prüfen'}/><Metric label="Schema" value={missing.length?`${missing.length} fehlt`:'OK'}/><Metric label="Business Tools" value={bt?.ok?'OK':'Prüfen'}/><Metric label="Aktivitäten" value={safeList(store.data.activity_logs).length}/></div>
  <div className="grid2"><Card title="Backend / Supabase"><pre className="codeBox">{JSON.stringify(ready,null,2)}</pre></Card><Card title="Business Tools & ENV"><pre className="codeBox">{JSON.stringify(bt,null,2)}</pre><div className="sub">Live Lead-Suche und echte Places-Daten benötigen GOOGLE_PLACES_API_KEY in Railway. Ohne Key liefert die Live-Lead-Suche keine Beispiel-Leads.</div>{msg&&<div className="sub">{msg}</div>}</Card></div>
  <Card title="Migrationen & SQL-Status">{migrationRows.map((m:any)=><div className="item" key={m.version}><div><b>{m.version} · {m.file}</b><div className="sub">Tabellen: {m.tables.join(', ')}</div>{m.missing.length>0&&<div className="sub">Fehlend laut Backend: {m.missing.join(', ')}</div>}</div><Badge type={m.missing.length?'yellow':'green'}>{m.missing.length?'prüfen':'OK'}</Badge></div>)}</Card>
- <Card title="Live/Lokal Datenzählung">{localTables.map(t=><div className="item" key={t}><b>{t}</b><span>{safeList(store.data[t]).length} Einträge</span><Badge type={Array.isArray(store.data[t])?'green':'yellow'}>{Array.isArray(store.data[t])?'verfügbar':'nicht geladen'}</Badge></div>)}</Card>
+ <Card title="Live/Lokal Datenzählung">{tableCountRows}</Card>
  <Card title="Aktivitätslog">{activity.length===0&&<div className="sub">Noch keine kritischen Aktionen protokolliert.</div>}{activity.map((a:any)=><div className="item" key={a.id}><div><b>{a.title||a.type}</b><div className="sub">{a.ref_table||a.type} · {new Date(a.created_at).toLocaleString('de-DE')}</div></div><Badge type={a.severity==='warning'?'yellow':'green'}>{a.type||'log'}</Badge></div>)}</Card>
  
 <Card title="Integrationen & ENV-Status">{integrations?['google_oauth','google_places','gotenberg','mail'].map((k:string)=>{const row=integrations[k]||{};return <div className="item" key={k}><div><b>{k}</b><div className="sub">{row.purpose||'Integration'}</div>{Array.isArray(row.missing_env)&&row.missing_env.length>0&&<div className="sub">Fehlt: {row.missing_env.join(', ')}</div>}</div><Badge type={row.connected?'green':'yellow'}>{row.connected?'bereit':'prüfen'}</Badge></div>}):<div className="sub">Noch nicht geprüft.</div>}</Card>
