@@ -371,12 +371,48 @@ function compactLiveError(e:any){
  if(raw.includes('Failed to fetch')||raw.includes('fetch failed'))return 'Backend nicht erreichbar. BACKEND_URL/Proxy prüfen.'
  return raw.length>180?raw.slice(0,180)+'…':raw
 }
+function v066Now(){return new Date().toISOString()}
+function v066Clock(value:any){try{return value?new Date(value).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'–'}catch{return '–'}}
+function v066StatusText(status:any){
+ if(!status||status.state==='idle')return 'Live-System bereit'
+ if(status.state==='loading')return 'Live-Daten werden geladen…'
+ if(status.state==='saving')return `${status.pending||1} Änderung wird live gespeichert…`
+ if(status.state==='saved')return `Live gespeichert · ${v066Clock(status.lastSavedAt)}`
+ if(status.state==='error')return `Speicherfehler · ${compactLiveError(status.lastError)}`
+ return 'Live-System bereit'
+}
+function LiveSaveStatusBar({status}:any){
+ const state=status?.state||'idle'
+ const type=state==='error'?'red':state==='saving'||state==='loading'?'yellow':'green'
+ return <div className={`v066LiveSaveStatus ${state}`} role="status" aria-live="polite"><Badge type={type}>{state==='error'?'Fehler':state==='saving'?'Speichert':state==='loading'?'Lädt':'Live'}</Badge><span>{v066StatusText(status)}</span>{status?.table&&<small>{status.operation||'sync'} · {status.table}</small>}</div>
+}
+function ApiDiagnosticsPanel(){
+ const [events,setEvents]=useState<any[]>([])
+ useEffect(()=>{
+  function onError(e:any){setEvents((p:any[])=>[{id:uid(),...(e.detail||{})},...p].slice(0,4))}
+  if(typeof window!=='undefined') window.addEventListener('mmos:api-error',onError as any)
+  return()=>{if(typeof window!=='undefined') window.removeEventListener('mmos:api-error',onError as any)}
+ },[])
+ if(!events.length)return null
+ return <div className="v066ApiDiagnostics"><div className="item"><b>Letzte API-Hinweise</b><button className="btn secondary" onClick={()=>setEvents([])}>Ausblenden</button></div>{events.map((e:any)=><div className="v066ApiEvent" key={e.id}><b>{e.label||e.method||'API'}</b><span>{e.kind||'api'} · {e.message}</span><small>{e.url}</small></div>)}</div>
+}
+function IntegrationDiagnosticRow({name,row}:any){
+ const connected=!!row?.connected
+ return <div className="v066DiagRow"><div><b>{name}</b><div className="sub">{row?.purpose||'Integration'}</div>{row?.url_masked&&<div className="sub">URL: {row.url_masked}{row.status?` · HTTP ${row.status}`:''}</div>}{row?.error&&<div className="sub v066ErrorText">Fehler: {row.error}</div>}{row?.hint&&<div className="sub">Hinweis: {row.hint}</div>}{Array.isArray(row?.missing_env)&&row.missing_env.length>0&&<div className="sub">Fehlt: {row.missing_env.join(', ')}</div>}</div><Badge type={connected?'green':'yellow'}>{connected?'bereit':'prüfen'}</Badge></div>
+}
+function V066EmptyState({title='Noch keine Daten',text='Sobald Live-Daten vorhanden sind, erscheinen sie hier.',action}:any){return <div className="emptyState v066EmptyState"><b>{title}</b><span>{text}</span>{action}</div>}
+function useDebouncedEffect(fn:()=>void,deps:any[],delay=800){useEffect(()=>{const t=setTimeout(fn,delay);return()=>clearTimeout(t)},deps)}
 
 function useStore(){
  const [data,setData]=useState<any>(seed)
  const [toast,setToast]=useState('')
+ const [liveStatus,setLiveStatus]=useState<any>({state:'idle',pending:0,lastSavedAt:null,lastError:null})
  const tables=['customers','demo_customers','demo_invoices','demo_contracts','demo_notes','demo_appointments','demo_files','demo_notifications','demo_workflow_runs','demo_qr_campaigns','demo_mail_jobs','customer_subscriptions','customer_tool_access','package_requests','invoices','tickets','ticket_messages','appointments','customer_clients','offers','automations','workflow_runs','activity_logs','customer_notes','integrations','oauth_tokens','seo_snapshots','customer_files','notifications','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','qr_campaigns','review_feedback','knowledge_articles','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns','api_usage_cache','data_integrity_checks','onboarding_checklists','monthly_reports','approval_requests','output_documents','customer_registrations','customer_invites','customer_users','user_profiles','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','security_events','dsar_requests','landing_page_settings','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes']
  function notify(m:string){setToast(m);setTimeout(()=>setToast(''),3200)}
+ function setStoreBusy(operation:string,table:string){setLiveStatus((p:any)=>({...p,state:'saving',pending:Number(p.pending||0)+1,operation,table,lastError:null}))}
+ function setStoreLoaded(){setLiveStatus((p:any)=>({...p,state:'saved',pending:0,lastSavedAt:v066Now(),lastError:null,operation:'load',table:'all'}))}
+ function setStoreSaved(operation:string,table:string){setLiveStatus((p:any)=>({...p,state:'saved',pending:Math.max(0,Number(p.pending||1)-1),lastSavedAt:v066Now(),lastError:null,operation,table}))}
+ function setStoreError(operation:string,table:string,error:any){setLiveStatus((p:any)=>({...p,state:'error',pending:0,lastError:error,operation,table,lastSavedAt:p.lastSavedAt||null}))}
  function persistLocal(updater:(p:any)=>any){
   setData((p:any)=>{
    const next=updater(p)
@@ -389,33 +425,46 @@ function useStore(){
   if(typeof window!=='undefined') window.addEventListener('mmos:toast',onGlobalToast as any)
   return ()=>{ if(typeof window!=='undefined') window.removeEventListener('mmos:toast',onGlobalToast as any) }
  },[])
+ async function loadTableSnapshot(t:string,demoActive:boolean,preferBackend:boolean){
+  if(preferBackend){
+   try{
+    const remote=await storeClient.list(t,{limit:1000})
+    return [t,remote.data||[]]
+   }catch(e){
+    console.warn(`[MMOS] Backend list failed for ${t}`,e)
+   }
+  }
+  if(!hasSupabase||!supabase)return [t,[]]
+  try{
+   let q:any=supabase.from(t).select('*')
+   if(!demoActive&&demoScopedTables.has(t)) q=q.or('is_demo.is.false,is_demo.is.null')
+   const {data,error}=await q
+   if(error&&(!demoActive&&demoScopedTables.has(t))){
+    const fallback=await supabase.from(t).select('*')
+    return [t,fallback.data||[]]
+   }
+   return [t,data||[]]
+  }catch(_){return [t,[]]}
+ }
  async function load(){
+  setLiveStatus((p:any)=>({...p,state:'loading',operation:'load',table:'all',lastError:null}))
   const r:any={}
   const demoActive=isDemoMode()
   const session=await getCurrentSession().catch(()=>null as any)
   const preferBackend=Boolean(session?.access_token)&&!allowLocalWriteFallback()
-  for(const t of tables){
-   if(preferBackend){
-    try{
-     const remote=await storeClient.list(t,{limit:1000})
-     r[t]=remote.data||[]
-     continue
-    }catch(e){
-     console.warn(`[MMOS] Backend list failed for ${t}`,e)
+  const chunkSize=8
+  for(let i=0;i<tables.length;i+=chunkSize){
+   const chunk=tables.slice(i,i+chunkSize)
+   const settled=await Promise.allSettled(chunk.map((t)=>loadTableSnapshot(t,demoActive,preferBackend)))
+   for(const entry of settled){
+    if(entry.status==='fulfilled'){
+     const [t,rows]:any=entry.value
+     r[t]=rows
     }
    }
-   if(!hasSupabase||!supabase){r[t]=[];continue}
-   try{
-    let q:any=supabase.from(t).select('*')
-    if(!demoActive&&demoScopedTables.has(t)) q=q.or('is_demo.is.false,is_demo.is.null')
-    const {data,error}=await q
-    if(error&&(!demoActive&&demoScopedTables.has(t))){
-     const fallback=await supabase.from(t).select('*')
-     r[t]=fallback.data||[]
-    }else r[t]=data||[]
-   }catch(_){r[t]=[]}
   }
   setData((p:any)=>({...p,...r}))
+  setStoreLoaded()
  }
  useEffect(()=>{
   if(allowLocalWriteFallback()){
@@ -444,22 +493,29 @@ function useStore(){
  }
  async function create(table:string,row:any){
   const payload=withModeScope(table,{id:row.id||uid(),...row,created_at:row.created_at||new Date().toISOString()})
+  const previous=data
+  setStoreBusy('create',table)
+  setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
   try{
    const viaBackend=await backendWrite('create',table,payload)
    if(viaBackend.ok){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
-   else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+   else if(allowLocalWriteFallback()) {try{safeLocalStorageSet(DEMO_SANDBOX_KEY,{...data,[table]:[payload,...(data[table]||[])]})}catch{}}
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
-   addActivity('create',table,payload.id,{live:hasSupabase})
+   addActivity('create',table,payload.id,{live:hasSupabase,optimistic:true})
+   setStoreSaved('create',table)
    notify('Gespeichert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote create failed`,e)
    if(allowLocalWriteFallback()){
-    persistLocal((p:any)=>({...p,[table]:[payload,...(p[table]||[])]}))
+    try{safeLocalStorageSet(DEMO_SANDBOX_KEY,{...data,[table]:[payload,...(data[table]||[])]})}catch{}
     addActivity('create-local',table,payload.id,{fallback:true})
+    setStoreSaved('create-local',table)
     notify('Lokal gespeichert (Demo/Fallback)')
     return payload
    }
+   setData(previous)
+   setStoreError('create',table,e)
    notify('Live-Speicherung fehlgeschlagen: '+compactLiveError(e))
    throw e
   }
@@ -467,50 +523,64 @@ function useStore(){
  }
  async function update(table:string,id:string,row:any){
   const normalized=withModeScope(table,{...row,updated_at:row.updated_at||new Date().toISOString()})
+  const previous=data
+  setStoreBusy('update',table)
+  setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>String(x.id)===String(id)?{...x,...normalized}:x)}))
   try{
    const viaBackend=await backendWrite('update',table,normalized,id)
    if(viaBackend.ok){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
-   else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>x.id===id?{...x,...normalized}:x)}))
+   else if(allowLocalWriteFallback()) persistLocal((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>String(x.id)===String(id)?{...x,...normalized}:x)}))
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
-   addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase})
+   addActivity('update',table,id,{patch:Object.keys(row||{}),live:hasSupabase,optimistic:true})
+   setStoreSaved('update',table)
    notify('Aktualisiert')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote update failed`,e)
    if(allowLocalWriteFallback()){
     persistLocal((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>String(x.id)===String(id)?{...x,...normalized}:x)}))
     addActivity('update-local',table,id,{fallback:true,patch:Object.keys(row||{})})
+    setStoreSaved('update-local',table)
     notify('Lokal aktualisiert (Demo/Fallback)')
     return {id,...normalized}
    }
+   setData(previous)
+   setStoreError('update',table,e)
    notify('Live-Aktualisierung fehlgeschlagen: '+compactLiveError(e))
    throw e
   }
   return {id,...normalized}
  }
  async function remove(table:string,id:string){
+  const previous=data
+  setStoreBusy('delete',table)
+  setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>String(x.id)!==String(id))}))
   try{
    const viaBackend=await backendWrite('remove',table,null,id)
    if(viaBackend.ok){await load()}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
-   else if(allowLocalWriteFallback()) setData((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>x.id!==id)}))
+   else if(allowLocalWriteFallback()) persistLocal((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>String(x.id)!==String(id))}))
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
-   addActivity('delete',table,id,{live:hasSupabase})
+   addActivity('delete',table,id,{live:hasSupabase,optimistic:true})
+   setStoreSaved('delete',table)
    notify('Gelöscht')
   }catch(e:any){
    console.warn(`[MMOS] ${table} remote delete failed`,e)
    if(allowLocalWriteFallback()){
     persistLocal((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>String(x.id)!==String(id))}))
     addActivity('delete-local',table,id,{fallback:true})
+    setStoreSaved('delete-local',table)
     notify('Lokal gelöscht (Demo/Fallback)')
     return true
    }
+   setData(previous)
+   setStoreError('delete',table,e)
    notify('Live-Löschung fehlgeschlagen: '+compactLiveError(e))
    throw e
   }
   return true
  }
- return {data,setData,create,update,remove,load,toast,notify}
+ return {data,setData,create,update,remove,load,toast,notify,liveStatus}
 }
 
 function isDemoRecord(c:any){return Boolean(c?.is_demo)||String(c?.name||c?.company_name||c?.business_name||'').trim().toUpperCase().startsWith('DEMO ')}
@@ -684,7 +754,15 @@ function FieldHelpEnhancer(){
    if(!el.getAttribute('title')&&next) el.setAttribute('title',next)
    if(!el.getAttribute('aria-label')&&next) el.setAttribute('aria-label',next)
   })
- },[])
+  const tables=Array.from(document.querySelectorAll('table')) as HTMLTableElement[]
+  tables.forEach((table:any)=>{
+   const heads=Array.from(table.querySelectorAll('thead th')).map((th:any)=>String(th.textContent||'').trim())
+   if(!heads.length)return
+   Array.from(table.querySelectorAll('tbody tr')).forEach((tr:any)=>{
+    Array.from(tr.children).forEach((td:any,i:number)=>{if(heads[i]&&!td.getAttribute('data-label'))td.setAttribute('data-label',heads[i])})
+   })
+  })
+ })
  return null
 }
 
@@ -882,11 +960,12 @@ function ProfessionalLanding({lp,setRole,setActiveAdmin}:any){
 
   <section className="landingPackages proSection packageShowcase">
    <div className="packageShowcaseHead"><h2>{lp.package_headline}</h2><p>{lp.package_subline}</p></div>
-   <div className="grid3 packageGrid packageCardsCompact">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};const fallback=(defaultMainLandingSettings.packages||{})[p]||{};const features=Array.isArray(po.features)&&po.features.length?po.features:(fallback.features||[]);return <div className="packageLandingCard" key={p}><div className="packageLandingTop"><div><span className="packageEyebrow">{po.audience||fallback.audience||'Für lokale Unternehmen'}</span><h3>{po.headline||p}</h3></div><div className="packagePrice">{eur(pprice(p))}<span>/Monat</span></div></div>{po.description&&<p className="packageBenefit">{po.description}</p>}<ul className="packageFeatureList">{features.slice(0,5).map((feature:any,i:number)=><li key={`${feature}-${i}`}>{feature}</li>)}</ul><button className="btn secondary packageCardBtn" onClick={()=>openPackageInquiry(p)}>{lp.package_cta_label||'Paket anfragen'}</button></div>})}</div>
+   <div className="grid3 packageGrid packageCardsCompact mobilePackageSnap">{Object.keys(packageDefs).map(p=>{const po=(lp.packages||{})[p]||{};const fallback=(defaultMainLandingSettings.packages||{})[p]||{};const features=Array.isArray(po.features)&&po.features.length?po.features:(fallback.features||[]);return <div className="packageLandingCard" key={p}><div className="packageLandingTop"><div><span className="packageEyebrow">{po.audience||fallback.audience||'Für lokale Unternehmen'}</span><h3>{po.headline||p}</h3></div><div className="packagePrice">{eur(pprice(p))}<span>/Monat</span></div></div>{po.description&&<p className="packageBenefit">{po.description}</p>}<ul className="packageFeatureList">{features.slice(0,5).map((feature:any,i:number)=><li key={`${feature}-${i}`}>{feature}</li>)}</ul><button className="btn secondary packageCardBtn" onClick={()=>openPackageInquiry(p)}>{lp.package_cta_label||'Paket anfragen'}</button></div>})}</div>
    <div className="packageAddonBox"><div><span className="packageEyebrow">{lp.package_addon_headline||'Individuell erweiterbar'}</span><h3>{lp.package_addon_subline||'Starte mit dem passenden Paket und erweitere es jederzeit um einzelne Tools.'}</h3><p>{lp.package_addon_note||'Alle Funktionen sind flexibel erweiterbar und können einzeln zum Paket hinzugebucht werden.'}</p></div><button className="btn" onClick={()=>openPackageInquiry('Individuelles Setup')}>{lp.package_addon_cta_label||'Individuelles Setup anfragen'}</button></div>
    <div className="optionalToolsBox"><div><h3>{lp.optional_tools_headline||'Optional zubuchbare Tools'}</h3><p>{lp.optional_tools_subline||'Ergänze dein Paket nur um die Funktionen, die dein Betrieb wirklich braucht.'}</p></div><div className="optionalToolChips">{(Array.isArray(lp.optional_tools)?lp.optional_tools:defaultMainLandingSettings.optional_tools).map((tool:any,i:number)=><span key={`${tool}-${i}`}>{tool}</span>)}</div></div>
   </section><section className="proSection"><Card title="FAQ">{faq.map((f:any,i:number)=><div className="item" key={`${f.question}-${i}`}><b>{f.question}</b><span>{f.answer}</span></div>)}</Card></section>{lp.footer_note&&<div className="landingFooter sub">{lp.footer_note}</div>}
-  {inquiry&&<div className="publicInquiryOverlay" role="dialog" aria-modal="true"><form className="publicInquiryModal" onSubmit={submitPackageInquiry}><div className="row between"><div><span className="packageEyebrow">{lp.package_form_title||defaultMainLandingSettings.package_form_title}</span><h2>{inquiry}</h2></div><button type="button" className="btn secondary" onClick={()=>setInquiry(null)}>Schließen</button></div><p>{lp.package_form_subline||defaultMainLandingSettings.package_form_subline}</p><div className="grid2"><input className="input" value={inquiryForm.name} onChange={e=>setInquiryForm({...inquiryForm,name:e.target.value})} placeholder="Dein Name *" required/><input className="input" value={inquiryForm.company} onChange={e=>setInquiryForm({...inquiryForm,company:e.target.value})} placeholder="Betrieb / Unternehmen"/><input className="input" type="email" value={inquiryForm.email} onChange={e=>setInquiryForm({...inquiryForm,email:e.target.value})} placeholder="E-Mail *" required/><input className="input" value={inquiryForm.phone} onChange={e=>setInquiryForm({...inquiryForm,phone:e.target.value})} placeholder="Telefon optional"/></div><textarea className="input textarea" value={inquiryForm.message} onChange={e=>setInquiryForm({...inquiryForm,message:e.target.value})} placeholder="Nachricht"/><div className="toolbarActions"><button className="btn" type="submit" disabled={inquiryBusy}>{inquiryBusy?'Sendet...':(lp.package_form_submit_label||defaultMainLandingSettings.package_form_submit_label)}</button><button className="btn secondary" type="button" onClick={()=>setInquiry(null)} disabled={inquiryBusy}>Abbrechen</button></div>{inquiryMsg&&<div className="sub inquiryStatus">{inquiryMsg}</div>}</form></div>}
+  <div className="mobileStickyLandingCta"><button className="btn" onClick={()=>openPackageInquiry('Kostenlose Analyse')}>Kostenlose Analyse anfragen</button><button className="btn secondary" onClick={()=>document.querySelector('.landingPackages')?.scrollIntoView({behavior:'smooth',block:'start'})}>Pakete</button></div>
+  {inquiry&&<div className="publicInquiryOverlay publicInquiryBottomSheet" role="dialog" aria-modal="true"><form className="publicInquiryModal" onSubmit={submitPackageInquiry}><div className="row between"><div><span className="packageEyebrow">{lp.package_form_title||defaultMainLandingSettings.package_form_title}</span><h2>{inquiry}</h2></div><button type="button" className="btn secondary" onClick={()=>setInquiry(null)}>Schließen</button></div><p>{lp.package_form_subline||defaultMainLandingSettings.package_form_subline}</p><div className="grid2"><input className="input" value={inquiryForm.name} onChange={e=>setInquiryForm({...inquiryForm,name:e.target.value})} placeholder="Dein Name *" required/><input className="input" value={inquiryForm.company} onChange={e=>setInquiryForm({...inquiryForm,company:e.target.value})} placeholder="Betrieb / Unternehmen"/><input className="input" type="email" value={inquiryForm.email} onChange={e=>setInquiryForm({...inquiryForm,email:e.target.value})} placeholder="E-Mail *" required/><input className="input" value={inquiryForm.phone} onChange={e=>setInquiryForm({...inquiryForm,phone:e.target.value})} placeholder="Telefon optional"/></div><textarea className="input textarea" value={inquiryForm.message} onChange={e=>setInquiryForm({...inquiryForm,message:e.target.value})} placeholder="Nachricht"/><div className="toolbarActions"><button className="btn" type="submit" disabled={inquiryBusy}>{inquiryBusy?'Sendet...':(lp.package_form_submit_label||defaultMainLandingSettings.package_form_submit_label)}</button><button className="btn secondary" type="button" onClick={()=>setInquiry(null)} disabled={inquiryBusy}>Abbrechen</button></div>{inquiryMsg&&<div className="sub inquiryStatus">{inquiryMsg}</div>}</form></div>}
  </div>
 }
 
@@ -976,7 +1055,9 @@ function MainLandingPageEditor({store}:any){
  const current=mainLandingSettings(store.data)
  const [f,setF]=useState<any>(current)
  const [msg,setMsg]=useState('')
+ const [draftState,setDraftState]=useState('Live-Daten geladen')
  useEffect(()=>{setF(mainLandingSettings(store.data))},[store.data.landing_page_settings])
+ useDebouncedEffect(()=>{setDraftState('Änderungen bereit zum Speichern · Auto-Check aktiv')},[JSON.stringify(f)],700)
  function setPackage(pkg:string,patch:any){setF((p:any)=>({...p,packages:{...(p.packages||{}),[pkg]:{...((p.packages||{})[pkg]||{}),...patch}}}))}
  function packageFeatureList(pkg:string){const p=((f.packages||{})[pkg]||{});const fallback=((defaultMainLandingSettings.packages||{})[pkg]||{}).features||[];return Array.isArray(p.features)?p.features:fallback}
  function patchPackageFeature(pkg:string,i:number,value:string){const next=[...packageFeatureList(pkg)];next[i]=value;setPackage(pkg,{features:next})}
@@ -1027,7 +1108,7 @@ function MainLandingPageEditor({store}:any){
  function reset(){setF(defaultMainLandingSettings);setMsg('Standardtexte geladen – bitte speichern.')}
  return <>
   <Head title="Haupt-Landingpage" sub="Texte der öffentlichen Startseite, Demo-Audit, Pakete, Ablauf und FAQ bearbeiten" action={<button className="btn" onClick={save}>Landingpage speichern</button>}/>
-  <div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Logo-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des zweiten Buttons, z. B. Portal öffnen"/></div><label className="checkline"><input type="checkbox" checked={f.show_public_demo_button!==false} onChange={e=>setF({...f,show_public_demo_button:e.target.checked})}/> Zweiten öffentlichen Button auf der Landingpage anzeigen</label><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button>{isDemoFeatureEnabled()&&f.show_public_demo_button!==false&&<button className="btn secondary">{f.secondary_cta_label}</button>}</div><div className="sub">Ablauf, Demo-Audit, Pakete und FAQ werden darunter angezeigt.</div></div></Card></div>
+  <div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Logo-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des zweiten Buttons, z. B. Portal öffnen"/></div><label className="checkline"><input type="checkbox" checked={f.show_public_demo_button!==false} onChange={e=>setF({...f,show_public_demo_button:e.target.checked})}/> Zweiten öffentlichen Button auf der Landingpage anzeigen</label><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/><div className="sub v066DraftState">{draftState}</div>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button>{isDemoFeatureEnabled()&&f.show_public_demo_button!==false&&<button className="btn secondary">{f.secondary_cta_label}</button>}</div><div className="sub">Ablauf, Demo-Audit, Pakete und FAQ werden darunter angezeigt.</div></div></Card></div>
   <Card title="Ablauf in 3 Schritten bearbeiten">{(f.steps||defaultMainLandingSettings.steps).slice(0,3).map((step:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={step.title||''} onChange={e=>patchStep(i,{title:e.target.value})} placeholder={`Titel Schritt ${i+1}`}/><textarea className="input textarea" value={step.description||''} onChange={e=>patchStep(i,{description:e.target.value})} placeholder={`Beschreibung Schritt ${i+1}`}/></div>)}<div className="sub">Beispiel-Ergebnisse werden im dritten Schritt angezeigt.</div><div className="grid3">{(f.example_metrics||defaultMainLandingSettings.example_metrics).map((m:any,i:number)=><Card key={i} title={`Beispielwert ${i+1}`}><input className="input" value={m.label||''} onChange={e=>patchMetric(i,{label:e.target.value})} placeholder="Kennzahl, z. B. neue Bewertungen"/><input className="input" value={m.value||''} onChange={e=>patchMetric(i,{value:e.target.value})} placeholder="Wert, z. B. +34"/></Card>)}</div></Card>
   <Card title="Demo-Audit & Beweisbereich bearbeiten"><input className="input" value={f.proof_headline||''} onChange={e=>setF({...f,proof_headline:e.target.value})} placeholder="Überschrift Demo-Audit"/><textarea className="input textarea" value={f.proof_subline||''} onChange={e=>setF({...f,proof_subline:e.target.value})} placeholder="Erklärung Demo-Audit"/><div className="grid2"><div><input className="input" value={audit.badge||''} onChange={e=>setAudit({badge:e.target.value})} placeholder="Badge, z. B. Demo-Audit"/><input className="input" value={audit.business||''} onChange={e=>setAudit({business:e.target.value})} placeholder="Beispielbetrieb"/><input className="input" value={audit.score||''} onChange={e=>setAudit({score:e.target.value})} placeholder="Score, z. B. 72/100"/><input className="input" value={audit.score_label||''} onChange={e=>setAudit({score_label:e.target.value})} placeholder="Score-Label"/><textarea className="input textarea" value={audit.summary||''} onChange={e=>setAudit({summary:e.target.value})} placeholder="Audit-Zusammenfassung"/></div><div><div className="sub">Gefundene Potenziale</div>{auditFindings().map((x:any,i:number)=><div className="toolEditRow" key={`finding-${i}`}><input className="input" value={x||''} onChange={e=>patchAuditList('findings',i,e.target.value)} placeholder={`Potenzial ${i+1}`}/><button className="btn secondary" onClick={()=>removeAuditList('findings',i)}>−</button></div>)}<button className="btn secondary" onClick={()=>addAuditList('findings')}>Potenzial hinzufügen</button><div className="sub">Nächste Hebel</div>{auditWins().map((x:any,i:number)=><div className="toolEditRow" key={`win-${i}`}><input className="input" value={x||''} onChange={e=>patchAuditList('wins',i,e.target.value)} placeholder={`Hebel ${i+1}`}/><button className="btn secondary" onClick={()=>removeAuditList('wins',i)}>−</button></div>)}<button className="btn secondary" onClick={()=>addAuditList('wins')}>Hebel hinzufügen</button></div></div></Card>
   <Card title="Monatlicher Fortschritt & Kundenportal bearbeiten"><div className="grid2"><div><input className="input" value={f.monthly_headline||''} onChange={e=>setF({...f,monthly_headline:e.target.value})} placeholder="Überschrift: Was du jeden Monat bekommst"/><textarea className="input textarea" value={f.monthly_subline||''} onChange={e=>setF({...f,monthly_subline:e.target.value})} placeholder="Beschreibung Monatsnutzen"/>{monthlyList().map((m:any,i:number)=><div className="v42PackageEdit" key={`monthly-${i}`}><input className="input" value={m.title||''} onChange={e=>patchMonthly(i,{title:e.target.value})} placeholder={`Monatskarte ${i+1}`}/><textarea className="input textarea" value={m.description||''} onChange={e=>patchMonthly(i,{description:e.target.value})} placeholder="Beschreibung"/><button className="btn secondary" onClick={()=>removeMonthly(i)}>Monatskarte entfernen</button></div>)}<button className="btn secondary" onClick={addMonthly}>Monatskarte hinzufügen</button></div><div><input className="input" value={f.portal_preview_headline||''} onChange={e=>setF({...f,portal_preview_headline:e.target.value})} placeholder="Überschrift Kundenportal"/><textarea className="input textarea" value={f.portal_preview_subline||''} onChange={e=>setF({...f,portal_preview_subline:e.target.value})} placeholder="Beschreibung Kundenportal"/>{portalList().map((x:any,i:number)=><div className="toolEditRow" key={`portal-${i}`}><input className="input" value={x||''} onChange={e=>patchPortal(i,e.target.value)} placeholder={`Portalpunkt ${i+1}`}/><button className="btn secondary" onClick={()=>removePortal(i)}>−</button></div>)}<button className="btn secondary" onClick={addPortal}>Portalpunkt hinzufügen</button></div></div></Card>
@@ -1507,7 +1588,7 @@ export default function App(){
   url.searchParams.set('app','1')
   window.location.assign(url.toString())
  }
- return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><FieldHelpEnhancer/>
+ return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo"><div className="mark">M</div><span>MMOS</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><LiveSaveStatusBar status={store.liveStatus}/><ApiDiagnosticsPanel/><FieldHelpEnhancer/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  {blockCustomerScopedRender?<NoLiveCustomerPanel store={store} setView={setView} setCid={setCid}/>:<>
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
@@ -1558,6 +1639,7 @@ export default function App(){
  {view==='approvals'&&<ApprovalCenter store={store} cid={cid} role={role}/>} 
  </>}
  <MobileAppBottomNav role={role} view={view} keys={mobileBottomKeys} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
+ <MobileFloatingAction role={role} view={view} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  </main></div>
 }
 
@@ -2018,7 +2100,7 @@ function HealthCenterV42({store}:any){
  <Card title="Live/Lokal Datenzählung">{tableCountRows}</Card>
  <Card title="Aktivitätslog">{activity.length===0&&<div className="sub">Noch keine kritischen Aktionen protokolliert.</div>}{activity.map((a:any)=><div className="item" key={a.id}><div><b>{a.title||a.type}</b><div className="sub">{a.ref_table||a.type} · {new Date(a.created_at).toLocaleString('de-DE')}</div></div><Badge type={a.severity==='warning'?'yellow':'green'}>{a.type||'log'}</Badge></div>)}</Card>
  
-<Card title="Integrationen & ENV-Status">{integrations?['google_oauth','google_places','gotenberg','mail'].map((k:string)=>{const row=integrations[k]||{};return <div className="item" key={k}><div><b>{k}</b><div className="sub">{row.purpose||'Integration'}</div>{Array.isArray(row.missing_env)&&row.missing_env.length>0&&<div className="sub">Fehlt: {row.missing_env.join(', ')}</div>}</div><Badge type={row.connected?'green':'yellow'}>{row.connected?'bereit':'prüfen'}</Badge></div>}):<div className="sub">Noch nicht geprüft.</div>}</Card>
+<Card title="Integrationen & ENV-Status">{integrations?['google_oauth','google_places','gotenberg','mail'].map((k:string)=><IntegrationDiagnosticRow key={k} name={k} row={integrations[k]||{}}/>):<V066EmptyState title="Noch nicht geprüft" text="Starte die Systemprüfung, um ENV, Mail, Gotenberg und Google-Integrationen detailliert zu prüfen."/>}</Card>
 <Card title="Schema Rohdaten"><pre className="codeBox">{JSON.stringify(schema,null,2)}</pre></Card></>
 }
 
@@ -2445,11 +2527,44 @@ function Dashboard({store,cid,role,setCid,setView,activeAdmin}:any){
    {title:'Monatsreport ansehen',desc:reports[0]?.title||'Noch kein Report erstellt',view:'reports',badge:'blue'},
    {title:'Google & SEO prüfen',desc:'Sichtbarkeit, Quellen und Wettbewerber',view:'seo',badge:'green'}
   ]
-  return <><Head title="Mein Marketing-Portal" sub={`Willkommen zurück, ${cname(store.data,cid)} · klarer Überblick statt Tool-Suche`} action={<LiveModeBadge/>}/><div className="customerHero"><div><Badge type="green">Betreut durch Mecklenburg Marketing</Badge><h1>Das ist heute wichtig</h1><p>Du siehst die nächsten Aufgaben, offene Freigaben, Rechnungen und aktuelle Empfehlungen auf einen Blick.</p>{packageProgress(pct)}</div><div className="customerHeroCard"><b>Setup-Fortschritt</b><strong>{pct}%</strong><span>{steps.filter((s:any)=>!s.done)[0]?.label||'Setup vollständig'}</span></div></div><div className="grid4"><Metric label="Offene Tickets" value={open}/><Metric label="SEO-Wachstum" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Offene Rechnungen" value={inv.filter((i:any)=>i.status!=='Bezahlt').length}/><Metric label="Warnungen" value={overdue}/></div><Card title="Auf einen Blick"><div className="grid4 portalFocusGrid"><div><b>Was wurde gemacht?</b><span>Reports, Dateien und erledigte Aufgaben bündeln den Fortschritt.</span></div><div><b>Was hat es gebracht?</b><span>SEO, Reviews, Klicks und Leads werden verständlich dargestellt.</span></div><div><b>Was ist offen?</b><span>Freigaben, Rechnungen und Tickets sind direkt erreichbar.</span></div><div><b>Nächste Empfehlung</b><span>Konkreter nächster Schritt statt komplizierter Toolsuche.</span></div></div></Card><Card title="Nächste Schritte">{actions.map((a:any)=><div className="item" key={a.title}><div><b>{a.title}</b><div className="sub">{a.desc}</div></div><div className="toolbarActions"><Badge type={a.badge}>{a.badge==='green'?'OK':'Offen'}</Badge><button className="btn secondary" onClick={()=>setView(a.view)}>Öffnen</button></div></div>)}</Card><div className="grid2"><Card title="Aktuelle Empfehlung"><ToolTipHint title="Google Business Optimierung">Aktualisiere regelmäßig Fotos, Leistungen und Beiträge. Das stärkt lokale Sichtbarkeit und Vertrauen bei neuen Kunden.</ToolTipHint><button className="btn secondary" onClick={()=>setView('knowledge')}>Erklärung im Wissenscenter öffnen</button></Card><Card title="Datenvertrauen"><TrustHint source={seo.length?'SEO Snapshot / Google Sync':'nicht synchronisierte Daten'} updated={seo.at(-1)?.created_at}/><div className="sub">Live-/Sync-Hinweise zeigen, ob Daten aus Supabase/API oder aus dem lokalen Test-Modus stammen.</div></Card></div></>
+  return <><Head title="Mein Marketing-Portal" sub={`Willkommen zurück, ${cname(store.data,cid)} · klarer Überblick statt Tool-Suche`} action={<LiveModeBadge/>}/><div className="customerHero"><div><Badge type="green">Betreut durch Mecklenburg Marketing</Badge><h1>Das ist heute wichtig</h1><p>Du siehst die nächsten Aufgaben, offene Freigaben, Rechnungen und aktuelle Empfehlungen auf einen Blick.</p>{packageProgress(pct)}</div><div className="customerHeroCard"><b>Setup-Fortschritt</b><strong>{pct}%</strong><span>{steps.filter((s:any)=>!s.done)[0]?.label||'Setup vollständig'}</span></div></div><CustomerMobileResultDeck store={store} cid={cid} setView={setView} growth={growth} pct={pct} approvals={approvals} reports={reports}/><div className="grid4"><Metric label="Offene Tickets" value={open}/><Metric label="SEO-Wachstum" value={`${growth>=0?'+':''}${growth}%`}/><Metric label="Offene Rechnungen" value={inv.filter((i:any)=>i.status!=='Bezahlt').length}/><Metric label="Warnungen" value={overdue}/></div><Card title="Auf einen Blick"><div className="grid4 portalFocusGrid"><div><b>Was wurde gemacht?</b><span>Reports, Dateien und erledigte Aufgaben bündeln den Fortschritt.</span></div><div><b>Was hat es gebracht?</b><span>SEO, Reviews, Klicks und Leads werden verständlich dargestellt.</span></div><div><b>Was ist offen?</b><span>Freigaben, Rechnungen und Tickets sind direkt erreichbar.</span></div><div><b>Nächste Empfehlung</b><span>Konkreter nächster Schritt statt komplizierter Toolsuche.</span></div></div></Card><Card title="Nächste Schritte">{actions.map((a:any)=><div className="item" key={a.title}><div><b>{a.title}</b><div className="sub">{a.desc}</div></div><div className="toolbarActions"><Badge type={a.badge}>{a.badge==='green'?'OK':'Offen'}</Badge><button className="btn secondary" onClick={()=>setView(a.view)}>Öffnen</button></div></div>)}</Card><div className="grid2"><Card title="Aktuelle Empfehlung"><ToolTipHint title="Google Business Optimierung">Aktualisiere regelmäßig Fotos, Leistungen und Beiträge. Das stärkt lokale Sichtbarkeit und Vertrauen bei neuen Kunden.</ToolTipHint><button className="btn secondary" onClick={()=>setView('knowledge')}>Erklärung im Wissenscenter öffnen</button></Card><Card title="Datenvertrauen"><TrustHint source={seo.length?'SEO Snapshot / Google Sync':'nicht synchronisierte Daten'} updated={seo.at(-1)?.created_at}/><div className="sub">Live-/Sync-Hinweise zeigen, ob Daten aus Supabase/API oder aus dem lokalen Test-Modus stammen.</div></Card></div></>
  }
  const todayFollowUps=(store.data.acquisition_campaigns||[]).filter((c:any)=>String(c.follow_up_at||'').slice(0,10)<=new Date().toISOString().slice(0,10)&&!['Gewonnen','Verloren','Archiviert'].includes(c.stage||c.status))
  const redCustomers=(store.data.customer_health_scores||[]).filter((h:any)=>h.status==='Rot'||Number(h.score||0)<55)
- return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne ausgeblendete Testkunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><Card title="Arbeitsmodus"><div className="grid4 portalFocusGrid"><div><b>Kunden mit Handlungsbedarf</b><span>Health, Tickets und offene Aufgaben zuerst prüfen.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div><b>Leads nachfassen</b><span>Follow-ups und Kampagnen ohne Suche bearbeiten.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Leads</button></div><div><b>Reports fällig</b><span>Monatsreports vorbereiten und Kundenwert sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div><div><b>Systemstatus</b><span>Backend, Syncs und Services im Blick behalten.</span><button className="btn secondary" onClick={()=>setView('health_center')}>Status</button></div></div></Card><div className="grid2"><Card title="Revenue Übersicht"><div className="item"><b>Revenue Forecasting</b><span>MRR, Pipeline und Umsatzpotenzial zentral sichtbar.</span><button className="btn secondary" onClick={()=>setView('revenue_forecasting')}>Forecast öffnen</button></div><div className="item"><b>Revenue Share</b><span>Beteiligung, Add-ons und Revenue-Modelle prüfen.</span><button className="btn secondary" onClick={()=>setView('revenue_share')}>Revenue Share öffnen</button></div></Card><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=>{const publicName=p.company_name||p.company||p.contact_name||p.requested_by||cname(store.data,p.customer_id);return <div className="item" key={p.id}><div><b>{publicName} möchte {p.package_name}</b><div className="sub">{p.email||p.contact_email||'keine E-Mail'}{p.phone?` · ${p.phone}`:''}{p.billing_interval?` · ${p.billing_interval}`:''}</div>{p.message&&<p className="sub">{p.message}</p>}<Badge type={p.customer_id?'purple':'blue'}>{p.customer_id?'Kundenportal':'Website-Anfrage'}</Badge>{p.mail_status&&<Badge type={p.mail_status==='sent'?'green':'yellow'}>Mail: {p.mail_status}</Badge>}</div><div className="toolbarActions">{p.customer_id&&<button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button>}{(p.email||p.contact_email)&&<button className="btn secondary" onClick={()=>{window.location.href=`mailto:${p.email||p.contact_email}?subject=Mecklenburg Marketing Anfrage ${p.package_name}`}}>Antworten</button>}</div></div>})}</Card>}</>
+ return <><Head title="Agentur-Cockpit" sub={`Herzlich willkommen ${activeAdmin} · Akquise, Kunden, Finanzen und Systemzustand`} action={<LiveModeBadge/>}/><AdminMobileCommandCenter store={store} setView={setView} pending={pending} todayFollowUps={todayFollowUps} redCustomers={redCustomers} openTickets={open} revenue={revenue}/><div className="grid4"><Metric label="Umsatz" value={eur(revenue)} sub="ohne ausgeblendete Testkunden"/><Metric label="Follow-ups heute" value={todayFollowUps.length}/><Metric label="Offene Tickets" value={open}/><Metric label="Paketanfragen" value={pending.length}/></div><Card title="Arbeitsmodus"><div className="grid4 portalFocusGrid"><div><b>Kunden mit Handlungsbedarf</b><span>Health, Tickets und offene Aufgaben zuerst prüfen.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div><b>Leads nachfassen</b><span>Follow-ups und Kampagnen ohne Suche bearbeiten.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Leads</button></div><div><b>Reports fällig</b><span>Monatsreports vorbereiten und Kundenwert sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div><div><b>Systemstatus</b><span>Backend, Syncs und Services im Blick behalten.</span><button className="btn secondary" onClick={()=>setView('health_center')}>Status</button></div></div></Card><div className="grid2"><Card title="Revenue Übersicht"><div className="item"><b>Revenue Forecasting</b><span>MRR, Pipeline und Umsatzpotenzial zentral sichtbar.</span><button className="btn secondary" onClick={()=>setView('revenue_forecasting')}>Forecast öffnen</button></div><div className="item"><b>Revenue Share</b><span>Beteiligung, Add-ons und Revenue-Modelle prüfen.</span><button className="btn secondary" onClick={()=>setView('revenue_share')}>Revenue Share öffnen</button></div></Card><Card title="Heute erledigen"><div className="item"><b>Akquise-Follow-ups</b><span>{todayFollowUps.length} Kampagnen benötigen Nachfassen.</span><button className="btn secondary" onClick={()=>setView('acquisition_campaigns')}>Öffnen</button></div><div className="item"><b>Rote Kunden</b><span>{redCustomers.length} Kunden mit erhöhtem Risiko.</span><button className="btn secondary" onClick={()=>setView('health_scores')}>Prüfen</button></div><div className="item"><b>Überfällige Rechnungen</b><span>{store.data.invoices.filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length} Vorgänge.</span><button className="btn secondary" onClick={()=>setView('dunning')}>Mahnwesen</button></div></Card><Card title="Professioneller Output"><div className="item"><b>Mini-Audits, Angebote, Verträge, Mahnungen</b><span>Einheitlich im Mecklenburg-Marketing-Design öffnen oder als HTML/PDF-Vorlage exportieren.</span><button className="btn secondary" onClick={()=>setView('output_engine')}>Output Engine</button></div><div className="item"><b>Monatsreports</b><span>Kundenwert monatlich sichtbar machen.</span><button className="btn secondary" onClick={()=>setView('monthly_reports')}>Reports</button></div></Card></div>{pending.length>0&&<Card title="Paketanfragen">{pending.map((p:any)=>{const publicName=p.company_name||p.company||p.contact_name||p.requested_by||cname(store.data,p.customer_id);return <div className="item" key={p.id}><div><b>{publicName} möchte {p.package_name}</b><div className="sub">{p.email||p.contact_email||'keine E-Mail'}{p.phone?` · ${p.phone}`:''}{p.billing_interval?` · ${p.billing_interval}`:''}</div>{p.message&&<p className="sub">{p.message}</p>}<Badge type={p.customer_id?'purple':'blue'}>{p.customer_id?'Kundenportal':'Website-Anfrage'}</Badge>{p.mail_status&&<Badge type={p.mail_status==='sent'?'green':'yellow'}>Mail: {p.mail_status}</Badge>}</div><div className="toolbarActions">{p.customer_id&&<button className="btn secondary" onClick={()=>setCid(p.customer_id)}>Kunde öffnen</button>}{(p.email||p.contact_email)&&<button className="btn secondary" onClick={()=>{window.location.href=`mailto:${p.email||p.contact_email}?subject=Mecklenburg Marketing Anfrage ${p.package_name}`}}>Antworten</button>}</div></div>})}</Card>}</>
+}
+
+
+function CustomerMobileResultDeck({store,cid,setView,growth,pct,approvals,reports}:any){
+ const reviews=(store.data.review_feedback||[]).filter((r:any)=>r.customer_id===cid)
+ const leads=(store.data.prospect_leads||[]).filter((l:any)=>l.customer_id===cid)
+ const openApprovals=(approvals||[]).filter((a:any)=>a.status==='Offen').length
+ const latestReport=(reports||[])[0]
+ const cards=[
+  {label:'Sichtbarkeit',value:`${growth>=0?'+':''}${growth||0}%`,desc:'SEO und lokale Präsenz',view:'seo',tone:'green'},
+  {label:'Bewertungen',value:String(reviews.length||'–'),desc:'Feedback und Review-Funnel',view:'reviews',tone:'purple'},
+  {label:'Freigaben',value:String(openApprovals),desc:'Offene Entscheidungen',view:'approvals',tone:openApprovals?'yellow':'green'},
+  {label:'Report',value:latestReport?'Neu':'–',desc:latestReport?.title||'Monatsreport öffnen',view:'reports',tone:'blue'}
+ ]
+ return <section className="mobileOnly mobileHomeDeck" aria-label="Mobile Ergebnisübersicht"><div className="mobileSectionHead"><span>Meine Ergebnisse</span><strong>Marketing auf einen Blick</strong><small>Swipe durch die wichtigsten Kennzahlen und springe direkt in den passenden Bereich.</small></div><div className="mobileSnapCards">{cards.map((c:any)=><button key={c.label} type="button" className={`mobileWorkflowCard tone-${c.tone}`} onClick={()=>setView(c.view)}><span>{c.label}</span><strong>{c.value}</strong><small>{c.desc}</small></button>)}</div><div className="mobilePrimaryAction"><button className="btn" onClick={()=>setView('approvals')}>Heute prüfen</button><button className="btn secondary" onClick={()=>setView('tickets')}>Support öffnen</button></div></section>
+}
+
+function AdminMobileCommandCenter({store,setView,pending,todayFollowUps,redCustomers,openTickets,revenue}:any){
+ const overdue=(store.data.invoices||[]).filter((i:any)=>['Überfällig','Mahnung 1','Mahnung 2'].includes(i.status)).length
+ const tasks=[
+  {label:'Paketanfragen',value:pending.length,desc:'Neue Website-Anfragen',view:'dashboard',tone:pending.length?'purple':'green'},
+  {label:'Follow-ups',value:todayFollowUps.length,desc:'Heute nachfassen',view:'acquisition_campaigns',tone:todayFollowUps.length?'yellow':'green'},
+  {label:'Risiko-Kunden',value:redCustomers.length,desc:'Health prüfen',view:'health_scores',tone:redCustomers.length?'red':'green'},
+  {label:'Mahnwesen',value:overdue,desc:'Offene Vorgänge',view:'dunning',tone:overdue?'red':'green'}
+ ]
+ return <section className="mobileOnly mobileAdminCommand" aria-label="Mobiler Admin-Arbeitsmodus"><div className="mobileCommandHero"><span>Heute wichtig</span><strong>Agentur-Zentrale</strong><small>{eur(revenue)} bezahlter Umsatz · {openTickets} offene Tickets</small></div><div className="mobileSnapCards">{tasks.map((t:any)=><button key={t.label} type="button" className={`mobileWorkflowCard tone-${t.tone}`} onClick={()=>setView(t.view)}><span>{t.label}</span><strong>{t.value}</strong><small>{t.desc}</small></button>)}</div><div className="mobilePrimaryAction"><button className="btn" onClick={()=>setView('lead_scraper')}>+ Neuer Lead</button><button className="btn secondary" onClick={()=>setView('crm')}>CRM öffnen</button></div></section>
+}
+
+function MobileFloatingAction({role,view,setView,openMenu}:any){
+ const primary=role==='admin'
+  ?(view==='dashboard'?{label:'+ Lead',target:'lead_scraper'}:view==='crm'?{label:'+ Kunde',target:'crm'}:{label:'Aktion',target:'dashboard'})
+  : (view==='dashboard'?{label:'Support',target:'tickets'}:{label:'Start',target:'dashboard'})
+ return <div className="mobileOnly mobileFabCluster" aria-label="Schnellaktion"><button type="button" className="mobileFab" onClick={()=>setView(primary.target)}>{primary.label}</button><button type="button" className="mobileFab ghost" onClick={openMenu}>☰</button></div>
 }
 
 

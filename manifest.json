@@ -27,5 +27,45 @@
     "v47_customer_health_events",
     "v47_automation_playbooks",
     "v47_media_report_links"
+  ],
+  "id": "/",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "window-controls-overlay",
+    "browser"
+  ],
+  "background_color": "#070b12",
+  "theme_color": "#070b12",
+  "orientation": "portrait",
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "MMOS Dashboard öffnen",
+      "url": "/?app=1",
+      "icons": [
+        {
+          "src": "/icons/mmos-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Paketanfragen",
+      "short_name": "Anfragen",
+      "description": "Admin-Ansicht für neue Anfragen",
+      "url": "/?app=1",
+      "icons": [
+        {
+          "src": "/icons/mmos-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
   ]
 }

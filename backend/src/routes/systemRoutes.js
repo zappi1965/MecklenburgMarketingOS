@@ -205,6 +205,30 @@ async function checkGotenbergRuntime() {
   }
 }
 
+
+function mailRuntimeStatus() {
+  const resendKey = cleanIntegrationEnv(process.env.RESEND_API_KEY)
+  const smtpHost = cleanIntegrationEnv(process.env.SMTP_HOST)
+  const mailFrom = cleanIntegrationEnv(process.env.MAIL_FROM || process.env.PACKAGE_INQUIRY_FROM)
+  const packageInquiryTo = cleanIntegrationEnv(process.env.PACKAGE_INQUIRY_TO)
+  const connected = Boolean(resendKey || smtpHost)
+  const missing_env = []
+  if (!connected) missing_env.push('RESEND_API_KEY oder SMTP_HOST')
+  if (!mailFrom) missing_env.push('MAIL_FROM oder PACKAGE_INQUIRY_FROM')
+  return {
+    connected,
+    configured: connected,
+    provider: resendKey ? 'resend' : (smtpHost ? 'smtp' : null),
+    from_configured: Boolean(mailFrom),
+    inquiry_recipient_configured: Boolean(packageInquiryTo),
+    from_masked: mailFrom ? mailFrom.replace(/<(.{2}).+(@.+)>/, '<$1…$2>') : null,
+    inquiry_to_masked: packageInquiryTo ? packageInquiryTo.replace(/^(.{2}).+(@.+)$/, '$1…$2') : null,
+    missing_env,
+    hint: connected ? 'Mailversand ist grundsätzlich konfiguriert. Domain und Absender müssen beim Provider verifiziert sein.' : 'Setze RESEND_API_KEY und einen verifizierten MAIL_FROM-Absender.',
+    purpose: 'Einladungen, Angebote, Reports, Paketanfragen und Mahnungen per Mail'
+  }
+}
+
 function systemRoutes(supabaseAdmin) {
   const router = express.Router()
 
@@ -249,7 +273,7 @@ function systemRoutes(supabaseAdmin) {
       google_oauth: { connected: diagnostics.google_oauth.configured, missing_env: diagnostics.google_oauth.missing_env, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
       google_places: { connected: diagnostics.google_places.present, missing_env: diagnostics.google_places.present ? [] : ['GOOGLE_PLACES_API_KEY'], purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
       gotenberg: { connected: gotenbergRuntime.connected, configured: gotenbergRuntime.configured, missing_env: gotenbergRuntime.missing_env || [], error: gotenbergRuntime.error, hint: gotenbergRuntime.hint, status: gotenbergRuntime.status, url_masked: gotenbergRuntime.url_masked, purpose: 'serverseitige PDF-Erzeugung' },
-      mail: { connected: Boolean(cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)), missing_env: (cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
+      mail: mailRuntimeStatus()
     }
     res.json({
       ok: true,
@@ -372,7 +396,7 @@ function systemRoutes(supabaseAdmin) {
       google_oauth: { connected: googleOauthMissing.length === 0, missing_env: googleOauthMissing, purpose: 'Google Reviews, Search Console, Analytics und Business Profile Sync' },
       google_places: { connected: googlePlacesMissing.length === 0, missing_env: googlePlacesMissing, purpose: 'Lead Scraper, Google Business Audit und lokale Wettbewerberdaten' },
       gotenberg: { connected: gotenbergRuntime.connected, configured: gotenbergRuntime.configured, missing_env: gotenbergRuntime.missing_env || [], error: gotenbergRuntime.error, hint: gotenbergRuntime.hint, status: gotenbergRuntime.status, url_masked: gotenbergRuntime.url_masked, purpose: 'serverseitige PDF-Erzeugung' },
-      mail: { connected: Boolean(cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)), missing_env: (cleanIntegrationEnv(process.env.RESEND_API_KEY) || cleanIntegrationEnv(process.env.SMTP_HOST)) ? [] : ['RESEND_API_KEY oder SMTP_HOST'], purpose: 'Einladungen, Angebote, Reports und Mahnungen per Mail' }
+      mail: mailRuntimeStatus()
     })
   })
 
