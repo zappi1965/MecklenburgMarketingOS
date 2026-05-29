@@ -1,10 +1,7 @@
-
 const cron = require('node-cron')
-const { createClient } = require('@supabase/supabase-js')
+const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : null
+const supabase = getSupabaseAdmin()
 
 async function run() {
   if (!supabase) return console.log('Security audit: Supabase ENV fehlt')
