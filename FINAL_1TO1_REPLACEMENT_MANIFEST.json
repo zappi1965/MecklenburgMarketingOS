@@ -24,5 +24,16 @@
     "backend deployen",
     "frontend deployen"
   ],
-  "created_at": "2026-05-30 13:48:00"
+  "created_at": "2026-05-30 13:48:00",
+  "admin_tools_no_relogin_fix": {
+    "fixed_at": "2026-05-30 13:54:13",
+    "files": [
+      "frontend/src/middleware.ts",
+      "frontend/src/app/page.tsx"
+    ],
+    "changes": [
+      "middleware no longer redirects protected routes to /auth based only on cookies",
+      "legacy Neu & wichtig sidebar section is admin-only"
+    ]
+  }
 }

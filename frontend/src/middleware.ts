@@ -1,8 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
-const PROTECTED_PREFIXES = ['/admin','/crm','/automation','/media','/value-dashboard','/growth-command','/dashboard','/portal','/reviews','/qr-campaigns','/loyalty','/tickets','/invoices','/analytics','/booking','/inbox','/payments-vouchers','/referrals','/settings']
-const PUBLIC_PREFIXES = ['/auth','/api/public','/api/proxy-health','/impressum','/datenschutz','/cookies','/agb','/widerruf','/privacy','/hub','/r','/pay','/l']
-function hasSessionCookie(req: NextRequest) { return req.cookies.getAll().some((cookie) => cookie.name.startsWith('sb-') || cookie.name.includes('supabase') || cookie.name === 'mmos_session') }
-function isProtected(pathname: string) { return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) }
-function isPublic(pathname: string) { return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) }
-export function middleware(req: NextRequest) { const { pathname, searchParams } = req.nextUrl; const guardEnabled = process.env.NEXT_PUBLIC_REQUIRE_ROUTE_GUARD === 'true'; if (!guardEnabled || isPublic(pathname) || !isProtected(pathname)) return NextResponse.next(); const demoAllowed = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === 'true' && searchParams.has('demo'); if (demoAllowed || hasSessionCookie(req)) return NextResponse.next(); const loginUrl = req.nextUrl.clone(); loginUrl.pathname = '/auth'; loginUrl.searchParams.set('next', `${pathname}${req.nextUrl.search}`); return NextResponse.redirect(loginUrl) }
-export const config = { matcher: ['/admin/:path*','/crm/:path*','/automation/:path*','/media/:path*','/value-dashboard/:path*','/value-dashboard','/growth-command/:path*','/growth-command','/dashboard/:path*','/dashboard','/portal/:path*','/portal','/reviews/:path*','/reviews','/qr-campaigns/:path*','/qr-campaigns','/loyalty/:path*','/loyalty','/tickets/:path*','/tickets','/invoices/:path*','/invoices','/analytics/:path*','/analytics','/booking/:path*','/booking','/inbox/:path*','/inbox','/payments-vouchers/:path*','/payments-vouchers','/referrals/:path*','/referrals','/settings/:path*'] }
+
+/**
+ * MMOS Auth Routing Fix
+ *
+ * Supabase browser sessions are stored client-side. The middleware cannot reliably
+ * see those sessions as cookies. A server-side redirect based only on cookies
+ * caused valid users to be sent back to /auth when opening /admin tools.
+ *
+ * Protected pages are therefore allowed to render and are guarded client-side by:
+ * - AdminOnly / RoleGate
+ * - CustomerOrAdminOnly / ToolAccessGate
+ *
+ * Result:
+ * - Admin tools open without a forced re-login.
+ * - Unauthenticated users still see the client-side login-required panel.
+ */
+export function middleware(_req: NextRequest) {
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: [
+    '/admin/:path*',
+    '/crm/:path*',
+    '/automation/:path*',
+    '/media/:path*',
+    '/value-dashboard/:path*',
+    '/growth-command/:path*',
+    '/dashboard/:path*',
+    '/portal/:path*',
+    '/reviews/:path*',
+    '/qr-campaigns/:path*',
+    '/loyalty/:path*',
+    '/tickets/:path*',
+    '/invoices/:path*',
+    '/analytics/:path*',
+    '/booking/:path*',
+    '/inbox/:path*',
+    '/payments-vouchers/:path*',
+    '/referrals/:path*',
+    '/settings/:path*'
+  ]
+}
