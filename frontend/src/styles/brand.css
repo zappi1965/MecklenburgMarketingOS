@@ -1,0 +1,88 @@
+.brandLogoLink{
+  display:inline-flex;
+  align-items:center;
+  min-width:0;
+  color:inherit;
+  text-decoration:none;
+}
+.brandLogo{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.brandLogoMarkWrap{
+  display:inline-grid;
+  place-items:center;
+  flex:0 0 auto;
+  width:38px;
+  height:38px;
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(37,99,235,.16),rgba(124,58,237,.16));
+  border:1px solid rgba(148,163,184,.18);
+  overflow:hidden;
+}
+.brandLogoMark{
+  width:32px;
+  height:auto;
+  object-fit:contain;
+  display:block;
+}
+.brandLogoTextWrap{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  line-height:1.05;
+}
+.brandLogoText{
+  font-weight:900;
+  font-size:15px;
+  letter-spacing:-.035em;
+  color:#f8fafc;
+  white-space:nowrap;
+}
+.brandLogoSubline{
+  margin-top:4px;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#94a3b8;
+  white-space:nowrap;
+}
+.brandLogo--topbar .brandLogoMarkWrap{
+  width:34px;
+  height:34px;
+  border-radius:12px;
+}
+.brandLogo--topbar .brandLogoMark{
+  width:29px;
+}
+.brandLogo--topbar .brandLogoText{
+  font-size:14px;
+}
+.brandLogo--mark .brandLogoMarkWrap{
+  width:40px;
+  height:40px;
+}
+.brandLogo--full .brandLogoMarkWrap{
+  display:none;
+}
+.brandLogoFull{
+  width:min(280px, 100%);
+  height:auto;
+  display:block;
+}
+.adminBrand .brandLogoText,
+.adminBrand.inline .brandLogoText{
+  color:#f8fafc;
+}
+.siteHeader .brandLogoText,
+.landingNav .brandLogoText{
+  color:#0f172a;
+}
+@media(max-width:720px){
+  .brandLogo--sidebar .brandLogoText{font-size:14px}
+  .brandLogo--sidebar .brandLogoSubline{font-size:9px}
+  .brandLogoFull{width:220px}
+}

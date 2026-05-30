@@ -23,7 +23,11 @@
     "daily-briefing-worker": "node src/workers/dailyBriefingWorker.js --cron",
     "daily-briefing-worker:once": "node src/workers/dailyBriefingWorker.js",
     "maintenance-worker": "node src/workers/maintenanceCheckWorker.js --cron",
-    "maintenance-worker:once": "node src/workers/maintenanceCheckWorker.js"
+    "maintenance-worker:once": "node src/workers/maintenanceCheckWorker.js",
+    "backup:once": "node src/workers/backupWorker.js",
+    "worker:jobs": "node src/workers/jobWorker.js",
+    "worker:jobs:once": "node src/workers/jobWorker.js --once",
+    "test:security-core": "node --test tests/permissionService.test.js tests/jobQueueService.test.js"
   },
   "dependencies": {
     "@sentry/node": "8.55.2",

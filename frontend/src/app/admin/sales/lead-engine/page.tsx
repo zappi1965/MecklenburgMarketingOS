@@ -1,7 +1,7 @@
-import V47CompleteModulePage from '@/components/v47/V47CompleteModulePage'
+import MiniAuditGeneratorClient from '@/components/mini-audit/MiniAuditGeneratorClient'
 
-export const metadata = { title: 'V47 · MMOS' }
+export const metadata = { title: 'Mini Audit Generator · MMOS' }
 
 export default function Page() {
-  return <V47CompleteModulePage moduleKey="lead_engine" />
+  return <MiniAuditGeneratorClient />
 }

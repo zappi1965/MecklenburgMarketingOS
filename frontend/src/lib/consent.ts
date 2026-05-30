@@ -108,7 +108,7 @@ export function onConsentChange(listener: Listener): () => void {
 // Wenn die Kategorie abgelehnt wird, werden die Keys entfernt.
 const STORAGE_KEYS_BY_CATEGORY: Record<Exclude<ConsentCategory, 'essential'>, string[]> = {
   functional: ['mmos_device_id'],
-  analytics: [],
+  analytics: ['sentryReplaySession', 'sentryReplayPreviousSession', 'mmos_client_error_reporting'],
   marketing: []
 }
 

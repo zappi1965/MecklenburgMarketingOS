@@ -2,13 +2,14 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
-  LayoutDashboard, BarChart3, Bot, KeyRound, Shield, FileText,
+  BarChart3, Bot, KeyRound, Shield, FileText,
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
   Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles,
   BrainCircuit, Gauge, TrendingUp, Target
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
+import BrandLogo from '@/components/brand/BrandLogo'
 
 type NavSection = {
   label: string
@@ -19,12 +20,13 @@ const NAV: NavSection[] = [
   {
     label: 'Ueberblick',
     items: [
-      { href: '/admin/ops', label: 'Health-Cockpit', icon: Activity, hint: 'Wo brennt\'s über alle Customer' },
+      { href: '/admin/ops', label: 'Health-Cockpit', icon: Activity, hint: 'Wo brennt es ueber alle Customer' },
       { href: '/admin/maintenance', label: 'Wartungs-Reminder', icon: Wrench, hint: 'Tages-Scan: Logo, Loyalty, MFA, ...' },
       { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Customer' },
       { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
       { href: '/admin/customer-intelligence', label: 'Customer Intelligence', icon: BrainCircuit, hint: 'Health-/Risiko-/Upsell-Score, Monatsreports' },
       { href: '/admin/sales', label: 'Sales-Werkzeuge', icon: Target, hint: 'Google-Audit, Lead-Suche, Angebote, Vertraege' },
+      { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Alle Tools & Vertrieb sicher erklaeren' },
       { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen & Reports' },
       { href: '/growth-command', label: 'Growth Command', icon: BarChart3, hint: 'Alle 12 Bereiche' },
       { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln' }
@@ -40,6 +42,7 @@ const NAV: NavSection[] = [
       { href: '/reputation-center', label: 'Reputation Center', icon: Star },
       { href: '/slug-hub', label: 'Slug-Hub', icon: Megaphone },
       { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Megaphone },
+      { href: '/admin/sales/mini-audit-generator', label: 'Mini Audit Generator', icon: FileSearch },
       { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText },
       { href: '/admin/widget', label: 'Bewertungs-Widget', icon: Star },
       { href: '/admin/review-intelligence', label: 'Review Intelligence', icon: Gauge, hint: 'Sentiment-Profil, Vorlagen' },
@@ -79,6 +82,8 @@ const NAV: NavSection[] = [
       { href: '/admin/tool-access-v2', label: 'Tool-Freigaben Pro', icon: Shield },
       { href: '/crm/customer-health', label: 'Customer Health', icon: BarChart3 },
       { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield },
+      { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'E2E, Monitoring, Backups, API-Kosten, Logs' },
+      { href: '/admin/production/security-core', label: 'Security Core', icon: Shield, hint: 'Tenant-Isolation, Jobs, Migration Guard' },
       { href: '/admin/demo-data', label: 'Demo-Daten', icon: FileText }
     ]
   }
@@ -119,10 +124,7 @@ export default function AdminShell({
     <div className={`adminShell ${drawerOpen ? 'drawerOpen' : ''}`}>
       <aside className="adminSidebar">
         <div className="adminSidebarHeader">
-          <a href="/admin/insights" className="adminBrand">
-            <span className="adminBrandMark">M</span>
-            <span className="adminBrandText">MMOS</span>
-          </a>
+          <BrandLogo href="/admin/insights" variant="sidebar" subline="Internes OS" />
           <button type="button" className="adminDrawerClose" aria-label="Menue schliessen" onClick={() => setDrawerOpen(false)}>
             <X size={20} />
           </button>
@@ -142,6 +144,7 @@ export default function AdminShell({
                     onClick={() => setDrawerOpen(false)}
                     className={active ? 'adminNavItem active' : 'adminNavItem'}
                     aria-current={active ? 'page' : undefined}
+                    title={item.hint}
                   >
                     <Icon size={16} strokeWidth={2} />
                     <span>{item.label}</span>
@@ -158,7 +161,7 @@ export default function AdminShell({
               const active = isActive(item.href)
               return (
                 <a key={item.href} href={item.href} onClick={() => setDrawerOpen(false)} className={active ? 'adminNavItem active' : 'adminNavItem'}>
-                  <Icon size={16} strokeWidth={2} />
+                  <Icon size={16} />
                   <span>{item.label}</span>
                 </a>
               )
@@ -186,10 +189,7 @@ export default function AdminShell({
         <button type="button" className="adminMenuBtn" aria-label="Menue oeffnen" onClick={() => setDrawerOpen(true)}>
           <Menu size={22} />
         </button>
-        <a href="/admin/insights" className="adminBrand inline">
-          <span className="adminBrandMark">M</span>
-          <span className="adminBrandText">MMOS</span>
-        </a>
+        <BrandLogo href="/admin/insights" variant="topbar" subline="Intern" />
       </header>
 
       <main className="adminContent">

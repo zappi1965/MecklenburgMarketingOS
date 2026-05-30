@@ -1,0 +1,25 @@
+{
+  "name": "MMOS Complete Repo Replacement With New Functions",
+  "mode": "complete_repo_replacement",
+  "base_uploaded_file": "MecklenburgMarketingOS-main-2-v066-stability-speed-foundation-fullbuild.zip",
+  "base_root_detected": "MecklenburgMarketingOS-main-2",
+  "overlay_used": "MMOS_UploadOnly_RepoReady_Fullbuild.zip",
+  "contains_complete_frontend_backend_from_base": true,
+  "contains_new_overlays": true,
+  "new_features": [
+    "Internal Access / Admin-Kunden-Trennung",
+    "Customer Portal Reports",
+    "Media Binding / PDF-Storage",
+    "Brand Logo",
+    "Google-only Mini Audit Generator",
+    "Production Readiness",
+    "Consent-safe Error Tracking",
+    "Security Core",
+    "Admin All-Tools Wissenstest"
+  ],
+  "manual_steps_still_required": [
+    "Supabase migrations 0090/0091",
+    "ENV variables",
+    "Backend deploy before frontend"
+  ]
+}

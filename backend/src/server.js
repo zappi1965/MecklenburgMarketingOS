@@ -23,6 +23,10 @@ const authRoutes = require('./routes/authRoutes')
 const systemRoutes = require('./routes/systemRoutes')
 const googleRoutes = require('./routes/googleRoutes')
 const businessToolsRoutes = require('./routes/businessToolsRoutes')
+const documentMediaRoutes = require('./routes/documentMediaRoutes')
+const productionReadinessRoutes = require('./routes/productionReadinessRoutes')
+const documentEngineV2Routes = require('./routes/documentEngineV2Routes')
+const securityCoreRoutes = require('./routes/securityCoreRoutes')
 const qrRoutes = require('./routes/qrRoutes')
 const gdprRoutes = require('./routes/gdprRoutes')
 const automationRoutes = require('./routes/automationRoutes')
@@ -53,21 +57,16 @@ const storeRoutes = require('./routes/storeRoutes')
 const opsAdminRoutes = require('./routes/opsAdminRoutes')
 const { bookingPublicRoutes } = require('./routes/bookingRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
+const { createAdminAuditMiddleware } = require('./middleware/adminAuditMiddleware')
 
 const app = express()
 
-// Sentry first so it can capture errors raised by everything else.
 initSentry(app)
 
-// Railway/Vercel run the backend behind a reverse proxy.
-// express-rate-limit requires Express to trust exactly the proxy hop count,
-// otherwise X-Forwarded-For triggers ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
 const trustProxyHopsRaw = process.env.TRUST_PROXY_HOPS || process.env.RAILWAY_TRUST_PROXY_HOPS || '1'
 const trustProxyHops = Math.max(0, Number(trustProxyHopsRaw) || 1)
 app.set('trust proxy', trustProxyHops)
 
-// One CORS block only. Credentials stay disabled because the current app does
-// not use cookie auth between Vercel and Railway.
 app.use(cors({
   origin: true,
   credentials: false,
@@ -85,14 +84,13 @@ app.use(express.json({ limit: '50mb' }))
 
 const supabaseAdmin = getSupabaseAdmin()
 const supabaseConfigured = Boolean(supabaseAdmin)
+app.locals.supabaseAdmin = supabaseAdmin
 const demoModeEnabled = process.env.ENABLE_DEMO_MODE === 'true'
 
 app.get('/api/health', (_, res) => {
   res.json({ ok: true, service: 'MMOS Backend', timestamp: new Date().toISOString() })
 })
 
-// Public endpoints that must remain accessible without a Supabase session.
-// Health checks, auth bootstrap, and the public QR/loyalty slug surface.
 const PUBLIC_PATHS = [
   /^\/api\/health$/,
   /^\/api\/system\/health$/,
@@ -118,19 +116,16 @@ const requireAuth = authMiddleware()
 const requireAdmin = authMiddleware({ roles: ['admin'] })
 
 app.use('/api', (req, res, next) => {
-  // req.originalUrl is the full path before any router stripping; strip the
-  // query string so the whitelist regexes only need to match the path.
   const fullPath = (req.originalUrl || req.url || '').split('?')[0]
   if (PUBLIC_PATHS.some((re) => re.test(fullPath))) return next()
   return requireAuth(req, res, next)
 })
 
-// System route is critical because Vercel proxy-health and deployment checks use it.
+app.use('/api', createAdminAuditMiddleware(supabaseAdmin))
+
 app.use('/api/system', systemRoutes(supabaseAdmin))
 app.use('/api/public', packageInquiryRoutes(supabaseAdmin))
 
-// Routes that touch admin-only or cross-tenant data. Adds a second guard
-// requiring role=admin in user_profiles (admin or super_admin with status=active).
 const adminScopedRoutes = [
   ['/api/monitoring', monitoringRoutes],
   ['/api/ops', opsRoutes],
@@ -152,85 +147,45 @@ for (const [routePath, routeFactory] of adminScopedRoutes) {
   app.use(routePath, requireAdmin, routeFactory(supabaseAdmin))
 }
 
-// Customer-intelligence reads PII per customer. Mount with per-customer access
-// check that admins automatically pass through.
+app.use('/api/production', productionReadinessRoutes(supabaseAdmin))
+app.use('/api/document-media', documentMediaRoutes(supabaseAdmin))
+
 app.use('/api/customer-intelligence', requireCustomerAccess(), customerIntelligenceRoutes(supabaseAdmin))
-
-// Customer portal also operates on the authenticated user's own customer.
 app.use('/api/customer-portal', customerPortalRoutes(supabaseAdmin))
-
-// v33-functional has a mix: public /public/* paths (whitelisted above) plus
-// admin/customer endpoints. Auth is already enforced by the global middleware
-// for everything that isn't whitelisted, so we mount the router as-is.
 app.use('/api/v33-functional', v33FunctionalRoutes(supabaseAdmin))
-
-// Auth router needs no guard (in PUBLIC_PATHS) and handles its own checks.
 app.use('/api/auth', authRoutes(supabaseAdmin))
-
-// Public QR endpoint replaces the third-party api.qrserver.com / quickchart.io
-// calls that previously leaked customer slugs and IP addresses to non-EU
-// providers. Whitelisted above; rate-limited inside the route.
 app.use('/api/qr', qrRoutes())
-
-// Art. 15 / 17 DSGVO self-service endpoints (export, delete-request,
-// delete-cancel, status). Each route inside enforces auth on its own via
-// authMiddleware() so the global guard above is redundant but harmless.
 app.use('/api/gdpr', gdprRoutes(supabaseAdmin))
-
-// Referral-Programm: GET/POST sind authentifiziert (global), per-customer-
-// Access wird im Router selbst via requireCustomerAccess geprueft.
 app.use('/api/referrals', referralRoutes(supabaseAdmin))
-
-// Phase-11 Quick-Win-Bundle (Wallet, Newsletter, Vouchers). Alle global
-// authentifiziert ueber den /api-Guard; per-customer-Pruefung im Router.
 app.use('/api/wallet', walletPassRoutes(supabaseAdmin))
 app.use('/api/newsletter', newsletterRoutes(supabaseAdmin))
 app.use('/api/vouchers', voucherRoutes(supabaseAdmin))
-
-// Phase 11c — Sicherheit (2FA) + Datenqualitaet + AI-Review-Response.
-// Alle global authentifiziert; pro Route eigene Admin-/Customer-Pruefung.
 app.use('/api/security', securityRoutes())
 app.use('/api/data-quality', dataQualityRoutes())
-
-// Phase 11d — Buchhaltung, Mahnstufen, POS, No-Show, Chatbot.
 app.use('/api/accounting', accountingRoutes())
 app.use('/api/dunning', dunningRoutes())
 app.use('/api/pos', posRoutes())
 app.use('/api/no-show', noShowRoutes())
-// Chatbot ist oeffentlich (PUBLIC_PATHS-Whitelist deckt /start und /message).
 app.use('/api/chatbot', chatbotRoutes())
-
-// Phase 11e — BI + GMB + AI-CRM-Mail + Bewertungs-Widget.
 app.use('/api/analytics', analyticsRoutes())
 app.use('/api/gmb', gmbRoutes())
 app.use('/api/ai-crm-mail', aiCrmMailRoutes())
 app.use('/api/social', socialRoutes())
 app.use('/api/review-widget', reviewWidgetRoutes())
-// iframe-Endpoint ist oeffentlich (PUBLIC_PATHS-Whitelist).
 app.use('/api/review-widget/embed', reviewWidgetEmbedRouter())
-
-// Phase 11f — DSGVO-Cockpit + Public-API + Smart-Pricing.
 app.use('/api/compliance', complianceCockpitRoutes())
 app.use('/api/api-keys', apiKeyRoutes())
-// Public-API ueber X-API-Key (eigene Auth, kein Bearer-Token).
 app.use('/api/public/v1', publicApiV1Routes())
 app.use('/api/pricing', pricingRoutes())
 app.use('/api/onboarding', onboardingRoutes())
 app.use('/api/loyalty', loyaltyScanRoutes())
-// Wallet-Self-Service fuer Endkunden (Magic-Link, oeffentlich whitelisted).
 app.use('/api/wallet/me', walletMeRoutes())
-
-// Generisches CRUD fuer den Frontend-Monolith. Globaler Auth-Guard
-// laeuft davor; pro Tabelle prueft storeService Admin/Customer-Scope.
 app.use('/api/store', storeRoutes())
 
-// Admin-Automatisierungs-Tools: Health-Cockpit, Maintenance-Reminder,
-// Onboarding-Audit. Alle Routen pruefen intern Admin-Rolle.
-app.use('/api/ops-admin', opsAdminRoutes())
+app.use('/api/document-engine-v2', requireAdmin, documentEngineV2Routes(supabaseAdmin))
+app.use('/api/security-core', requireAdmin, securityCoreRoutes(supabaseAdmin))
 
-// Booking-Engine: oeffentliche Buchungs-Endpunkte (Slug-basiert,
-// PUBLIC_PATHS-Whitelist). Admin-Verwaltung der Booking-Tabellen laeuft
-// ueber /api/store (ALLOWLIST).
+app.use('/api/ops-admin', opsAdminRoutes())
 app.use('/api/booking', bookingPublicRoutes())
 
 if (demoModeEnabled) {
@@ -254,15 +209,11 @@ for (const [modulePath, routePath] of optionalRoutes) {
     if (typeof routeFactory === 'function') {
       app.use(routePath, requireAuth, routeFactory(supabaseAdmin))
     }
-  } catch (_) {
-    // Optional route not present in this build; skip silently.
-  }
+  } catch (_) {}
 }
 
-// Sentry error handler must run before the JSON error responder.
 attachErrorHandler(app)
 
-// Final error responder. Never leaks stack traces or request bodies to the client.
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err)
   const status = err.status || err.statusCode || 500
@@ -273,8 +224,6 @@ app.use((err, req, res, next) => {
     error: safeMessage,
     hint: err.hint || undefined
   })
-  // Lightweight fallback log when Sentry is not configured. Only path + method,
-  // never the body or stack.
   const { enabled } = getSentry()
   if (!enabled) {
     console.error('[API_ERROR]', req.method, req.path, status, safeMessage)
@@ -286,7 +235,6 @@ const server = app.listen(port, () => {
   console.log(`MMOS backend running on ${port}`)
 })
 
-// Graceful shutdown so in-flight requests can complete under Railway SIGTERM.
 function shutdown(signal) {
   console.log(`[${signal}] graceful shutdown initiated`)
   server.close(() => process.exit(0))
@@ -295,10 +243,6 @@ function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT', () => shutdown('SIGINT'))
 
-// Process-level crash guards: a stray rejected promise must not silently
-// terminate the server (Node aborts on unhandledRejection by default), and an
-// uncaught exception leaves the process in an undefined state -> log, report to
-// Sentry, then restart cleanly via graceful shutdown (Railway respawns).
 process.on('unhandledRejection', (reason) => {
   const { enabled, Sentry } = getSentry()
   if (enabled && Sentry) { try { Sentry.captureException(reason) } catch (_) {} }

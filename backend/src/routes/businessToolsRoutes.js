@@ -1,14 +1,12 @@
 const express = require('express')
 const GotenbergService = require('../services/gotenbergService')
+const { enforceApiBudget, recordApiUsageEvent } = require('../services/apiCostControlService')
 
 const placesCache = new Map()
 const usageWindow = new Map()
 const CACHE_TTL_MS = Number(process.env.GOOGLE_PLACES_CACHE_TTL_MS || 6 * 60 * 60 * 1000)
 const MAX_SEARCHES_PER_HOUR = Number(process.env.GOOGLE_PLACES_MAX_SEARCHES_PER_HOUR || 60)
 
-function jsonKey(value = {}) {
-  return JSON.stringify(Object.keys(value).sort().reduce((acc, key) => { acc[key] = value[key]; return acc }, {}))
-}
 function rateKey(req) {
   const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
   return forwarded || req.ip || 'local'
@@ -35,7 +33,6 @@ function validateInput(input = {}, fields = []) {
   return { ok: missing.length === 0, missing }
 }
 
-
 function classifyGooglePlacesError(payload = {}, httpStatus = 502) {
   const status = payload.status || String(httpStatus)
   const message = String(payload.error_message || `Google Places Fehler: ${status}`)
@@ -45,13 +42,13 @@ function classifyGooglePlacesError(payload = {}, httpStatus = 502) {
   err.provider = 'google_places'
   if (/referer|referrer/i.test(message)) {
     err.code = 'GOOGLE_PLACES_KEY_RESTRICTION_INVALID'
-    err.hint = 'Der Railway-Backend-Key darf keine Website-/HTTP-Referrer-Restriktion haben. Nutze für GOOGLE_PLACES_API_KEY einen serverseitigen Google Maps API-Key mit API-Restriktion auf Places API und – falls Railway eine stabile Egress-IP hat – IP-Restriktion. Sonst zunächst ohne Application restriction testen.'
+    err.hint = 'Der Railway-Backend-Key darf keine Website-/HTTP-Referrer-Restriktion haben. Nutze für GOOGLE_PLACES_API_KEY einen serverseitigen Google Maps API-Key mit API-Restriktion auf Places API.'
   } else if (status === 'REQUEST_DENIED') {
     err.code = 'GOOGLE_PLACES_REQUEST_DENIED'
-    err.hint = 'Prüfe, ob im Google Cloud Projekt Billing aktiv ist und die Places API für diesen Key erlaubt ist. Der verwendete Legacy-Endpunkt benötigt die Places API für /maps/api/place/textsearch/json.'
+    err.hint = 'Prüfe Billing, API-Restriktionen und Places API im Google Cloud Projekt.'
   } else if (status === 'OVER_QUERY_LIMIT') {
     err.code = 'GOOGLE_PLACES_OVER_QUERY_LIMIT'
-    err.hint = 'Google Places Quota oder Tagesbudget erreicht. Prüfe Google Cloud Quotas/Billing.'
+    err.hint = 'Google Places Quota oder Tagesbudget erreicht.'
   } else if (status === 'INVALID_REQUEST') {
     err.code = 'GOOGLE_PLACES_INVALID_REQUEST'
     err.hint = 'Prüfe Suchbegriff, Ort und Query-Parameter.'
@@ -71,7 +68,6 @@ function scoreFromBusiness(input = {}) {
   if (Number(input.rating || 0) >= 4.5) score += 7
   return Math.max(20, Math.min(96, score))
 }
-
 
 async function googlePlacesTextSearch(query, apiKey, options = {}) {
   const cacheKey = `places:${query}`
@@ -115,7 +111,7 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
       gotenberg_status: gotenbergHealth,
       mode: hasPlaces ? 'live_google_places' : 'live_google_places_required',
       timestamp: new Date().toISOString(),
-      features: ['google_business_audit','lead_search','acquisition_campaign_center','data_integrity','places_cache','places_rate_limit','gotenberg_pdf_render'],
+      features: ['google_business_audit','lead_search','acquisition_campaign_center','data_integrity','places_cache','places_rate_limit','gotenberg_pdf_render','api_cost_control'],
       rate_limit: { max_searches_per_hour: MAX_SEARCHES_PER_HOUR },
       cache: { entries: placesCache.size, ttl_ms: CACHE_TTL_MS }
     })
@@ -134,7 +130,10 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
       let places = []
       let source = apiKey ? 'google_places' : 'manual_input'
       if (apiKey && (input.business_name || input.city)) {
-        const lookup = await googlePlacesTextSearch(`${input.business_name || ''} ${input.city || ''}`.trim(), apiKey)
+        await enforceApiBudget({ supabase: supabaseAdmin, provider: 'google_places', feature: 'google_places_text_search', actor_user_id: req.user?.id, customer_id: input.customer_id, estimated_cost_cents: Number(process.env.GOOGLE_PLACES_TEXT_SEARCH_ESTIMATED_CENTS || 3) })
+        const query = `${input.business_name || ''} ${input.city || ''}`.trim()
+        const lookup = await googlePlacesTextSearch(query, apiKey)
+        await recordApiUsageEvent(supabaseAdmin, { provider: 'google_places', feature: 'google_business_audit', endpoint: '/api/business-tools/google-business-audit', actor_user_id: req.user?.id, customer_id: input.customer_id, estimated_cost_cents: Number(process.env.GOOGLE_PLACES_TEXT_SEARCH_ESTIMATED_CENTS || 3), success: true, metadata: { query } })
         places = lookup.results
         source = lookup.source
       }
@@ -153,17 +152,7 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
         Number(merged.rating || 0) >= 4.5 ? 'Gute Sternebewertung – als Vertrauenssignal stärker nutzen.' : 'Sternebewertung bietet Optimierungspotenzial.',
         'Leistungen, Kategorien, Fotos, Beiträge und Öffnungszeiten regelmäßig prüfen.'
       ]
-      res.json({
-        ok: true,
-        source,
-        rate,
-        audit: {
-          score,
-          summary: `Google Business Audit für ${input.business_name || place.name || 'Betrieb'} mit ${score}/100 Punkten.`,
-          findings,
-          place
-        }
-      })
+      res.json({ ok: true, source, rate, audit: { score, summary: `Google Business Audit für ${input.business_name || place.name || 'Betrieb'} mit ${score}/100 Punkten.`, findings, place } })
     } catch (error) {
       next(error)
     }
@@ -177,40 +166,39 @@ module.exports = function businessToolsRoutes(supabaseAdmin) {
       const rate = checkRate(req)
       if (!rate.ok) return res.status(429).json({ ok: false, code: 'GOOGLE_PLACES_RATE_LIMIT', error: 'Zu viele Google-Places-Abfragen in diesem Zeitraum.', rate })
       const apiKey = process.env.GOOGLE_PLACES_API_KEY
-      if (!apiKey) {
-        return res.status(503).json({ ok: false, source: 'google_places_required', code: 'GOOGLE_PLACES_API_KEY_MISSING', error: 'Lead-Suche benötigt Live-Daten über GOOGLE_PLACES_API_KEY. Es werden keine Demo- oder Ersatz-Leads erzeugt.', rate, leads: [] })
-      }
+      if (!apiKey) return res.status(503).json({ ok: false, source: 'google_places_required', code: 'GOOGLE_PLACES_API_KEY_MISSING', error: 'Lead-Suche benötigt Live-Daten über GOOGLE_PLACES_API_KEY.', rate, leads: [] })
+      await enforceApiBudget({ supabase: supabaseAdmin, provider: 'google_places', feature: 'google_places_text_search', actor_user_id: req.user?.id, customer_id: input.customer_id, estimated_cost_cents: Number(process.env.GOOGLE_PLACES_TEXT_SEARCH_ESTIMATED_CENTS || 3) })
       const lookup = await googlePlacesTextSearch(`${input.branch || 'Betrieb'} in ${input.city || 'Schwerin'}`, apiKey)
+      await recordApiUsageEvent(supabaseAdmin, { provider: 'google_places', feature: 'lead_search', endpoint: '/api/business-tools/lead-search', actor_user_id: req.user?.id, customer_id: input.customer_id, estimated_cost_cents: Number(process.env.GOOGLE_PLACES_TEXT_SEARCH_ESTIMATED_CENTS || 3), success: true, metadata: { branch: input.branch, city: input.city } })
       const results = lookup.results
       const maxReviews = Number(input.max_reviews || 99999)
       const minRating = Number(input.min_rating || 0)
-      const leads = results
-        .map((p) => ({
-          name: p.name,
-          branch: input.branch || (p.types || []).slice(0, 2).join(', '),
-          city: input.city || '',
-          rating: p.rating || 0,
-          reviews: p.user_ratings_total || 0,
-          website: '',
-          score: Math.max(35, Math.min(95, 92 - Math.min(p.user_ratings_total || 0, 200) / 4 + ((p.rating || 0) < 4.2 ? 8 : 0))),
-          google_url: p.place_id ? `https://www.google.com/maps/place/?q=place_id:${p.place_id}` : '',
-          reasons: ['Google Places Treffer', (p.user_ratings_total || 0) < 80 ? 'wenige Bewertungen' : 'starke Konkurrenz / Benchmark', 'Audit empfohlen'],
-          source: 'google_places'
-        }))
-        .filter((p) => p.reviews <= maxReviews && p.rating >= minRating)
+      const leads = results.map((p) => ({
+        name: p.name,
+        branch: input.branch || (p.types || []).slice(0, 2).join(', '),
+        city: input.city || '',
+        rating: p.rating || 0,
+        reviews: p.user_ratings_total || 0,
+        website: '',
+        score: Math.max(35, Math.min(95, 92 - Math.min(p.user_ratings_total || 0, 200) / 4 + ((p.rating || 0) < 4.2 ? 8 : 0))),
+        google_url: p.place_id ? `https://www.google.com/maps/place/?q=place_id:${p.place_id}` : '',
+        reasons: ['Google Places Treffer', (p.user_ratings_total || 0) < 80 ? 'wenige Bewertungen' : 'starke Konkurrenz / Benchmark', 'Audit empfohlen'],
+        source: 'google_places'
+      })).filter((p) => p.reviews <= maxReviews && p.rating >= minRating)
       res.json({ ok: true, source: lookup.source, rate, cache_entries: placesCache.size, leads })
     } catch (error) {
       next(error)
     }
   })
 
-
   router.post('/render-pdf', async (req, res, next) => {
     try {
       const html = String(req.body?.html || '')
       const filename = `${safeFilename(req.body?.filename || req.body?.title || 'mmos-dokument')}.pdf`
       if (!html.trim()) return res.status(400).json({ ok: false, code: 'VALIDATION_ERROR', error: 'HTML-Inhalt fehlt. PDF kann nicht erzeugt werden.' })
+      await enforceApiBudget({ supabase: supabaseAdmin, provider: 'gotenberg', feature: 'gotenberg_render_pdf', actor_user_id: req.user?.id, customer_id: req.body?.customer_id, estimated_cost_cents: Number(process.env.GOTENBERG_RENDER_PDF_ESTIMATED_CENTS || 1) })
       const pdf = await gotenberg.convertHtmlToPdf(html, filename)
+      await recordApiUsageEvent(supabaseAdmin, { provider: 'gotenberg', feature: 'render_pdf', endpoint: '/api/business-tools/render-pdf', actor_user_id: req.user?.id, customer_id: req.body?.customer_id, estimated_cost_cents: Number(process.env.GOTENBERG_RENDER_PDF_ESTIMATED_CENTS || 1), success: true, metadata: { filename } })
       if (pdf?.dryRun) return res.status(503).json({ ok: false, code: 'GOTENBERG_NOT_CONFIGURED', error: pdf.note, hint: 'Setze GOTENBERG_URL in Railway oder nutze die HTML-/Druckansicht.' })
       res.setHeader('Content-Type', 'application/pdf')
       res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
