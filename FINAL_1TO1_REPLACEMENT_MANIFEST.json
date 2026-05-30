@@ -35,5 +35,107 @@
       "middleware no longer redirects protected routes to /auth based only on cookies",
       "legacy Neu & wichtig sidebar section is admin-only"
     ]
+  },
+  "neu_wichtig_same_system_fix": {
+    "fixed_at": "2026-05-30 14:02:13",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "frontend/src/app/globals.css",
+      "frontend/src/components/admin/AdminKnowledgeQuizPanel.tsx",
+      "frontend/src/components/admin/ProductionReadinessPanel.tsx",
+      "frontend/src/components/admin/SecurityCorePanel.tsx",
+      "frontend/src/app/admin/training/page.tsx",
+      "frontend/src/app/admin/production/page.tsx",
+      "frontend/src/app/admin/production/security-core/page.tsx"
+    ],
+    "reason": "Legacy Neu & wichtig used /admin links, causing a separate AdminShell system to open."
+  },
+  "clean_neu_wichtig_menu_fix": {
+    "fixed_at": "2026-05-30 14:03:40",
+    "files": [
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/globals.css"
+    ],
+    "removed_from_adminshell_sidebar": [
+      "E-Rechnung",
+      "Buchhaltungs-Export",
+      "Kassen-Anbindung",
+      "Smart Pricing",
+      "No-Show-Risiko",
+      "Loyalty Growth",
+      "Roadmap-/Fremdmenüpunkte"
+    ],
+    "kept_in_neu_wichtig": [
+      "Tool-Zentrale",
+      "Wissenstest",
+      "Mini Audit Generator",
+      "Lead Engine",
+      "Production Readiness",
+      "Security Core"
+    ]
+  },
+  "restore_grouped_admin_tools_sidebar": {
+    "fixed_at": "2026-05-30 14:06:06",
+    "files": [
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/globals.css"
+    ],
+    "neu_wichtig_only": [
+      "Tool-Zentrale",
+      "Wissenstest",
+      "Mini Audit Generator",
+      "Lead Engine",
+      "Production Readiness",
+      "Security Core"
+    ],
+    "restored_grouped_sections": [
+      "Akquise & Vertrieb",
+      "Marketing & Sichtbarkeit",
+      "Kundenportal & Betrieb",
+      "Finanzen",
+      "Sicherheit & Verwaltung",
+      "Bestehendes MMOS"
+    ]
+  },
+  "front_backoffice_split": {
+    "fixed_at": "2026-05-30 14:20:13",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/components/security/RoleGate.tsx",
+      "frontend/src/middleware.ts",
+      "frontend/src/app/globals.css"
+    ],
+    "frontoffice": [
+      "Dashboard",
+      "CRM",
+      "Pipeline",
+      "Leads",
+      "Mini Audit",
+      "Google/SEO",
+      "QR/Loyalty",
+      "Reviews",
+      "Tickets",
+      "Booking",
+      "Reports",
+      "Automation"
+    ],
+    "backoffice": [
+      "Rechnungen",
+      "E-Rechnung",
+      "Buchhaltungs-Export",
+      "Kassen-Anbindung",
+      "Mahnwesen",
+      "Umsatz-Prognose",
+      "Smart Pricing",
+      "Pakete",
+      "Tool-Freigaben",
+      "Production Readiness",
+      "Security Core",
+      "DSGVO",
+      "API-Keys",
+      "Demo-Daten",
+      "Wissenstest"
+    ]
   }
 }

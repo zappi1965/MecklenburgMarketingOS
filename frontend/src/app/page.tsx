@@ -19,6 +19,9 @@ import { businessToolsClient } from '@/lib/businessToolsClient'
 import { customerPortalClient } from '@/lib/customerPortalClient'
 import { adminProfilesClient } from '@/lib/adminProfilesClient'
 import { safeLocalStorageGet, safeLocalStorageSet, safeLocalStorageText } from '@/lib/safeStorage'
+import AdminKnowledgeQuizPanel from '@/components/admin/AdminKnowledgeQuizPanel'
+import ProductionReadinessPanel from '@/components/admin/ProductionReadinessPanel'
+import SecurityCorePanel from '@/components/admin/SecurityCorePanel'
 
 type Role='guest'|'admin'|'customer'
 type FileType='invoices'|'contracts'|'media'|'documents'|'reports'
@@ -1433,6 +1436,65 @@ function AdminProfilesManager(){
  </>
 }
 
+
+function AdminInternalToolCenter({setView}:any){
+ const tools=[
+  {key:'admin_training',title:'Wissenstest',tag:'Training',text:'Interner Wissenstest zu MMOS-Tools, Vertrieb, Datenschutz, Security und Betrieb.'},
+  {key:'mini_audit',title:'Mini Audit Generator',tag:'Akquise',text:'Google-only Mini-Audit direkt im bestehenden Admin-Dashboard öffnen.'},
+  {key:'lead_scraper',title:'Lead Engine',tag:'Akquise',text:'Leads suchen, prüfen und für den Vertrieb vorbereiten.'},
+  {key:'production_readiness',title:'Production Readiness',tag:'Betrieb',text:'Monitoring, Backups, API-Kosten und technische Bereitschaft prüfen.'},
+  {key:'security_core_live',title:'Security Core',tag:'Sicherheit',text:'Tenant-Isolation, Buckets, ENV und Systemstatus prüfen.'},
+  {key:'security_center',title:'Security & Health Center',tag:'Bestand',text:'Bestehendes Sicherheits- und Health-Center im Dashboard öffnen.'}
+ ]
+ return <div className="grid">{tools.map((tool:any)=><Card key={tool.key} title={tool.title} right={<Badge>{tool.tag}</Badge>}><p className="sub">{tool.text}</p><button className="btn" onClick={()=>setView(tool.key)}>Öffnen</button></Card>)}</div>
+}
+
+
+
+function BackofficeCenter({setView}:any){
+ const groups=[
+  {title:'Finanzen',tools:[
+   {label:'Rechnungen',view:'finance',text:'Rechnungen, Zahlungsstatus und PDF-Ausgaben.'},
+   {label:'E-Rechnung',href:'/admin/e-invoice',text:'XRechnung / ZUGFeRD.'},
+   {label:'Buchhaltungs-Export',href:'/admin/accounting',text:'DATEV, lexoffice und sevDesk.'},
+   {label:'Kassen-Anbindung',href:'/admin/pos',text:'POS- und SumUp-Transaktionen.'},
+   {label:'Mahnwesen',view:'dunning',text:'Mahnstufen, offene Forderungen und Zahlungsdruck.'},
+   {label:'Umsatz-Prognose',view:'revenue_forecasting',text:'Forecasts, Risiken und Umsatzentwicklung.'},
+   {label:'Smart Pricing',href:'/admin/pricing',text:'Preislogik, Paketwerte und Optimierung.'},
+   {label:'Dynamic Billing',view:'dynamic_billing',text:'Flexible Abrechnung und Paketlogik.'},
+   {label:'Revenue Share',view:'revenue_share',text:'Umsatzbeteiligungen und interne Verteilung.'}
+  ]},
+  {title:'Pakete & Freigaben',tools:[
+   {label:'Pakete & Billing',view:'packages',text:'Pakete, Add-ons und laufende Kosten.'},
+   {label:'Paket-Matrix',view:'package_matrix',text:'Starter, Growth, Premium und Modullogik.'},
+   {label:'Package Recommendations',view:'package_recommendations',text:'Paketempfehlungen anhand Kundenbedarf.'},
+   {label:'Tool-Freigaben Pro',href:'/admin/tool-access-v2',text:'Freischaltungen pro Kunde und Paket.'},
+   {label:'Pakete & Kundentools',href:'/admin/tools',text:'Tool-Katalog und Kundenfreigaben.'}
+  ]},
+  {title:'System & Sicherheit',tools:[
+   {label:'Production Readiness',view:'production_readiness',text:'Monitoring, Backups, API-Kosten und Admin-Logs.'},
+   {label:'Security Core',view:'security_core_live',text:'Tenant-Isolation, Rechte, Jobs und ENV-Status.'},
+   {label:'Security & Health Center',view:'security_center',text:'Bestehendes Health- und Sicherheitscenter.'},
+   {label:'Sicherheit & 2FA',href:'/admin/security',text:'Login-Sicherheit und Zwei-Faktor-Logik.'},
+   {label:'DSGVO-Cockpit',href:'/admin/compliance',text:'Datenschutz, Prozesse und Nachweise.'},
+   {label:'API-Keys',href:'/admin/api-keys',text:'Schlüssel und Integrationszugänge.'}
+  ]},
+  {title:'Interne Verwaltung',tools:[
+   {label:'Admin Profile',view:'admin_profiles',text:'Admin-Konten und Zuständigkeiten.'},
+   {label:'Haupt-Landingpage',view:'main_landing',text:'Öffentliche Startseite verwalten.'},
+   {label:'Interne Testumgebung',view:'demo_environment',text:'Demo- und Testmodus.'},
+   {label:'Demo-Daten',href:'/admin/demo-data',text:'Demo-Daten und Testinhalte.'},
+   {label:'Datenqualität',href:'/admin/data-quality',text:'Dubletten, E-Mail-Check und Datenpflege.'},
+   {label:'Wissenstest',view:'admin_training',text:'Interner MMOS-Wissenstest.'}
+  ]}
+ ]
+ return <div className="backofficePage">
+  <div className="head"><div><p className="eyebrow">Internes Backoffice</p><h1>Backoffice</h1><p className="sub">Interne Verwaltung, Finanzen, Sicherheit, Systembetrieb und organisatorische Tools.</p></div><button className="btn secondary" onClick={()=>setView('dashboard')}>Zurück ins Frontoffice</button></div>
+  {groups.map((group:any)=><Card key={group.title} title={group.title}><div className="grid">{group.tools.map((tool:any)=><div className="card" key={tool.label}><div className="row" style={{justifyContent:'space-between',gap:8}}><b>{tool.label}</b><Badge>Backoffice</Badge></div><p className="sub">{tool.text}</p>{tool.view?<button className="btn" onClick={()=>setView(tool.view)}>Öffnen</button>:<a className="btn" href={tool.href}>Öffnen</a>}</div>)}</div></Card>)}
+ </div>
+}
+
+
 export default function App(){
  const baseStore=applyDemoSandboxStorePatch(useStore())
  const [role,setRole]=useState<Role>('guest')
@@ -1461,7 +1523,7 @@ export default function App(){
  const [adminAvatars,setAdminAvatars]=useState<any>({DominiqueMM:'',JanneMM:''})
  useEffect(()=>{if(!isDemoFeatureEnabled())return;const p=new URLSearchParams(window.location.search);const demo=p.get('demo');const c=p.get('customer');if(demo==='admin'){markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM');setView('dashboard');return}if(c){if(demo==='customer')markDemoMode();setRole('customer');setCid(c);setView('dashboard')}},[])
  const admin=[
-   'dashboard','admin_profiles','main_landing','demo_environment','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr',
+   'dashboard','backoffice','admin_training','production_readiness','security_core_live','admin_tool_center','admin_training','production_readiness','security_core_live','admin_profiles','main_landing','demo_environment','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr',
    'public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty',
    'reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','kpi',
    'customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events',
@@ -1512,7 +1574,7 @@ export default function App(){
  const disabledRoutes=new Set(accessRows.filter((x:any)=>x.enabled===false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean))
  const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route)&&route!=='heatmap')
  const labels:any={
-   dashboard:'Dashboard',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',
+   dashboard:'Dashboard',backoffice:'Backoffice',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_tool_center:'Tool-Zentrale',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',
    public_landing:'Öffentliche /l/[slug] Seite',
    loyalty:'Loyalty Programm',
    loyalty_rewards:'Rewards',
@@ -1539,15 +1601,13 @@ export default function App(){
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
-   {label:'Übersicht',hint:'Start, Landingpage & Revenue',tools:['dashboard','main_landing','demo_environment','revenue_forecasting','revenue_share']},
-   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins und Systemstatus',tools:['admin_profiles','security_center']},
-   {label:'CRM & Betrieb',hint:'Kunden, Onboarding, Termine, Tickets',tools:['crm','onboarding','finance','tickets','booking','pipeline','media','timeline_events','health_scores']},
-   {label:'QR & Loyalty',hint:'QR-Code, Endkundenseite, Punkte, Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
-   {label:'Reviews',hint:'Feedback, KI-Auswertung, Vorlagen',tools:['reviews']},
-   {label:'Akquise & Sales',hint:'Audit, Leads, Angebote, Verträge',tools:['business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine']},
-   {label:'Automation & Marketing',hint:'Kampagnen, Regeln, AI Assistant',tools:['automations','workflows','smart_automation','marketing_automation','ai_assistant']},
-   {label:'SEO & Analytics',hint:'Google/API, SEO, KPI',tools:['integrations','seo','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']},
-   {label:'Reports & System',hint:'Reports, Output und Mahnwesen',tools:['monthly_reports','approvals','dunning']}
+   {label:'Frontoffice',hint:'Kundenarbeit, Vertrieb und operative Kundenbetreuung',tools:['dashboard','crm','pipeline','customer_health','customer_intelligence']},
+   {label:'Akquise & Leads',hint:'Leads, Audits und Erstgespräch',tools:['business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator']},
+   {label:'Google & Sichtbarkeit',hint:'Google Business, SEO, Wettbewerber und KPIs',tools:['integrations','seo','kpi','competitors']},
+   {label:'QR & Loyalty',hint:'QR-Code, Slug-Seiten, Punkte und Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
+   {label:'Reviews & Reputation',hint:'Bewertungen, Antworten und Review Intelligence',tools:['reviews','review_intelligence','review_templates']},
+   {label:'Kundenkommunikation',hint:'Tickets, Booking, Media, Reports und Freigaben',tools:['tickets','booking','media','reports','monthly_reports','approvals','knowledge','onboarding']},
+   {label:'Kampagnen & Automation',hint:'Workflows, Marketing-Automation und AI Assistant',tools:['automations','workflows','smart_automation','marketing_automation','ai_assistant','customer_workflows']}
  ]
  const customerNavGroups=[
    {label:'Übersicht',hint:'Portalstart',tools:['dashboard','onboarding','knowledge']},
@@ -1588,9 +1648,17 @@ export default function App(){
   url.searchParams.set('app','1')
   window.location.assign(url.toString())
  }
- return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo hasImage appSidebarLogo"><img className="brandLogoImg sidebarLogoImg" src="/brand/mecklenburg-marketing-logo-mark.png" alt="Mecklenburg Marketing"/><span>Mecklenburg Marketing</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{role==='admin'&&<div className="navGroup importantNavGroup"><div className="navGroupTitle">Neu & wichtig</div><a className="nav quickAdminLink" href="/admin">Tool-Zentrale</a><a className="nav quickAdminLink" href="/admin/training">Wissenstest</a><a className="nav quickAdminLink" href="/admin/sales/mini-audit-generator">Mini Audit Generator</a><a className="nav quickAdminLink" href="/admin/sales/lead-engine">Lead Engine</a><a className="nav quickAdminLink" href="/admin/production">Production Readiness</a><a className="nav quickAdminLink" href="/admin/production/security-core">Security Core</a></div>}{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><LiveSaveStatusBar status={store.liveStatus}/><ApiDiagnosticsPanel/><FieldHelpEnhancer/>
+ return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo hasImage appSidebarLogo"><img className="brandLogoImg sidebarLogoImg" src="/brand/mecklenburg-marketing-logo-mark.png" alt="Mecklenburg Marketing"/><span>Mecklenburg Marketing</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{role==='admin'&&<div className="navGroup backofficeEntryGroup"><div className="navGroupTitle">Intern</div><button className={`nav backofficeOpenBtn ${view==='backoffice'?'active':''}`} onClick={()=>{setView('backoffice');setMobileNavOpen(false)}}>Backoffice öffnen</button><small className="navHint">Finanzen, Rechte, System, Sicherheit, interne Verwaltung</small></div>}{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><LiveSaveStatusBar status={store.liveStatus}/><ApiDiagnosticsPanel/><FieldHelpEnhancer/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  {blockCustomerScopedRender?<NoLiveCustomerPanel store={store} setView={setView} setCid={setCid}/>:<>
+ {view==='backoffice'&&role==='admin'&&<BackofficeCenter setView={setView}/>}
+ {view==='admin_training'&&role==='admin'&&<AdminKnowledgeQuizPanel/>}
+ {view==='production_readiness'&&role==='admin'&&<ProductionReadinessPanel/>}
+ {view==='security_core_live'&&role==='admin'&&<SecurityCorePanel/>}
+ {view==='admin_tool_center'&&role==='admin'&&<AdminInternalToolCenter setView={setView}/>}
+ {view==='admin_training'&&role==='admin'&&<AdminKnowledgeQuizPanel/>}
+ {view==='production_readiness'&&role==='admin'&&<ProductionReadinessPanel/>}
+ {view==='security_core_live'&&role==='admin'&&<SecurityCorePanel/>}
  {view==='dashboard'&&role==='admin'&&<ProductionStatusCard/>}
  {view==='dashboard'&&<Dashboard store={store} cid={cid} role={role} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>}
  {view==='main_landing'&&role==='admin'&&<MainLandingPageEditor store={store}/>}

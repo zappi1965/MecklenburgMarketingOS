@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * MMOS Auth Routing Fix
+ * MMOS Front-/Backoffice Auth Fix
  *
- * Supabase browser sessions are stored client-side. The middleware cannot reliably
- * see those sessions as cookies. A server-side redirect based only on cookies
- * caused valid users to be sent back to /auth when opening /admin tools.
+ * Supabase browser sessions are not reliably available to middleware.
+ * Server redirects based on cookie checks caused valid admins to be sent back
+ * to /auth when opening Backoffice tools.
  *
- * Protected pages are therefore allowed to render and are guarded client-side by:
- * - AdminOnly / RoleGate
- * - CustomerOrAdminOnly / ToolAccessGate
- *
- * Result:
- * - Admin tools open without a forced re-login.
- * - Unauthenticated users still see the client-side login-required panel.
+ * Access control remains in the client via RoleGate/AdminOnly/ToolAccessGate.
  */
 export function middleware(_req: NextRequest) {
   return NextResponse.next()
