@@ -51,5 +51,13 @@
       "legacy app sidebar",
       "admin sidebar"
     ]
+  },
+  "legacy_sidebar_new_tools_fix": {
+    "fixed_at": "2026-05-30",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "frontend/src/app/globals.css"
+    ],
+    "reason": "AdminShell sidebar had new tools, but legacy monolithic app sidebar did not show 'Neu & wichtig'."
   }
 }

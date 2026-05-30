@@ -3692,3 +3692,31 @@ input,select,textarea{accent-color:var(--purple)}
   .landingNav .brandLogoImg{height:38px;max-width:190px}
   .appSidebarLogo .sidebarLogoImg{width:36px;height:36px;max-width:36px}
 }
+
+
+/* MMOS legacy sidebar quick links */
+.importantNavGroup{
+  border:1px solid rgba(56,189,248,.26);
+  background:rgba(56,189,248,.06);
+  border-radius:14px;
+  padding:8px;
+  margin:10px 0 14px;
+}
+.importantNavGroup .navGroupTitle{
+  color:#7dd3fc;
+  font-size:11px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin:4px 4px 8px;
+}
+.quickAdminLink{
+  display:block;
+  width:100%;
+  text-decoration:none;
+  margin:4px 0;
+}
+.side a.nav{
+  display:block;
+  text-decoration:none;
+}

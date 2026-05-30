@@ -1,0 +1,28 @@
+{
+  "name": "MMOS Final 1:1 Fullbuild Replacement",
+  "mode": "complete_repo_replacement",
+  "base": "MecklenburgMarketingOS-main-2-v066-stability-speed-foundation-fullbuild.zip",
+  "contains": [
+    "current full frontend",
+    "current full backend",
+    "supabase migrations",
+    "docs",
+    "github workflows",
+    "admin quiz /admin/training",
+    "admin sidebar + legacy sidebar new tools",
+    "logo visibility fix",
+    "mini audit turbopack build fix",
+    "security core",
+    "production readiness",
+    "media binding",
+    "internal access"
+  ],
+  "usage": [
+    "entpacken",
+    "repo-inhalt 1:1 ersetzen",
+    "commit/push",
+    "backend deployen",
+    "frontend deployen"
+  ],
+  "created_at": "2026-05-30 13:48:00"
+}
