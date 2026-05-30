@@ -21,5 +21,10 @@
     "Supabase migrations 0090/0091",
     "ENV variables",
     "Backend deploy before frontend"
-  ]
+  ],
+  "build_fix": {
+    "fixed_at": "2026-05-30",
+    "file": "frontend/src/components/mini-audit/MiniAuditGeneratorClient.tsx",
+    "issue": "Removed accidental shell heredoc tail causing Turbopack 'Unknown regular expression flags'."
+  }
 }

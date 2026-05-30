@@ -234,13 +234,3 @@ export default function MiniAuditGeneratorClient() {
     </main>
   )
 }
-TS
-
-cat > /mnt/data/repo_files/frontend/src/app/admin/sales/mini-audit-generator/page.tsx <<'TSX'
-import MiniAuditGeneratorClient from '@/components/mini-audit/MiniAuditGeneratorClient'
-
-export const metadata = { title: 'Mini Audit Generator · MMOS' }
-
-export default function Page() {
-  return <MiniAuditGeneratorClient />
-}
