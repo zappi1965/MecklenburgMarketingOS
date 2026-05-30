@@ -26,5 +26,30 @@
     "fixed_at": "2026-05-30",
     "file": "frontend/src/components/mini-audit/MiniAuditGeneratorClient.tsx",
     "issue": "Removed accidental shell heredoc tail causing Turbopack 'Unknown regular expression flags'."
+  },
+  "ui_sidebar_fix": {
+    "fixed_at": "2026-05-30",
+    "files": [
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/admin/page.tsx",
+      "frontend/src/app/admin/tools/page.tsx",
+      "frontend/src/app/admin/demo-data/page.tsx"
+    ],
+    "new_sidebar_section": "Neu & wichtig"
+  },
+  "logo_visibility_fix": {
+    "fixed_at": "2026-05-30",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "frontend/src/components/brand/BrandLogo.tsx",
+      "frontend/src/app/globals.css",
+      "frontend/src/styles/brand.css",
+      "frontend/src/components/AdminShell.tsx"
+    ],
+    "routes": [
+      "landing /",
+      "legacy app sidebar",
+      "admin sidebar"
+    ]
   }
 }

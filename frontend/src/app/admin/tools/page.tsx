@@ -1,4 +1,3 @@
-import AdminShell from '@/components/AdminShell'
 import { customerPackageComposition, customerToolModules, modulesForPackage, singleModuleValue } from '@/lib/customerToolModules'
 
 export const metadata = { title: 'Kundentools · MMOS Admin' }
@@ -11,7 +10,7 @@ const eur = (value: number) => new Intl.NumberFormat('de-DE', {
 
 export default function AdminToolsPage() {
   return (
-    <AdminShell activeHref="/admin/tools">
+    <>
       <div className="adminPageHeader">
         <div>
           <p className="eyebrow">V44 Functional Fullbuild</p>
@@ -67,6 +66,6 @@ export default function AdminToolsPage() {
           </table>
         </div>
       </section>
-    </AdminShell>
+    </>
   )
 }

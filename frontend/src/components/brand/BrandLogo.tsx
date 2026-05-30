@@ -1,5 +1,3 @@
-import Image from 'next/image'
-
 type BrandLogoVariant = 'sidebar' | 'topbar' | 'mark' | 'full'
 
 export default function BrandLogo({
@@ -15,36 +13,35 @@ export default function BrandLogo({
 }) {
   const isMarkOnly = variant === 'mark'
   const isFull = variant === 'full'
+  const markSrc = '/brand/mecklenburg-marketing-logo-mark.png'
+  const fullSrc = '/brand/mecklenburg-marketing-logo-full.png'
+
   const content = (
     <span className={`brandLogo brandLogo--${variant} ${className}`.trim()}>
-      <span className="brandLogoMarkWrap" aria-hidden="true">
-        <Image
-          src="/brand/mecklenburg-marketing-logo-mark.png"
-          alt=""
-          width={180}
-          height={120}
-          priority={variant === 'sidebar' || variant === 'topbar'}
-          className="brandLogoMark"
+      {isFull ? (
+        <img
+          src={fullSrc}
+          alt="Mecklenburg Marketing"
+          className="brandLogoFull"
+          loading="eager"
         />
-      </span>
-      {!isMarkOnly && (
-        <span className="brandLogoTextWrap">
-          {isFull ? (
-            <Image
-              src="/brand/mecklenburg-marketing-logo-full.png"
-              alt="Mecklenburg Marketing"
-              width={720}
-              height={260}
-              priority
-              className="brandLogoFull"
+      ) : (
+        <>
+          <span className="brandLogoMarkWrap" aria-hidden="true">
+            <img
+              src={markSrc}
+              alt=""
+              className="brandLogoMark"
+              loading="eager"
             />
-          ) : (
-            <>
+          </span>
+          {!isMarkOnly && (
+            <span className="brandLogoTextWrap">
               <span className="brandLogoText">Mecklenburg Marketing</span>
               {subline && <span className="brandLogoSubline">{subline}</span>}
-            </>
+            </span>
           )}
-        </span>
+        </>
       )}
     </span>
   )

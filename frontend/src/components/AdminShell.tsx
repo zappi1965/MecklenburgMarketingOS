@@ -11,85 +11,103 @@ import {
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 import BrandLogo from '@/components/brand/BrandLogo'
 
-type NavSection = {
-  label: string
-  items: Array<{ href: string; label: string; icon: any; hint?: string }>
-}
+type NavItem = { href: string; label: string; icon: any; hint?: string }
+type NavSection = { label: string; items: NavItem[] }
+
+const NEW_TOOL_NAV: NavItem[] = [
+  { href: '/admin', label: 'Tool-Zentrale', icon: BarChart3, hint: 'Alle neuen Admin-Tools auf einen Blick' },
+  { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Quiz zu allen MMOS-Tools, Vertrieb, Datenschutz und Betrieb' },
+  { href: '/admin/sales/mini-audit-generator', label: 'Mini Audit Generator', icon: FileSearch, hint: 'Google-only Mini-Audit für Akquise und Erstgespräch' },
+  { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Target, hint: 'Google-Places Lead-Suche und Akquise-Vorbereitung' },
+  { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'Monitoring, Backups, API-Kosten und Admin-Logs' },
+  { href: '/admin/production/security-core', label: 'Security Core', icon: Shield, hint: 'Tenant-Isolation, Rechte, Jobs und Migration Guard' },
+  { href: '/media/report-center', label: 'Media & Reports', icon: FileText, hint: 'Interner Report- und Dokumentenbereich' },
+  { href: '/portal/reports', label: 'Kundenportal Reports', icon: FileText, hint: 'Kundenansicht für freigegebene PDFs und Reports' }
+]
 
 const NAV: NavSection[] = [
   {
-    label: 'Ueberblick',
+    label: 'Neu & wichtig',
+    items: NEW_TOOL_NAV
+  },
+  {
+    label: 'Überblick',
     items: [
-      { href: '/admin/ops', label: 'Health-Cockpit', icon: Activity, hint: 'Wo brennt es ueber alle Customer' },
-      { href: '/admin/maintenance', label: 'Wartungs-Reminder', icon: Wrench, hint: 'Tages-Scan: Logo, Loyalty, MFA, ...' },
-      { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Customer' },
-      { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Cohorts' },
-      { href: '/admin/customer-intelligence', label: 'Customer Intelligence', icon: BrainCircuit, hint: 'Health-/Risiko-/Upsell-Score, Monatsreports' },
-      { href: '/admin/sales', label: 'Sales-Werkzeuge', icon: Target, hint: 'Google-Audit, Lead-Suche, Angebote, Vertraege' },
-      { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Alle Tools & Vertrieb sicher erklaeren' },
-      { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen & Reports' },
-      { href: '/growth-command', label: 'Growth Command', icon: BarChart3, hint: 'Alle 12 Bereiche' },
-      { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln' }
+      { href: '/admin/ops', label: 'Health-Cockpit', icon: Activity, hint: 'Wo brennt es über alle Kunden?' },
+      { href: '/admin/maintenance', label: 'Wartungs-Reminder', icon: Wrench, hint: 'Tages-Scan: Logo, Loyalty, MFA, Datenqualität' },
+      { href: '/admin/audits', label: 'Onboarding-Audits', icon: FileSearch, hint: 'Multi-Check pro Kunde' },
+      { href: '/admin/insights', label: 'Insights', icon: BarChart3, hint: 'Compliance, CLV, Kohorten und Wachstum' },
+      { href: '/admin/customer-intelligence', label: 'Customer Intelligence', icon: BrainCircuit, hint: 'Health-, Risiko- und Upsell-Score' },
+      { href: '/value-dashboard', label: 'Value Dashboard', icon: BarChart3, hint: 'Kundennutzen, Nachweise und Monatsreports' },
+      { href: '/growth-command', label: 'Growth Command', icon: TrendingUp, hint: 'Steuerung der Wachstumsbereiche' },
+      { href: '/admin/automations', label: 'Workflows', icon: Bot, hint: 'Cross-Modul-Regeln und Automation' }
+    ]
+  },
+  {
+    label: 'Akquise & Vertrieb',
+    items: [
+      { href: '/admin/sales', label: 'Sales-Werkzeuge', icon: Target, hint: 'Google-Audit, Lead-Suche, Angebote und Verträge' },
+      { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Megaphone, hint: 'Lead Scraper, Mini-Audit und Paketempfehlung' },
+      { href: '/admin/sales/mini-audit-generator', label: 'Mini Audit Generator', icon: FileSearch, hint: 'Automatischer Google-only Audit-Export' },
+      { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText, hint: 'Value-Angebote aus Audit und Paketlogik' },
+      { href: '/admin/tools', label: 'Pakete & Kundentools', icon: Megaphone, hint: 'Verkaufbare Module, Add-ons und Paketlogik' },
+      { href: '/admin/tool-access-v2', label: 'Tool-Freigaben Pro', icon: Shield, hint: 'Freischaltungen pro Kunde und Paket' }
     ]
   },
   {
     label: 'Marketing',
     items: [
-      { href: '/admin/seo', label: 'SEO & Sichtbarkeit', icon: Search, hint: 'Dashboard, Heatmap, KPI, Wettbewerber' },
+      { href: '/admin/seo', label: 'SEO & Sichtbarkeit', icon: Search, hint: 'Dashboard, Heatmap, KPIs und Wettbewerber' },
       { href: '/admin/gmb', label: 'Google Business', icon: Megaphone },
-      { href: '/admin/social', label: 'AI Social-Posts', icon: Sparkles, hint: 'KI-Posts fuer Instagram, Facebook, Google, LinkedIn' },
-      { href: '/admin/tools', label: 'Kundentools', icon: Megaphone, hint: 'Module, Pakete, Add-ons' },
+      { href: '/admin/social', label: 'AI Social-Posts', icon: Sparkles, hint: 'KI-Posts für Instagram, Facebook, Google und LinkedIn' },
       { href: '/reputation-center', label: 'Reputation Center', icon: Star },
-      { href: '/slug-hub', label: 'Slug-Hub', icon: Megaphone },
-      { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Megaphone },
-      { href: '/admin/sales/mini-audit-generator', label: 'Mini Audit Generator', icon: FileSearch },
-      { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText },
+      { href: '/admin/review-intelligence', label: 'Review Intelligence', icon: Gauge, hint: 'Sentiment-Profil, Themen und Vorlagen' },
       { href: '/admin/widget', label: 'Bewertungs-Widget', icon: Star },
-      { href: '/admin/review-intelligence', label: 'Review Intelligence', icon: Gauge, hint: 'Sentiment-Profil, Vorlagen' },
+      { href: '/slug-hub', label: 'Slug-Hub', icon: Megaphone },
       { href: '/admin/newsletter', label: 'Newsletter', icon: Mail },
       { href: '/admin/mail-assistant', label: 'AI Mail-Assistant', icon: Mail }
     ]
   },
   {
-    label: 'Betrieb',
+    label: 'Kundenportal & Betrieb',
     items: [
-      { href: '/admin/booking', label: 'Online-Terminbuchung', icon: CalendarClock, hint: 'Leistungen, Zeiten, Buchungs-Widget' },
-      { href: '/admin/loyalty-scan', label: 'Loyalty-Scan (Kasse)', icon: ScanLine, hint: 'Kunden-QR scannen, Punkte buchen' },
+      { href: '/portal/reports', label: 'Kundenportal Reports', icon: FileText, hint: 'Freigegebene Reports und PDFs aus Kundensicht' },
+      { href: '/media/report-center', label: 'Media & Reports', icon: FileText, hint: 'Reports, Angebote, Rechnungen und Dateien kundengenau verknüpfen' },
+      { href: '/admin/booking', label: 'Online-Terminbuchung', icon: CalendarClock, hint: 'Leistungen, Zeiten und Buchungs-Widget' },
+      { href: '/admin/loyalty-scan', label: 'Loyalty-Scan', icon: ScanLine, hint: 'Kunden-QR scannen und Punkte buchen' },
       { href: '/admin/no-show', label: 'No-Show-Risiko', icon: AlarmClock },
       { href: '/loyalty/growth', label: 'Loyalty Growth', icon: ScanLine },
-      { href: '/automation/playbooks', label: 'Automation Playbooks', icon: AlarmClock },
-      { href: '/media/report-center', label: 'Media & Reports', icon: FileText }
+      { href: '/automation/playbooks', label: 'Automation Playbooks', icon: Bot }
     ]
   },
   {
     label: 'Finanzen',
     items: [
-      { href: '/admin/e-invoice', label: 'E-Rechnung', icon: FileCode2, hint: 'XRechnung / ZUGFeRD (DE-Pflicht im B2B)' },
+      { href: '/admin/e-invoice', label: 'E-Rechnung', icon: FileCode2, hint: 'XRechnung / ZUGFeRD' },
       { href: '/admin/accounting', label: 'Buchhaltungs-Export', icon: FileSpreadsheet, hint: 'DATEV / lexoffice / sevDesk' },
-      { href: '/admin/pos', label: 'Kassen-Anbindung', icon: CreditCard, hint: 'POS-/SumUp-Transaktionen' },
+      { href: '/admin/pos', label: 'Kassen-Anbindung', icon: CreditCard, hint: 'POS- und SumUp-Transaktionen' },
       { href: '/admin/dunning', label: 'Mahnstufen', icon: ChartLine },
-      { href: '/admin/revenue-forecast', label: 'Umsatz-Prognose', icon: TrendingUp, hint: 'Forecast, Nutzung, Paket-Empfehlung' },
+      { href: '/admin/revenue-forecast', label: 'Umsatz-Prognose', icon: TrendingUp },
       { href: '/admin/pricing', label: 'Smart Pricing', icon: Wallet }
     ]
   },
   {
-    label: 'Verwaltung',
+    label: 'Sicherheit & Verwaltung',
     items: [
-      { href: '/admin/onboarding', label: 'Einrichtungs-Assistent', icon: Rocket, hint: 'Gefuehrtes Setup: Branding, QR, Loyalty' },
-      { href: '/admin/data-quality', label: 'Datenqualitaet', icon: Database, hint: 'Dubletten, E-Mail-Check, AI-Review-Antwort' },
+      { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'E2E, Monitoring, Backups, API-Kosten und Logs' },
+      { href: '/admin/production/security-core', label: 'Security Core', icon: Shield, hint: 'Tenant-Isolation, Jobs und Migration Guard' },
+      { href: '/admin/onboarding', label: 'Einrichtungs-Assistent', icon: Rocket, hint: 'Geführtes Setup' },
+      { href: '/admin/data-quality', label: 'Datenqualität', icon: Database, hint: 'Dubletten, E-Mail-Check und KI-Review-Antwort' },
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
-      { href: '/admin/tool-access-v2', label: 'Tool-Freigaben Pro', icon: Shield },
       { href: '/crm/customer-health', label: 'Customer Health', icon: BarChart3 },
       { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield },
-      { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'E2E, Monitoring, Backups, API-Kosten, Logs' },
-      { href: '/admin/production/security-core', label: 'Security Core', icon: Shield, hint: 'Tenant-Isolation, Jobs, Migration Guard' },
       { href: '/admin/demo-data', label: 'Demo-Daten', icon: FileText }
     ]
   }
 ]
 
-const PERSONAL_NAV = [
+const PERSONAL_NAV: NavItem[] = [
   { href: '/privacy/me', label: 'Meine Daten', icon: User }
 ]
 
@@ -103,16 +121,20 @@ export default function AdminShell({
   const [profile, setProfile] = useState<any>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [currentPath, setCurrentPath] = useState('')
 
   useEffect(() => {
     setMounted(true)
+    setCurrentPath(window.location.pathname)
     getCurrentUserProfile().then(setProfile).catch(() => setProfile(null))
   }, [])
 
-  const currentPath = activeHref || (typeof window !== 'undefined' ? window.location.pathname : '')
+  const activePath = activeHref || currentPath
 
   function isActive(href: string) {
-    return currentPath === href || currentPath.startsWith(href + '/')
+    if (!activePath) return false
+    if (href === '/admin') return activePath === '/admin'
+    return activePath === href || activePath.startsWith(href + '/')
   }
 
   async function logout() {
@@ -120,12 +142,30 @@ export default function AdminShell({
     if (typeof window !== 'undefined') window.location.href = '/auth'
   }
 
+  function renderItem(item: NavItem) {
+    const Icon = item.icon
+    const active = isActive(item.href)
+    return (
+      <a
+        key={item.href}
+        href={item.href}
+        onClick={() => setDrawerOpen(false)}
+        className={active ? 'adminNavItem active' : 'adminNavItem'}
+        aria-current={active ? 'page' : undefined}
+        title={item.hint}
+      >
+        <Icon size={16} strokeWidth={2} />
+        <span>{item.label}</span>
+      </a>
+    )
+  }
+
   return (
     <div className={`adminShell ${drawerOpen ? 'drawerOpen' : ''}`}>
       <aside className="adminSidebar">
         <div className="adminSidebarHeader">
-          <BrandLogo href="/admin/insights" variant="sidebar" subline="Internes OS" />
-          <button type="button" className="adminDrawerClose" aria-label="Menue schliessen" onClick={() => setDrawerOpen(false)}>
+          <BrandLogo href="/admin" variant="sidebar" subline="Internes OS" />
+          <button type="button" className="adminDrawerClose" aria-label="Menü schließen" onClick={() => setDrawerOpen(false)}>
             <X size={20} />
           </button>
         </div>
@@ -134,38 +174,13 @@ export default function AdminShell({
           {NAV.map((section) => (
             <div key={section.label} className="adminNavSection">
               <div className="adminNavSectionLabel">{section.label}</div>
-              {section.items.map((item) => {
-                const Icon = item.icon
-                const active = isActive(item.href)
-                return (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setDrawerOpen(false)}
-                    className={active ? 'adminNavItem active' : 'adminNavItem'}
-                    aria-current={active ? 'page' : undefined}
-                    title={item.hint}
-                  >
-                    <Icon size={16} strokeWidth={2} />
-                    <span>{item.label}</span>
-                  </a>
-                )
-              })}
+              {section.items.map(renderItem)}
             </div>
           ))}
 
           <div className="adminNavSection">
-            <div className="adminNavSectionLabel">Persoenlich</div>
-            {PERSONAL_NAV.map((item) => {
-              const Icon = item.icon
-              const active = isActive(item.href)
-              return (
-                <a key={item.href} href={item.href} onClick={() => setDrawerOpen(false)} className={active ? 'adminNavItem active' : 'adminNavItem'}>
-                  <Icon size={16} />
-                  <span>{item.label}</span>
-                </a>
-              )
-            })}
+            <div className="adminNavSectionLabel">Persönlich</div>
+            {PERSONAL_NAV.map(renderItem)}
           </div>
         </nav>
 
@@ -186,10 +201,10 @@ export default function AdminShell({
       </aside>
 
       <header className="adminTopbar">
-        <button type="button" className="adminMenuBtn" aria-label="Menue oeffnen" onClick={() => setDrawerOpen(true)}>
+        <button type="button" className="adminMenuBtn" aria-label="Menü öffnen" onClick={() => setDrawerOpen(true)}>
           <Menu size={22} />
         </button>
-        <BrandLogo href="/admin/insights" variant="topbar" subline="Intern" />
+        <BrandLogo href="/admin" variant="topbar" subline="Intern" />
       </header>
 
       <main className="adminContent">

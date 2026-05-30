@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import {
   allV45Tables,
   clearLocalDemoData,
@@ -34,7 +33,7 @@ export default function DemoDataPage() {
   }
 
   return (
-    <AdminShell activeHref="/admin/demo-data">
+    <>
       <div className="adminPageHeader">
         <div>
           <p className="eyebrow">V45 Demo-Daten</p>
@@ -88,6 +87,6 @@ export default function DemoDataPage() {
           <li><a href="/pay/pay_demo_kuestenblick_001">Demo Zahlungslink</a></li>
         </ul>
       </section>
-    </AdminShell>
+    </>
   )
 }

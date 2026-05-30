@@ -86,3 +86,11 @@
   .brandLogo--sidebar .brandLogoSubline{font-size:9px}
   .brandLogoFull{width:220px}
 }
+
+
+/* Robust brand image rendering */
+.brandLogo img{display:block}
+.brandLogoMark{width:32px;max-width:32px;height:auto;object-fit:contain}
+.brandLogo--topbar .brandLogoMark{width:29px;max-width:29px}
+.brandLogoFull{width:min(280px,100%);height:auto;object-fit:contain}
+.brandLogoText{color:#f8fafc}
