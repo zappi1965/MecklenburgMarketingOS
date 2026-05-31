@@ -49,6 +49,7 @@ async function deleteInvoiceAndPdf(store:any, invoice:any){
  await store.remove('invoices',invoice.id)
  const files=(store.data.customer_files||[]).filter((f:any)=>f.customer_id===invoice.customer_id&&f.file_type==='invoices'&&String(f.name||'').includes(String(invoice.invoice_number||'')))
  for(const f of files) await store.remove('customer_files',f.id)
+}
 
 async function logAdminAction(store:any,{customer_id=null,action,entity_type='system',entity_id='',status='OK',details='',actor_name='System'}:any){
  try{await store.create('admin_action_logs',{customer_id,action,entity_type,entity_id,status,details,actor_name,mode:isDemoMode()?'demo':'live',created_at:new Date().toISOString()})}catch(e){console.warn('Admin action log failed',e)}
@@ -68,8 +69,6 @@ function customerProductionFlags(data:any,cid:string){
  const audits=safeList(data.mini_audits).filter((x:any)=>x.customer_id===cid)
  const warnings=[!c.id?'kein Kunde gewählt':'',c.is_demo&&!isDemoMode()?'Demo-Kunde in Live-Ansicht sichtbar prüfen':'',tools.length===0?'keine Toolfreigaben':'',reports.length===0?'kein Report':'',invoices.length===0?'keine Rechnung':''].filter(Boolean)
  return {isDemo:Boolean(c.is_demo),hasCustomer:Boolean(c.id),hasTools:tools.length>0,hasFiles:files.length>0,hasInvoice:invoices.length>0,hasReport:reports.length>0,hasAudit:audits.length>0,portalSafe:Boolean(c.id)&&tools.length>0,warnings}
-}
-
 }
 
 // DSGVO/Drittland: QR-Codes werden serverseitig vom MMOS-Backend gerendert.
