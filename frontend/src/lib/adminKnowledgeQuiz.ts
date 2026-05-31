@@ -20,6 +20,10 @@ export type QuizQuestion = {
   options: string[]
   correctIndices: number[]
   explanation: string
+  answerMeta?: {
+    shuffled?: boolean
+    distractors?: string
+  }
 }
 
 export const CATEGORY_LABELS: Record<QuizCategory, string> = {
@@ -1132,13 +1136,143 @@ export const ADMIN_KNOWLEDGE_QUESTIONS: QuizQuestion[] = [
   }
 ]
 
+
+const PLAUSIBLE_DISTRACTORS: Record<QuizCategory, string[]> = {
+  foundation: [
+    "Eine interne Admin-Funktion, die nicht automatisch im Kundenportal sichtbar ist",
+    "Ein freigegebenes Kundenportal-Ergebnis ohne Zugriff auf andere Kunden",
+    "Eine Prozesshilfe für Akquise, Betreuung und Nachweisführung",
+    "Eine Rolle mit klar begrenztem Zugriff auf passende Daten"
+  ],
+  crm: [
+    "Eine strukturierte Kundenakte mit Status, Kontakt und Historie",
+    "Eine Pipeline-Stufe für den nächsten Vertriebs- oder Betreuungsschritt",
+    "Eine interne Notiz zur Nachverfolgung des Kundenverlaufs",
+    "Eine Segmentierung nach Paket, Potenzial oder Risiko"
+  ],
+  sales: [
+    "Ein Gesprächsanlass für den Erstkontakt mit lokalem Mehrwert",
+    "Eine Paketempfehlung auf Basis von Bedarf, Wirkung und Aufwand",
+    "Ein Angebot mit klaren Leistungen, Setup und laufender Betreuung",
+    "Ein Lead-Datensatz mit Branche, Ort, Status und nächstem Schritt"
+  ],
+  google: [
+    "Ein Google Business Profil mit Kategorien, Fotos, Beiträgen und Bewertungen",
+    "Eine lokale Sichtbarkeitskennzahl für Suchanfragen im Umfeld",
+    "Eine Optimierungsmaßnahme für Profilqualität und lokale Auffindbarkeit",
+    "Ein Wettbewerbsvergleich mit ähnlichen Betrieben in derselben Region"
+  ],
+  reviews: [
+    "Ein Bewertungsprozess mit öffentlichem Review und internem Feedbackkanal",
+    "Eine Antwortvorlage für sachliche, markenkonforme Kundenkommunikation",
+    "Eine Sentiment-Auswertung aus wiederkehrenden Themen in Bewertungen",
+    "Ein QR-gestützter Bewertungsfluss mit sauberer Weiterleitung"
+  ],
+  automation: [
+    "Ein Workflow mit Auslöser, Bedingung und Aktion",
+    "Eine automatische Erinnerung für wiederkehrende Kundenaufgaben",
+    "Eine Regel, die nach Status oder Paket unterschiedlich reagiert",
+    "Eine interne Automation zur Entlastung im Kundenbetrieb"
+  ],
+  content: [
+    "Ein vorbereiteter Beitrag für Google, Instagram oder Newsletter",
+    "Eine Textvorlage, die an Kunde, Anlass und Kanal angepasst wird",
+    "Eine Freigabe-Schleife für Inhalte vor Veröffentlichung",
+    "Ein Content-Plan für wiederkehrende lokale Sichtbarkeit"
+  ],
+  loyalty: [
+    "Eine QR-Kampagne mit Slug-Seite und klarer Kundenaktion",
+    "Ein Rewards-System mit Punkten, Regeln und Einlösung",
+    "Eine Scan-Regel gegen Mehrfachnutzung und Missbrauch",
+    "Ein Kundenbindungsbaustein für wiederkehrende Besuche"
+  ],
+  reports: [
+    "Ein Monatsreport mit KPI, Maßnahmen und nächster Empfehlung",
+    "Ein exportierbares PDF für Kundennachweis und Beratung",
+    "Eine Freigabeansicht für kundenspezifische Dokumente",
+    "Eine Zusammenfassung von SEO, Reviews, QR und Fortschritt"
+  ],
+  finance: [
+    "Eine Rechnung mit Leistung, Status, Betrag und PDF",
+    "Ein Buchhaltungs-Export für interne Weiterverarbeitung",
+    "Eine Paketgebühr mit Einrichtungskosten und laufendem Preis",
+    "Eine Zahlungs- oder Mahnstufe zur Nachverfolgung offener Beträge"
+  ],
+  operations: [
+    "Ein Health-Check für System, Datenqualität und Betriebsbereitschaft",
+    "Eine Backup- oder Monitoring-Prüfung für den laufenden Betrieb",
+    "Eine Qualitätskontrolle für fehlende Daten und Dubletten",
+    "Ein internes Protokoll für Änderungen und Admin-Aktionen"
+  ],
+  privacy: [
+    "Eine Zugriffstrennung zwischen Admin, Kunde und internem Backoffice",
+    "Eine DSGVO-konforme Begrenzung auf notwendige Daten",
+    "Eine sichere Freigabe nur für den passenden Kundenkontext",
+    "Ein Audit- oder Log-Nachweis für sensible Vorgänge"
+  ]
+}
+
+function shuffleArray<T>(items: T[]): T[] {
+  const copy = [...items]
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = copy[i]
+    copy[i] = copy[j]
+    copy[j] = tmp
+  }
+  return copy
+}
+
+function uniqueText(items: string[]) {
+  const seen = new Set<string>()
+  return items
+    .map((item) => String(item || '').trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false
+      seen.add(item)
+      return true
+    })
+}
+
+function normalizeQuizQuestion(q: QuizQuestion, pool: QuizQuestion[]): QuizQuestion {
+  const correctTexts = uniqueText(q.correctIndices.map((index) => q.options[index]).filter(Boolean))
+  const currentWrong = q.options.filter((_, index) => !q.correctIndices.includes(index))
+
+  const poolWrong = pool
+    .filter((item) => item.category === q.category && item.id !== q.id)
+    .flatMap((item) => item.options.filter((_, index) => !item.correctIndices.includes(index)))
+
+  const categoryWrong = PLAUSIBLE_DISTRACTORS[q.category] || []
+  const wrongTexts = uniqueText([...currentWrong, ...categoryWrong, ...poolWrong])
+    .filter((option) => !correctTexts.includes(option))
+
+  const desiredCount = Math.min(Math.max(4, correctTexts.length + 3), correctTexts.length + wrongTexts.length)
+  const selectedWrong = shuffleArray(wrongTexts).slice(0, Math.max(0, desiredCount - correctTexts.length))
+  const mixed = shuffleArray([
+    ...correctTexts.map((text) => ({ text, correct: true })),
+    ...selectedWrong.map((text) => ({ text, correct: false }))
+  ])
+
+  return {
+    ...q,
+    options: mixed.map((item) => item.text),
+    correctIndices: mixed.map((item, index) => item.correct ? index : -1).filter((index) => index >= 0),
+    answerMeta: {
+      shuffled: true,
+      distractors: 'category_plausible'
+    }
+  }
+}
+
 export function buildQuestionSet(count = 30, categories?: QuizCategory[]) {
   const filtered = categories?.length
     ? ADMIN_KNOWLEDGE_QUESTIONS.filter((q) => categories.includes(q.category))
     : ADMIN_KNOWLEDGE_QUESTIONS
 
-  const shuffled = [...filtered].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, Math.min(count, shuffled.length))
+  const shuffled = shuffleArray(filtered)
+  return shuffled
+    .slice(0, Math.min(count, shuffled.length))
+    .map((question) => normalizeQuizQuestion(question, filtered))
 }
 
 export function scoreQuiz(questions: QuizQuestion[], answers: Record<string, number[]>) {

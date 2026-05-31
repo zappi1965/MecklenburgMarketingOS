@@ -55,7 +55,7 @@ export default function AdminKnowledgeQuizPanel() {
   }
 
   function toggleAnswer(q: QuizQuestion, optionIndex: number) {
-    if (finished && mode === 'exam') return
+    if (finished) return
     setAnswers((prev) => {
       const current = prev[q.id] || []
       if (q.correctIndices.length === 1) {
@@ -108,7 +108,7 @@ export default function AdminKnowledgeQuizPanel() {
           <p className="lead">
             Vollständiger Multiple-Choice-Test zu allen MMOS-Bereichen: CRM, Pipeline,
             Sales, Google, Reviews, Automation, Content, Loyalty, Reports, Finanzen,
-            Betrieb, Datenschutz und Sicherheit.
+            Betrieb, Datenschutz und Sicherheit. Antworten werden auch im Training erst nach der Auswertung angezeigt.
           </p>
         </div>
         <div className="scoreCard">
@@ -195,7 +195,7 @@ export default function AdminKnowledgeQuizPanel() {
               <div className="options">
                 {q.options.map((option, optionIndex) => {
                   const active = selected.includes(optionIndex)
-                  const reveal = finished || mode === 'training'
+                  const reveal = finished
                   const shouldBe = q.correctIndices.includes(optionIndex)
                   const className = [
                     'optionBtn',
@@ -213,7 +213,7 @@ export default function AdminKnowledgeQuizPanel() {
                 })}
               </div>
 
-              {(mode === 'training' && isAnswered || finished) && (
+              {finished && (
                 <div className={correct ? 'explanation good' : 'explanation bad'}>
                   <strong>{correct ? 'Richtig.' : 'Merken:'}</strong>
                   <p>{q.explanation}</p>

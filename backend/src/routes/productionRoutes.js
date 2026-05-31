@@ -5,6 +5,16 @@ const PdfService = require('../services/pdfService')
 const QrService = require('../services/qrService')
 const ApiSyncService = require('../services/apiSyncService')
 const { createInvoiceSchema, createQrCampaignSchema, validate } = require('../validators/schemas')
+const {
+  requireAdminRequest,
+  validateDocumentRows,
+  validateInvoices,
+  runRlsAudit,
+  exportBackupSnapshot,
+  productionSummary,
+  CORE_TABLES
+} = require('../services/productionValidationService')
+const { sendMonitoringAlert } = require('../services/monitoringAlertService')
 
 function productionRoutes(supabase) {
   const router = express.Router()
@@ -70,6 +80,87 @@ function productionRoutes(supabase) {
         content: rendered
       })
       res.json({ ok: true, data: { invoice_number: invoiceNumber, rendered, file } })
+    } catch (e) { next(e) }
+  })
+
+
+  router.get('/validation/summary', async (req, res, next) => {
+    try {
+      requireAdminRequest(req)
+      res.json(await productionSummary(supabase))
+    } catch (e) { next(e) }
+  })
+
+  router.get('/validation/rls', async (req, res, next) => {
+    try {
+      requireAdminRequest(req)
+      res.json(await runRlsAudit(supabase))
+    } catch (e) { next(e) }
+  })
+
+  router.post('/validation/documents', async (req, res, next) => {
+    try {
+      requireAdminRequest(req)
+      res.json(await validateDocumentRows(supabase, req.body.customer_id || req.body.customerId))
+    } catch (e) { next(e) }
+  })
+
+  router.post('/validation/invoices', async (req, res, next) => {
+    try {
+      requireAdminRequest(req)
+      res.json(await validateInvoices(supabase, req.body.customer_id || req.body.customerId || null))
+    } catch (e) { next(e) }
+  })
+
+  router.post('/backup/export', async (req, res, next) => {
+    try {
+      requireAdminRequest(req)
+      const tables = Array.isArray(req.body.tables) && req.body.tables.length ? req.body.tables : CORE_TABLES
+      const limit = Math.min(Number(req.body.limit || 1000), 5000)
+      const snapshot = await exportBackupSnapshot(supabase, tables, limit)
+      try {
+        await supabase.from('backup_drill_runs').insert({
+          status: 'exported',
+          table_count: Object.keys(snapshot.tables || {}).length,
+          row_count: Object.values(snapshot.tables || {}).reduce((sum, t) => sum + Number(t.count || 0), 0),
+          metadata: { mode: 'api_export', limit },
+          created_at: new Date().toISOString()
+        })
+      } catch (_) {}
+      res.json({ ok: true, snapshot })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/monitoring/test-alert', async (req, res, next) => {
+    try {
+      requireAdminRequest(req)
+      const result = await sendMonitoringAlert(supabase, {
+        level: 'test',
+        title: 'MMOS Test-Alarm',
+        message: req.body.message || 'Monitoring-/Fehlerbenachrichtigung ist grundsätzlich eingerichtet.',
+        to: req.body.to,
+        metadata: { source: 'production.validation.test-alert', actor: req.user?.email || req.user?.id || null }
+      })
+      res.json(result)
+    } catch (e) { next(e) }
+  })
+
+  router.get('/live-e2e/:customer_id', async (req, res, next) => {
+    try {
+      requireAdminRequest(req)
+      const customer_id = req.params.customer_id
+      const [summary, documents, invoices, rls] = await Promise.all([
+        productionSummary(supabase),
+        validateDocumentRows(supabase, customer_id).catch((e) => ({ ok: false, error: e.message })),
+        validateInvoices(supabase, customer_id).catch((e) => ({ ok: false, error: e.message })),
+        runRlsAudit(supabase).catch((e) => ({ ok: false, error: e.message }))
+      ])
+      res.json({
+        ok: Boolean(summary.ok && documents.ok && invoices.ok),
+        customer_id,
+        checks: { summary, documents, invoices, rls },
+        timestamp: new Date().toISOString()
+      })
     } catch (e) { next(e) }
   })
 

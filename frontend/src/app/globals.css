@@ -3826,3 +3826,29 @@ input,select,textarea{accent-color:var(--purple)}
   margin:0 8px 6px;
   padding:7px 9px;
 }
+
+
+/* MMOS sales-ready workflow */
+.salesWorkflow{
+  display:grid;
+  gap:18px;
+}
+.workflowSteps{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:14px;
+}
+.salesWorkflow .metric{
+  border:1px solid rgba(148,163,184,.18);
+  border-radius:14px;
+  padding:14px;
+  background:rgba(15,23,42,.42);
+}
+.salesWorkflow .metric b{
+  display:block;
+  font-size:18px;
+}
+.salesWorkflow .metric span{
+  color:var(--muted);
+  font-size:12px;
+}

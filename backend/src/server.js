@@ -147,7 +147,7 @@ for (const [routePath, routeFactory] of adminScopedRoutes) {
   app.use(routePath, requireAdmin, routeFactory(supabaseAdmin))
 }
 
-app.use('/api/production', productionReadinessRoutes(supabaseAdmin))
+app.use('/api/production', requireAdmin, productionReadinessRoutes(supabaseAdmin))
 app.use('/api/document-media', documentMediaRoutes(supabaseAdmin))
 
 app.use('/api/customer-intelligence', requireCustomerAccess(), customerIntelligenceRoutes(supabaseAdmin))

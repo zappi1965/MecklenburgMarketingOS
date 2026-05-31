@@ -137,5 +137,102 @@
       "Demo-Daten",
       "Wissenstest"
     ]
+  },
+  "build_fix_duplicate_labels": {
+    "fixed_at": "2026-05-30 15:04:22",
+    "files": [
+      "frontend/src/app/page.tsx"
+    ],
+    "vercel_error": "An object literal cannot have multiple properties with the same name",
+    "validation": {
+      "labels_duplicate_keys": [],
+      "admin_duplicate_entries": []
+    }
+  },
+  "sales_ready_workflow_quiz_fix": {
+    "fixed_at": "2026-05-30 16:36:13",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "frontend/src/lib/adminKnowledgeQuiz.ts",
+      "frontend/src/components/admin/AdminKnowledgeQuizPanel.tsx",
+      "frontend/src/app/globals.css"
+    ],
+    "workflow": [
+      "Lead finden",
+      "Mini Audit erstellen",
+      "Kunde im CRM anlegen",
+      "Angebot/Paket auswählen",
+      "QR/Review/Google freischalten",
+      "Report erzeugen",
+      "Rechnung schreiben"
+    ],
+    "quiz": [
+      "no reveal during training",
+      "shuffle answer options",
+      "recalculate correct indices",
+      "category-plausible distractors"
+    ]
+  },
+  "production_hardening": {
+    "fixed_at": "2026-05-30 16:41:06",
+    "files": [
+      "scripts/quality-guard.mjs",
+      ".github/workflows/mmos-quality-guard.yml",
+      "frontend/src/app/page.tsx",
+      "frontend/src/components/security/ToolAccessGate.tsx",
+      "supabase/migrations/0092_sales_workflow_production.sql",
+      "docs/production-hardening-checklist.md"
+    ],
+    "capabilities": [
+      "quality guard",
+      "sales workflow status",
+      "sales workflow history",
+      "tool access cache",
+      "supabase production migration"
+    ]
+  },
+  "production_core_finalization": {
+    "fixed_at": "2026-05-30 16:47:05",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "frontend/src/lib/routeAccessPolicy.ts",
+      "backend/src/middleware/productionAccessGuard.js",
+      "supabase/migrations/0093_production_core_finalization.sql",
+      "docs/production-core-finalization.md"
+    ],
+    "capabilities": [
+      "customer portal rights hardening",
+      "document workflow linking",
+      "mini audit to offer to invoice",
+      "production health 2.0",
+      "admin action log",
+      "demo live separation",
+      "smoke test center"
+    ]
+  },
+  "production_final_readiness": {
+    "fixed_at": "2026-05-30 16:50:40",
+    "files": [
+      "backend/src/services/productionValidationService.js",
+      "backend/src/services/monitoringAlertService.js",
+      "backend/src/routes/productionRoutes.js",
+      "backend/src/server.js",
+      "scripts/production-live-e2e.mjs",
+      "scripts/backup-restore-drill.mjs",
+      "supabase/migrations/0094_production_validation_rls_backup_monitoring.sql",
+      "frontend/src/app/page.tsx",
+      "docs/legal/production-legal-finalization.md",
+      "docs/legal/avv-checklist.md"
+    ],
+    "capabilities": [
+      "live e2e validation",
+      "server side production admin guard",
+      "document validation",
+      "invoice and xrechnung validation",
+      "rls audit rpc",
+      "backup restore dry run",
+      "monitoring alert test",
+      "legal readiness templates"
+    ]
   }
 }

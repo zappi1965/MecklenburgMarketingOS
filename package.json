@@ -12,7 +12,12 @@
     "start": "yarn --cwd frontend start",
     "typecheck": "yarn --cwd frontend typecheck",
     "backend:start": "yarn --cwd backend start",
-    "stability:check": "yarn --cwd frontend typecheck && yarn --cwd frontend build"
+    "stability:check": "yarn quality:guard && yarn --cwd frontend typecheck && yarn --cwd frontend build",
+    "quality:guard": "node scripts/quality-guard.mjs",
+    "production:check": "yarn quality:guard && yarn --cwd frontend typecheck",
+    "production:live-e2e": "node scripts/production-live-e2e.mjs",
+    "backup:drill": "node scripts/backup-restore-drill.mjs",
+    "production:final-check": "yarn quality:guard && yarn production:check"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.106.2",

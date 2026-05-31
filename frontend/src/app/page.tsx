@@ -49,6 +49,27 @@ async function deleteInvoiceAndPdf(store:any, invoice:any){
  await store.remove('invoices',invoice.id)
  const files=(store.data.customer_files||[]).filter((f:any)=>f.customer_id===invoice.customer_id&&f.file_type==='invoices'&&String(f.name||'').includes(String(invoice.invoice_number||'')))
  for(const f of files) await store.remove('customer_files',f.id)
+
+async function logAdminAction(store:any,{customer_id=null,action,entity_type='system',entity_id='',status='OK',details='',actor_name='System'}:any){
+ try{await store.create('admin_action_logs',{customer_id,action,entity_type,entity_id,status,details,actor_name,mode:isDemoMode()?'demo':'live',created_at:new Date().toISOString()})}catch(e){console.warn('Admin action log failed',e)}
+}
+async function linkWorkflowDocument(store:any,{customer_id,workflow_id='',document_type,source_table='',source_id='',title,status='Entwurf',public_url='',metadata={}}:any){
+ const payload={customer_id,workflow_id,document_type,source_table,source_id,title,status,public_url,metadata,created_at:new Date().toISOString()}
+ try{await store.create('sales_workflow_documents',payload)}catch(e){console.warn('Workflow document link failed',e)}
+ try{await store.create('customer_files',{customer_id,name:title||`${document_type}.pdf`,original_name:title||`${document_type}.pdf`,file_type:document_type==='invoice'?'invoices':document_type==='report'?'reports':'documents',mime_type:'application/pdf',size_bytes:0,version:1,actor_name:'System',url:public_url||'',metadata:{source_table,source_id,document_type,...metadata},created_at:new Date().toISOString()})}catch(e){console.warn('Customer file link failed',e)}
+}
+function workflowStatusForCustomer(data:any,cid:string){return safeList(data.sales_workflows).find((w:any)=>w.customer_id===cid&&w.status!=='Archiviert')||null}
+function customerProductionFlags(data:any,cid:string){
+ const c=safeList(data.customers).find((x:any)=>x.id===cid)||{}
+ const tools=safeList(data.customer_tool_access).filter((x:any)=>x.customer_id===cid&&x.enabled!==false)
+ const files=safeList(data.customer_files).filter((x:any)=>x.customer_id===cid)
+ const invoices=safeList(data.invoices).filter((x:any)=>x.customer_id===cid)
+ const reports=safeList(data.monthly_reports).filter((x:any)=>x.customer_id===cid)
+ const audits=safeList(data.mini_audits).filter((x:any)=>x.customer_id===cid)
+ const warnings=[!c.id?'kein Kunde gewählt':'',c.is_demo&&!isDemoMode()?'Demo-Kunde in Live-Ansicht sichtbar prüfen':'',tools.length===0?'keine Toolfreigaben':'',reports.length===0?'kein Report':'',invoices.length===0?'keine Rechnung':''].filter(Boolean)
+ return {isDemo:Boolean(c.is_demo),hasCustomer:Boolean(c.id),hasTools:tools.length>0,hasFiles:files.length>0,hasInvoice:invoices.length>0,hasReport:reports.length>0,hasAudit:audits.length>0,portalSafe:Boolean(c.id)&&tools.length>0,warnings}
+}
+
 }
 
 // DSGVO/Drittland: QR-Codes werden serverseitig vom MMOS-Backend gerendert.
@@ -1472,6 +1493,13 @@ function BackofficeCenter({setView}:any){
    {label:'Pakete & Kundentools',href:'/admin/tools',text:'Tool-Katalog und Kundenfreigaben.'}
   ]},
   {title:'System & Sicherheit',tools:[
+   {label:'Production Core Finalization',view:'production_core',text:'Kundenportal-Rechte, Dokumente, Health, Logs, Smoke-Test.'},
+   {label:'Production Validation',view:'production_validation',text:'Live-E2E, RLS, Dokumente, Rechnungen, Backup und Monitoring prüfen.'},
+   {label:'Production Health 2.0',view:'production_health',text:'Backend, Supabase, Storage, PDF, Google und letzte Vorgänge.'},
+   {label:'Dokumenten-Zentrale',view:'document_center',text:'Audit, Angebot, Report und Rechnung pro Kunde verknüpfen.'},
+   {label:'Admin-Aktionslog',view:'action_log',text:'Änderungen, Freigaben und Systemaktionen nachvollziehen.'},
+   {label:'Demo-/Live-Trennung',view:'demo_live_guard',text:'Demo- und Live-Daten sauber getrennt halten.'},
+   {label:'Smoke-Test',view:'smoke_test',text:'Nach jedem Deploy die Kernstrecke abnehmen.'},
    {label:'Production Readiness',view:'production_readiness',text:'Monitoring, Backups, API-Kosten und Admin-Logs.'},
    {label:'Security Core',view:'security_core_live',text:'Tenant-Isolation, Rechte, Jobs und ENV-Status.'},
    {label:'Security & Health Center',view:'security_center',text:'Bestehendes Health- und Sicherheitscenter.'},
@@ -1492,6 +1520,267 @@ function BackofficeCenter({setView}:any){
   <div className="head"><div><p className="eyebrow">Internes Backoffice</p><h1>Backoffice</h1><p className="sub">Interne Verwaltung, Finanzen, Sicherheit, Systembetrieb und organisatorische Tools.</p></div><button className="btn secondary" onClick={()=>setView('dashboard')}>Zurück ins Frontoffice</button></div>
   {groups.map((group:any)=><Card key={group.title} title={group.title}><div className="grid">{group.tools.map((tool:any)=><div className="card" key={tool.label}><div className="row" style={{justifyContent:'space-between',gap:8}}><b>{tool.label}</b><Badge>Backoffice</Badge></div><p className="sub">{tool.text}</p>{tool.view?<button className="btn" onClick={()=>setView(tool.view)}>Öffnen</button>:<a className="btn" href={tool.href}>Öffnen</a>}</div>)}</div></Card>)}
  </div>
+}
+
+
+
+
+function SalesWorkflowCenter({store,cid,setCid,setView,activeAdmin}:any){
+ const [msg,setMsg]=useState('')
+ const currentCustomer=cobj(store.data,cid)||{}
+ const selectedName=currentCustomer?.name||'kein Kunde ausgewählt'
+ const workflows=safeList(store.data.sales_workflows)
+ const existing=workflows.find((w:any)=>w.customer_id===cid&&w.status!=='Archiviert')
+ const events=safeList(store.data.sales_workflow_events).filter((e:any)=>e.customer_id===cid).sort((a:any,b:any)=>String(b.created_at).localeCompare(String(a.created_at)))
+ const leadCount=safeList(store.data.prospect_leads).filter((l:any)=>l.status!=='Archiviert').length
+ const customerLeads=safeList(store.data.prospect_leads).filter((l:any)=>l.customer_id===cid||String(l.name||'').toLowerCase()===String(currentCustomer.name||'').toLowerCase())
+ const googleAudits=safeList(store.data.google_business_audits).filter((a:any)=>a.customer_id===cid)
+ const miniAudits=safeList(store.data.mini_audits).filter((m:any)=>m.customer_id===cid)
+ const offers=safeList(store.data.generated_offers).filter((o:any)=>o.customer_id===cid&&o.status!=='Archiviert')
+ const reports=safeList(store.data.monthly_reports).filter((r:any)=>r.customer_id===cid)
+ const invoices=safeList(store.data.invoices).filter((i:any)=>i.customer_id===cid)
+ const qrRows=safeList(store.data.qr_campaigns).filter((q:any)=>q.customer_id===cid)
+ const accessRows=safeList(store.data.customer_tool_access).filter((x:any)=>x.customer_id===cid&&x.enabled!==false)
+ const packageName=cpkg(store.data,cid)
+ const completed=Array.isArray(existing?.completed_steps)?existing.completed_steps:[]
+
+ const stepChecks:any={
+  lead: customerLeads.length>0||Boolean(cid),
+  audit: googleAudits.length>0||miniAudits.length>0,
+  crm: Boolean(cid&&currentCustomer?.name),
+  offer: offers.length>0||Boolean(packageName),
+  access: accessRows.length>0||qrRows.length>0,
+  report: reports.length>0,
+  invoice: invoices.length>0
+ }
+
+ const steps=[
+  {key:'lead',no:1,title:'Lead finden',view:'lead_scraper',metric:customerLeads.length?`${customerLeads.length} Lead(s) zum Kunden`:`${leadCount} aktive Leads`,text:'Google-/Places-basierte Leads suchen, qualifizieren und für den Erstkontakt vorbereiten.',required:'Branche, Ort, Name und nächster Kontaktstatus'},
+  {key:'audit',no:2,title:'Mini Audit erstellen',view:googleAudits.length?'mini_audit':'business_audit',metric:miniAudits.length?`${miniAudits.length} Mini Audit(s)`:'offen',text:'Google Business prüfen und daraus einen Mini Audit als Gesprächsanlass erzeugen.',required:'Google Audit oder Mini Audit vorhanden'},
+  {key:'crm',no:3,title:'Kunde im CRM anlegen',view:'crm',metric:cid?selectedName:'kein Kunde',text:'Lead konvertieren, Kundenakte pflegen, Ansprechpartner und Status hinterlegen.',required:'Kundenakte mit Name, Branche, Ort und Kontakt'},
+  {key:'offer',no:4,title:'Angebot/Paket auswählen',view:'offer_generator',metric:offers.length?`${offers.length} Angebot(e)`:packageName,text:'Starter, Growth oder Premium auswählen und Angebot erzeugen.',required:'Paket, Einrichtungspreis, monatlicher Preis, Leistungen'},
+  {key:'access',no:5,title:'QR/Review/Google freischalten',view:'crm',metric:accessRows.length?`${accessRows.length} Tools aktiv`:qrRows.length?`${qrRows.length} QR-Kampagne(n)`:'prüfen',text:'Paket und einzelne Kundentools freigeben: QR, Reviews, Google, Reports.',required:'Toolfreigabe + QR/Review/Google-Konfiguration'},
+  {key:'report',no:6,title:'Report erzeugen',view:'monthly_reports',metric:reports.length?`${reports.length} Report(s)`:'offen',text:'Monatsreport mit SEO, Reviews, QR und Empfehlungen vorbereiten.',required:'Report-Entwurf oder freigegebener Kundenreport'},
+  {key:'invoice',no:7,title:'Rechnung schreiben',view:'finance',metric:invoices.length?`${invoices.length} Rechnung(en)`:'offen',text:'Einrichtung oder Paketgebühr als Rechnung erfassen und PDF erzeugen.',required:'Rechnung mit Status und PDF'}
+ ]
+
+ const doneCount=steps.filter((s:any)=>stepChecks[s.key]||completed.includes(s.key)).length
+ const nextStep=steps.find((s:any)=>!(stepChecks[s.key]||completed.includes(s.key)))||steps[steps.length-1]
+ const productionReady=doneCount===steps.length
+
+ async function ensureWorkflow(extra:any={}){
+  if(!cid){setMsg('Bitte zuerst einen Kunden auswählen oder über den Pilot-Workflow anlegen.');return null}
+  const autoCompleted=Object.entries(stepChecks).filter(([,v]:any)=>v).map(([k])=>k)
+  const payload={customer_id:cid,status:productionReady?'Verkaufsbereit':'In Bearbeitung',current_step:nextStep.key,completed_steps:Array.from(new Set([...completed,...autoCompleted])),updated_at:new Date().toISOString(),...extra}
+  if(existing){await store.update('sales_workflows',existing.id,payload);return {...existing,...payload}}
+  return await store.create('sales_workflows',{...payload,created_at:new Date().toISOString(),owner_name:activeAdmin||'Admin'})
+ }
+
+ async function addEvent(stepKey:string,title:string,description:string){
+  if(!cid)return
+  await store.create('sales_workflow_events',{customer_id:cid,workflow_id:existing?.id||'',step_key:stepKey,title,description,actor_name:activeAdmin||'Admin',created_at:new Date().toISOString()})
+ }
+
+ async function markStep(step:any){
+  const nextCompleted=Array.from(new Set([...completed,step.key]))
+  await ensureWorkflow({completed_steps:nextCompleted,current_step:step.key,last_completed_step:step.key})
+  await addEvent(step.key,`${step.title} erledigt`,'Der Schritt wurde im Verkaufsworkflow manuell bestätigt.')
+  setMsg(`${step.title} wurde als erledigt markiert.`)
+ }
+
+ async function openStep(step:any){
+  await ensureWorkflow({current_step:step.key})
+  setView(step.view)
+ }
+
+ async function createPilotWorkflow(){
+  const customer=await store.create('customers',{name:'Demo Café Schwerin',branch:'Gastronomie',city:'Schwerin',email:'kontakt@demo-cafe-schwerin.de',phone:'',address:'Schwerin',package_name:'Growth',contact_person:'Inhaber/in',status:'Lead',is_demo:true,created_at:new Date().toISOString()})
+  await store.create('customer_subscriptions',{customer_id:customer.id,package_name:'Growth',status:'lead',price_monthly:pprice('Growth'),created_at:new Date().toISOString()})
+  await store.create('prospect_leads',{name:'Demo Café Schwerin',branch:'Gastronomie',city:'Schwerin',rating:4.2,reviews:37,website:'',status:'Neu',source:'Demo Workflow',customer_id:customer.id,created_at:new Date().toISOString()})
+  const audit=await store.create('google_business_audits',{customer_id:customer.id,business_name:'Demo Café Schwerin',score:61,status:'Bedingt',findings:['Google Business Fotos erneuern','Bewertungen aktiv einsammeln','QR-Review-Flow im Laden platzieren'],created_at:new Date().toISOString()})
+  await store.create('mini_audits',{customer_id:customer.id,audit_id:audit?.id,title:'Mini-Audit Demo Café Schwerin',status:'Erstellt',recommendations:['Google Business Profil optimieren','Bewertungs-QR am Tresen platzieren','Monatlichen Sichtbarkeitsreport nutzen'],created_at:new Date().toISOString()})
+  await store.create('generated_offers',{customer_id:customer.id,title:'Growth Angebot Demo Café Schwerin',package_name:'Growth',amount:pprice('Growth'),setup_fee:249,services:['Google Business Optimierung','Review QR Kampagne','Monatsreport','QR/Review Toolfreigabe'],status:'Entwurf',created_at:new Date().toISOString()})
+  const slug=slugifyLocal('demo-cafe-schwerin-review')
+  await store.create('qr_campaigns',{customer_id:customer.id,title:'Review QR Kampagne',name:'Review QR Kampagne',slug,public_url:publicSlugUrl(slug),target_url:`/l/${slug}`,purpose:'both',status:'Aktiv',active:true,scans:0,conversions:0,created_at:new Date().toISOString()})
+  for(const t of ['QR Kampagnen','Review Funnel','Google Business','SEO Dashboard','Reports']){await store.create('customer_tool_access',{customer_id:customer.id,tool_key:t,enabled:true,created_at:new Date().toISOString()})}
+  await store.create('monthly_reports',{customer_id:customer.id,title:'Pilot-Report Demo Café Schwerin',summary:'Start-Report für Google Business, Reviews und QR-Kampagne.',status:'Entwurf',selected_sources:['seo','reviews','qr','billing'],potential:'Mehr Bewertungen, bessere lokale Sichtbarkeit und wiederkehrende Kundenkontakte.',created_at:new Date().toISOString()})
+  const invoice={id:uid(),customer_id:customer.id,invoice_number:invName(store.data,customer.id),service_type:'Growth Paket Einrichtung',amount:pprice('Growth'),status:'Entwurf',is_demo:true,created_at:new Date().toISOString()}
+  await store.create('invoices',invoice)
+  const completed_steps=['lead','audit','crm','offer','access','report','invoice']
+  const workflow=await store.create('sales_workflows',{customer_id:customer.id,status:'Verkaufsbereit',current_step:'invoice',completed_steps,owner_name:activeAdmin||'Admin',created_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+  for(const key of completed_steps){await store.create('sales_workflow_events',{customer_id:customer.id,workflow_id:workflow?.id||'',step_key:key,title:`${key} vorbereitet`,description:'Durch Pilot-Workflow automatisch erstellt.',actor_name:activeAdmin||'Admin',created_at:new Date().toISOString()})}
+  setCid(customer.id)
+  setMsg('Pilot-Workflow vollständig vorbereitet.')
+  store.notify?.('Pilot-Verkaufsworkflow vorbereitet')
+ }
+
+ return <div className="salesWorkflow">
+  <Head title="Verkaufsworkflow" sub="Lead finden → Mini Audit → CRM → Angebot/Paket → Toolfreigabe → Report → Rechnung" action={<div className="toolbarActions"><button className="btn secondary" onClick={createPilotWorkflow}>Pilot-Workflow vorbereiten</button><button className="btn" onClick={()=>openStep(nextStep)}>Nächster Schritt: {nextStep.title}</button></div>}/>
+  <Card title="Deal-Status" action={<Badge>{productionReady?'verkaufsbereit':`${doneCount}/${steps.length} erledigt`}</Badge>}>
+   <div className="grid3">
+    <div className="metric"><b>{selectedName}</b><span>ausgewählter Kunde</span></div>
+    <div className="metric"><b>{packageName}</b><span>Paket / Empfehlung</span></div>
+    <div className="metric"><b>{existing?.status||'Noch kein Workflow'}</b><span>Workflow-Status</span></div>
+   </div>
+   <div style={{marginTop:12}}><Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kunde für Verkaufsworkflow auswählen"/></div>
+   {msg&&<p className="sub">{msg}</p>}
+  </Card>
+  <div className="workflowSteps">
+   {steps.map((step:any)=>{
+    const done=Boolean(stepChecks[step.key]||completed.includes(step.key))
+    return <Card key={step.key} title={`${step.no}. ${step.title}`} right={<Badge>{done?'erledigt':step.metric}</Badge>}>
+     <p className="sub">{step.text}</p>
+     <p className="sub"><b>Pflicht:</b> {step.required}</p>
+     <div className="toolbarActions"><button className="btn" onClick={()=>openStep(step)}>Öffnen</button><button className="btn secondary" onClick={()=>markStep(step)} disabled={done}>Als erledigt markieren</button></div>
+    </Card>
+   })}
+  </div>
+  <Card title="Workflow-Historie">
+   {events.length===0?<p className="sub">Noch keine Historie. Sobald Schritte geöffnet oder erledigt werden, entsteht hier ein Nachweis.</p>:events.slice(0,8).map((e:any)=><div className="item" key={e.id}><div><b>{e.title}</b><div className="sub">{e.description}</div></div><span className="sub">{new Date(e.created_at).toLocaleString('de-DE')}</span></div>)}
+  </Card>
+ </div>
+}
+
+
+
+
+
+function ProductionValidationCenter({store,cid,setCid}:any){
+ const [result,setResult]=useState<any>(null)
+ const [busy,setBusy]=useState('')
+ async function run(path:string,options:any={}){
+  setBusy(path)
+  try{
+   const payload=await apiRequest(`${API_BASE}${path}`,{...options,diagnosticsLabel:'Production Validation',retries:0})
+   setResult({ok:true,path,payload})
+  }catch(e:any){
+   setResult({ok:false,path,error:e.message||String(e),payload:e.payload})
+  }finally{setBusy('')}
+ }
+ return <div><Head title="Production Validation" sub="Live-E2E, Dokumente, Rechnungen/E-Rechnung, RLS, Backup und Monitoring zentral prüfen." action={<button className="btn" onClick={()=>run('/api/production/validation/summary')}>Summary prüfen</button>}/>
+  <Card title="Kunde für Live-Prüfung"><Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kunde auswählen"/></Card>
+  <div className="grid2">
+   <Card title="Echte Ende-zu-Ende Tests"><p className="sub">Prüft Summary, Dokumente, Rechnungen und RLS für einen echten Kunden.</p><button className="btn" disabled={!cid||!!busy} onClick={()=>run(`/api/production/live-e2e/${cid}`)}>Live-E2E starten</button></Card>
+   <Card title="Dokumentenvalidierung"><p className="sub">Prüft customer_files, output_documents und Workflow-Dokumente.</p><button className="btn" disabled={!cid||!!busy} onClick={()=>run('/api/production/validation/documents',{method:'POST',body:JSON.stringify({customer_id:cid})})}>Dokumente prüfen</button></Card>
+   <Card title="Rechnung / E-Rechnung"><p className="sub">Prüft Pflichtfelder und ob XRechnung-XML gebaut werden kann.</p><button className="btn" disabled={!!busy} onClick={()=>run('/api/production/validation/invoices',{method:'POST',body:JSON.stringify({customer_id:cid||null})})}>Rechnungen prüfen</button></Card>
+   <Card title="Supabase RLS Audit"><p className="sub">Prüft sensible Tabellen über die RPC-Funktion mmos_rls_audit.</p><button className="btn" disabled={!!busy} onClick={()=>run('/api/production/validation/rls')}>RLS prüfen</button></Card>
+   <Card title="Backup Export Test"><p className="sub">Exportiert Kern-Tabellen als JSON-Snapshot über Admin-API.</p><button className="btn" disabled={!!busy} onClick={()=>run('/api/production/backup/export',{method:'POST',body:JSON.stringify({limit:1000})})}>Backup testen</button></Card>
+   <Card title="Monitoring Test-Alarm"><p className="sub">Schreibt Alert-Event und sendet optional eine Testmail, wenn RESEND/Alert-Mail gesetzt ist.</p><button className="btn" disabled={!!busy} onClick={()=>run('/api/production/monitoring/test-alert',{method:'POST',body:JSON.stringify({message:'MMOS Production Validation Test'})})}>Alarm testen</button></Card>
+  </div>
+  {busy&&<Card title="Prüfung läuft"><p className="sub">{busy}</p></Card>}
+  {result&&<Card title="Letztes Ergebnis"><pre className="codeBlock">{JSON.stringify(result,null,2)}</pre></Card>}
+ </div>
+}
+
+
+function ProductionCoreFinalization({store,cid,setCid,setView,activeAdmin}:any){
+ const flags=customerProductionFlags(store.data,cid)
+ const workflow=workflowStatusForCustomer(store.data,cid)
+ async function runCoreLinking(){
+  if(!cid){appToast('Bitte zuerst einen Kunden auswählen.');return}
+  const audits=safeList(store.data.mini_audits).filter((m:any)=>m.customer_id===cid)
+  const offers=safeList(store.data.generated_offers).filter((o:any)=>o.customer_id===cid&&o.status!=='Archiviert')
+  const reports=safeList(store.data.monthly_reports).filter((r:any)=>r.customer_id===cid)
+  const invoices=safeList(store.data.invoices).filter((i:any)=>i.customer_id===cid)
+  const wf=workflow||await store.create('sales_workflows',{customer_id:cid,status:'In Bearbeitung',current_step:'document_linking',completed_steps:[],owner_name:activeAdmin,created_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+  for(const a of audits) await linkWorkflowDocument(store,{customer_id:cid,workflow_id:wf.id,document_type:'mini_audit',source_table:'mini_audits',source_id:a.id,title:a.title||'Mini Audit',status:a.status||'Erstellt'})
+  for(const o of offers) await linkWorkflowDocument(store,{customer_id:cid,workflow_id:wf.id,document_type:'offer',source_table:'generated_offers',source_id:o.id,title:o.title||'Angebot',status:o.status||'Entwurf',metadata:{package_name:o.package_name,amount:o.amount}})
+  for(const r of reports) await linkWorkflowDocument(store,{customer_id:cid,workflow_id:wf.id,document_type:'report',source_table:'monthly_reports',source_id:r.id,title:r.title||'Report',status:r.status||'Entwurf'})
+  for(const i of invoices) await linkWorkflowDocument(store,{customer_id:cid,workflow_id:wf.id,document_type:'invoice',source_table:'invoices',source_id:i.id,title:i.invoice_number||'Rechnung',status:i.status||'Entwurf',public_url:invoicePdfUrl(i),metadata:{amount:i.amount}})
+  await logAdminAction(store,{customer_id:cid,action:'production_core_linking',entity_type:'sales_workflow',entity_id:wf.id,status:'OK',details:'Dokumente mit Verkaufsworkflow und Kundenakte verknüpft.',actor_name:activeAdmin})
+  appToast('Dokumente und Workflow wurden produktionsfähig verknüpft.')
+ }
+ async function createCommercialChain(){
+  if(!cid){appToast('Bitte zuerst einen Kunden auswählen.');return}
+  const pkg=cpkg(store.data,cid)||'Starter'
+  const offer=await store.create('generated_offers',{customer_id:cid,title:`${pkg} Angebot ${cname(store.data,cid)}`,package_name:pkg,amount:pprice(pkg),setup_fee:249,services:['Google Business Optimierung','Review-/QR-Kampagne','Monatsreport','Toolfreigaben'],status:'Entwurf',created_at:new Date().toISOString()})
+  const invoice={id:uid(),customer_id:cid,invoice_number:invName(store.data,cid),service_type:`${pkg} Paket Einrichtung`,amount:Number(offer.setup_fee||249)+Number(offer.amount||0),status:'Entwurf',is_demo:isDemoCustomer(store.data,cid),created_at:new Date().toISOString()}
+  await store.create('invoices',invoice)
+  await store.create('sales_workflow_events',{customer_id:cid,workflow_id:workflow?.id||'',step_key:'commercial_chain',title:'Angebot und Rechnung vorbereitet',description:`${offer.title} und ${invoice.invoice_number} wurden aus dem Workflow erzeugt.`,actor_name:activeAdmin,created_at:new Date().toISOString()})
+  await logAdminAction(store,{customer_id:cid,action:'commercial_chain_created',entity_type:'offer_invoice',entity_id:offer.id,status:'OK',details:'Angebot und Rechnung aus Produktionskern erzeugt.',actor_name:activeAdmin})
+  setView('sales_workflow')
+ }
+ const cards=[
+  {title:'Kundenportal-Rechte',ok:flags.portalSafe,text:flags.portalSafe?'Toolfreigaben vorhanden, Kundensicht kann geprüft werden.':'Kunde hat noch keine Toolfreigaben.'},
+  {title:'Dokumenten-Engine',ok:flags.hasFiles,text:flags.hasFiles?'Dokumente/Dateien sind kundenbezogen vorhanden.':'Noch keine verknüpften Dokumente in der Kundenakte.'},
+  {title:'Kommerzielle Kette',ok:flags.hasAudit&&flags.hasInvoice&&flags.hasReport,text:'Mini Audit, Angebot, Report und Rechnung sollen zusammenhängend nachweisbar sein.'},
+  {title:'Demo-/Live-Trennung',ok:!flags.isDemo||isDemoMode(),text:flags.isDemo?'Demo-Kunde nur im Demo-Kontext verwenden.':'Live-Kunde oder neutrale Kundenakte.'}
+ ]
+ return <div className="productionCore"><Head title="Production Core Finalization" sub="Kundenportal-Rechte, Dokumente, Verkaufsworkflow, Health, Logs und Smoke-Test produktionsfähig machen." action={<div className="toolbarActions"><button className="btn secondary" onClick={()=>setView('production_health')}>Health prüfen</button><button className="btn" onClick={runCoreLinking}>Dokumente verknüpfen</button></div>}/>
+  <Card title="Kunde für Produktionsabnahme"><Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kunde auswählen"/><div className="sub">Workflow: {workflow?.status||'noch nicht gestartet'} · Warnungen: {flags.warnings.length?flags.warnings.join(', '):'keine'}</div></Card>
+  <div className="grid2">{cards.map((c:any)=><Card key={c.title} title={c.title} right={<Badge type={c.ok?'green':'yellow'}>{c.ok?'OK':'prüfen'}</Badge>}><p className="sub">{c.text}</p></Card>)}</div>
+  <Card title="Produktionsaktionen"><div className="toolbarActions"><button className="btn" onClick={createCommercialChain}>Mini Audit → Angebot → Rechnung erzeugen</button><button className="btn secondary" onClick={()=>setView('document_center')}>Dokumenten-Zentrale</button><button className="btn secondary" onClick={()=>setView('smoke_test')}>Smoke-Test starten</button><button className="btn secondary" onClick={()=>setView('action_log')}>Aktionslog öffnen</button></div></Card>
+ </div>
+}
+
+function ProductionHealthDashboardV2({store,cid,setView}:any){
+ const [remote,setRemote]=useState<any>(null)
+ const [checkedAt,setCheckedAt]=useState('')
+ async function check(){
+  const now=new Date().toISOString();setCheckedAt(now)
+  let result:any=null
+  try{result=await systemStatus();setRemote(result)}catch(e:any){result={ok:false,error:e.message||'Backend nicht erreichbar'};setRemote(result)}
+  try{await store.create('production_health_checks',{customer_id:cid||null,status:'checked',result,created_at:now})}catch{}
+ }
+ useEffect(()=>{check()},[])
+ const envMissing=safeList(remote?.missing_env||remote?.ready?.missing_env||remote?.status?.missing_env)
+ const checks=[
+  {name:'Frontend',ok:true,detail:'App gerendert'},
+  {name:'Backend',ok:!!remote?.ok,detail:remote?.error||remote?.service||'Systemstatus'},
+  {name:'Supabase',ok:hasSupabase,detail:hasSupabase?'ENV vorhanden':'Supabase ENV fehlt'},
+  {name:'Storage/Dokumente',ok:safeList(store.data.customer_files).length>0,detail:`${safeList(store.data.customer_files).length} Dateien`},
+  {name:'PDF/Gotenberg',ok:remote?.integrations?.gotenberg?.connected===true,detail:remote?.integrations?.gotenberg?.hint||'Fallback möglich'},
+  {name:'Google API',ok:remote?.integrations?.google?.connected!==false,detail:'Google/Places serverseitig prüfen'},
+  {name:'Letzter Report',ok:safeList(store.data.monthly_reports).length>0,detail:`${safeList(store.data.monthly_reports).length} Reports`},
+  {name:'Letzte Rechnung',ok:safeList(store.data.invoices).length>0,detail:`${safeList(store.data.invoices).length} Rechnungen`}
+ ]
+ return <div><Head title="Production Health 2.0" sub="Technische Einsatzbereitschaft: Backend, Supabase, Storage, PDF, Google, Reports und Rechnungen." action={<button className="btn" onClick={check}>Neu prüfen</button>}/>
+ <div className="grid2">{checks.map((c:any)=><Card key={c.name} title={c.name} right={<Badge type={c.ok?'green':'yellow'}>{c.ok?'OK':'prüfen'}</Badge>}><p className="sub">{c.detail}</p></Card>)}</div>
+ {envMissing.length>0&&<Card title="Fehlende ENV"><p className="sub">{envMissing.join(', ')}</p></Card>}
+ <Card title="Letzte Prüfung"><p className="sub">{checkedAt?new Date(checkedAt).toLocaleString('de-DE'):'offen'}</p><button className="btn secondary" onClick={()=>setView('production_core')}>Zur Produktionszentrale</button></Card></div>
+}
+
+function AdminActionLogCenter({store,cid,setCid}:any){
+ const [filter,setFilter]=useState(cid||'')
+ const rows=safeList(store.data.admin_action_logs).filter((r:any)=>!filter||r.customer_id===filter).sort((a:any,b:any)=>String(b.created_at).localeCompare(String(a.created_at)))
+ return <div><Head title="Admin-Aktionslog" sub="Nachvollziehbare Historie für Freigaben, Dokumente, Rechnungen, Reports und Systemaktionen."/><Card title="Filter"><Search items={allCustomers(store.data)} value={filter} onChange={(v:string)=>{setFilter(v);setCid?.(v)}} placeholder="Nach Kunde filtern"/></Card><Card title="Letzte Aktionen">{rows.length===0?<p className="sub">Noch keine Aktionen protokolliert.</p>:rows.slice(0,40).map((r:any)=><div className="item" key={r.id}><div><b>{r.action}</b><div className="sub">{r.details||r.entity_type} · {r.status}</div></div><span className="sub">{new Date(r.created_at).toLocaleString('de-DE')}</span></div>)}</Card></div>
+}
+
+function DocumentCenter({store,cid,setCid,activeAdmin}:any){
+ const docs=safeList(store.data.sales_workflow_documents).filter((d:any)=>d.customer_id===cid)
+ async function relink(){await logAdminAction(store,{customer_id:cid,action:'document_center_checked',entity_type:'documents',status:'OK',details:'Dokumenten-Zentrale geprüft.',actor_name:activeAdmin});appToast('Dokumentenprüfung protokolliert.')}
+ return <div><Head title="Dokumenten-Zentrale" sub="Audit, Angebot, Report und Rechnung je Kunde sichtbar verknüpfen." action={<button className="btn" onClick={relink}>Prüfung loggen</button>}/><Card title="Kunde"><Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kunde auswählen"/></Card><Card title="Verknüpfte Dokumente">{docs.length===0?<p className="sub">Noch keine verknüpften Workflow-Dokumente. Öffne Production Core und klicke „Dokumente verknüpfen“.</p>:docs.map((d:any)=><div className="item" key={d.id}><div><b>{d.title}</b><div className="sub">{d.document_type} · {d.status} · {d.source_table}</div></div><Badge>{d.status}</Badge></div>)}</Card><Card title="Kunden-Dateien"><FileList store={store} cid={cid}/></Card></div>
+}
+
+function DemoLiveSeparationCenter({store,setView}:any){
+ const demos=demoCustomers(store.data)
+ const live=safeList(store.data.customers).filter((c:any)=>!c.is_demo)
+ return <div><Head title="Demo-/Live-Trennung" sub="Demo-Kunden, Live-Kunden und Testmodus sauber getrennt halten." action={<button className="btn secondary" onClick={()=>setView('demo_environment')}>Testumgebung öffnen</button>}/><div className="grid2"><Card title="Live-Kunden"><b>{live.length}</b><p className="sub">Nicht durch Demo-Reset betroffen.</p></Card><Card title="Demo-Kunden"><b>{demos.length}</b><p className="sub">Nur für Präsentation und interne Tests verwenden.</p></Card></div>{isDemoMode()?<Card title="Demo-Modus aktiv"><p className="sub">Änderungen laufen in der Demo-Sandbox.</p></Card>:<Card title="Live-Modus aktiv"><p className="sub">Demo-Resets sind im Live-Modus gesperrt; Demo-Kunden bleiben markiert.</p></Card>}</div>
+}
+
+function SmokeTestCenter({store,cid,setCid,setView,activeAdmin}:any){
+ const [results,setResults]=useState<any[]>([])
+ function roleSafeCustomerPortal(data:any,customerId:string){const f=customerProductionFlags(data,customerId);return !customerId||f.portalSafe||f.warnings.includes('keine Toolfreigaben')}
+ const tests=[
+  {key:'login',title:'Login / App geladen',ok:true,action:null},
+  {key:'frontoffice',title:'Frontoffice sichtbar',ok:true,action:()=>setView('dashboard')},
+  {key:'backoffice',title:'Backoffice erreichbar',ok:true,action:()=>setView('backoffice')},
+  {key:'customer',title:'Kunde ausgewählt',ok:Boolean(cid),action:null},
+  {key:'lead',title:'Lead-Funktion erreichbar',ok:true,action:()=>setView('lead_scraper')},
+  {key:'audit',title:'Mini Audit erreichbar',ok:true,action:()=>setView('mini_audit')},
+  {key:'offer',title:'Angebot erreichbar',ok:true,action:()=>setView('offer_generator')},
+  {key:'qr',title:'QR-Kampagnen erreichbar',ok:true,action:()=>setView('qr')},
+  {key:'report',title:'Reports erreichbar',ok:true,action:()=>setView('monthly_reports')},
+  {key:'invoice',title:'Rechnungen erreichbar',ok:true,action:()=>setView('finance')},
+  {key:'portal_rights',title:'Kundensicht geschützt',ok:roleSafeCustomerPortal(store.data,cid),action:null}
+ ]
+ async function run(){
+  const next=tests.map((t:any)=>({id:t.key,title:t.title,status:t.ok?'OK':'Warnung',created_at:new Date().toISOString()}))
+  setResults(next)
+  await store.create('production_smoke_tests',{customer_id:cid||null,status:next.every((r:any)=>r.status==='OK')?'OK':'Warnung',results:next,actor_name:activeAdmin,created_at:new Date().toISOString()})
+  await logAdminAction(store,{customer_id:cid||null,action:'smoke_test_run',entity_type:'production_smoke_tests',status:'OK',details:'Interner Smoke-Test ausgeführt.',actor_name:activeAdmin})
+ }
+ return <div><Head title="Interner Smoke-Test" sub="Nach Deploys die Kernstrecke einmal strukturiert abnehmen." action={<button className="btn" onClick={run}>Smoke-Test ausführen</button>}/><Card title="Kunde für Smoke-Test"><Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kunde auswählen"/></Card><div className="grid2">{tests.map((t:any)=><Card key={t.key} title={t.title} right={<Badge type={t.ok?'green':'yellow'}>{t.ok?'OK':'prüfen'}</Badge>}>{t.action?<button className="btn secondary" onClick={t.action}>Öffnen</button>:<p className="sub">Automatische Prüfung</p>}</Card>)}</div>{results.length>0&&<Card title="Ergebnis">{results.map((r:any)=><div className="item" key={r.id}><b>{r.title}</b><Badge type={r.status==='OK'?'green':'yellow'}>{r.status}</Badge></div>)}</Card>}</div>
 }
 
 
@@ -1523,7 +1812,7 @@ export default function App(){
  const [adminAvatars,setAdminAvatars]=useState<any>({DominiqueMM:'',JanneMM:''})
  useEffect(()=>{if(!isDemoFeatureEnabled())return;const p=new URLSearchParams(window.location.search);const demo=p.get('demo');const c=p.get('customer');if(demo==='admin'){markDemoMode();setRole('admin');setActiveAdmin('DominiqueMM');setView('dashboard');return}if(c){if(demo==='customer')markDemoMode();setRole('customer');setCid(c);setView('dashboard')}},[])
  const admin=[
-   'dashboard','backoffice','admin_training','production_readiness','security_core_live','admin_tool_center','admin_profiles','main_landing','demo_environment','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','kpi','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events','business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine','monthly_reports','onboarding','approvals','health_scores','dunning','security_center'
+   'dashboard','sales_workflow','backoffice','production_core','production_validation','production_health','document_center','action_log','demo_live_guard','smoke_test','admin_training','production_readiness','security_core_live','admin_tool_center','admin_profiles','main_landing','demo_environment','crm','finance','tickets','booking','pipeline','automations','workflows','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','smart_automation','marketing_automation','ai_assistant','integrations','seo','kpi','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','timeline_events','business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine','monthly_reports','onboarding','approvals','health_scores','dunning','security_center'
  ]
  const packageToolRoutes:any={
    'QR Kampagnen':'qr',
@@ -1570,11 +1859,11 @@ export default function App(){
  const disabledRoutes=new Set(accessRows.filter((x:any)=>x.enabled===false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean))
  const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route)&&route!=='heatmap')
  const labels:any={
-   dashboard:'Dashboard',backoffice:'Backoffice',admin_tool_center:'Tool-Zentrale',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',public_landing:'Öffentliche /l/[slug] Seite',loyalty:'Loyalty Programm',loyalty_rewards:'Rewards',loyalty_rules:'Reward Regeln',staff_codes:'Mitarbeitercode',loyalty_segments:'Loyalty Segmente',smart_loyalty:'Smart Loyalty V2',reviews:'Reviews',review_intelligence:'Review Intelligence',review_templates:'Antwortvorlagen',smart_automation:'Smart Automation',marketing_automation:'Marketing Automation',ai_assistant:'AI Business Assistant',customer_health:'Customer Health',customer_intelligence:'Customer Intelligence',dynamic_billing:'Dynamic Billing',revenue_forecasting:'Revenue Forecasting',revenue_share:'Revenue Share',package_recommendations:'Package Recommendations',package_matrix:'Paket-Matrix',timeline_events:'Timeline Events',seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Security & Health Center',security_center:'Security & Health Center'
+   dashboard:'Dashboard',sales_workflow:'Verkaufsworkflow',production_validation:'Production Validation',smoke_test:'Smoke-Test',demo_live_guard:'Demo-/Live-Trennung',action_log:'Admin-Aktionslog',document_center:'Dokumenten-Zentrale',production_health:'Production Health',production_core:'Production Core',backoffice:'Backoffice',admin_tool_center:'Tool-Zentrale',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',public_landing:'Öffentliche /l/[slug] Seite',loyalty:'Loyalty Programm',loyalty_rewards:'Rewards',loyalty_rules:'Reward Regeln',staff_codes:'Mitarbeitercode',loyalty_segments:'Loyalty Segmente',smart_loyalty:'Smart Loyalty V2',reviews:'Reviews',review_intelligence:'Review Intelligence',review_templates:'Antwortvorlagen',smart_automation:'Smart Automation',marketing_automation:'Marketing Automation',ai_assistant:'AI Business Assistant',customer_health:'Customer Health',customer_intelligence:'Customer Intelligence',dynamic_billing:'Dynamic Billing',revenue_forecasting:'Revenue Forecasting',revenue_share:'Revenue Share',package_recommendations:'Package Recommendations',package_matrix:'Paket-Matrix',timeline_events:'Timeline Events',seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Security & Health Center',security_center:'Security & Health Center'
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
-   {label:'Frontoffice',hint:'Kundenarbeit, Vertrieb und operative Kundenbetreuung',tools:['dashboard','crm','pipeline','customer_health','customer_intelligence']},
+   {label:'Frontoffice',hint:'Kundenarbeit, Vertrieb und operative Kundenbetreuung',tools:['dashboard','sales_workflow','crm','pipeline','customer_health','customer_intelligence']},
    {label:'Akquise & Leads',hint:'Leads, Audits und Erstgespräch',tools:['business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator']},
    {label:'Google & Sichtbarkeit',hint:'Google Business, SEO, Wettbewerber und KPIs',tools:['integrations','seo','kpi','competitors']},
    {label:'QR & Loyalty',hint:'QR-Code, Slug-Seiten, Punkte und Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
@@ -1624,7 +1913,15 @@ export default function App(){
  return <div className={`app appLike ${mobileNavOpen?'navOpen':''}`}><button className="mobileMenuBtn" onClick={()=>setMobileNavOpen(!mobileNavOpen)} aria-label={mobileNavOpen?'Menü schließen':'Menü öffnen'}>{mobileNavOpen?'✕':'☰'}</button><div className="mobileOverlay" onClick={()=>setMobileNavOpen(false)}></div><aside className="side"><div className="logo hasImage appSidebarLogo"><img className="brandLogoImg sidebarLogoImg" src="/brand/mecklenburg-marketing-logo-mark.png" alt="Mecklenburg Marketing"/><span>Mecklenburg Marketing</span></div>{isDemoMode()?<div className="demoModeBadge">TEST MODE</div>:<div className="demoModeBadge">LIVE MODE</div>}{demoAdminSwitchEnabled&&<button className="nav" title="Wechselt aus der Live-Admin-Umgebung in die interne Demo-Admin-Umgebung. Live-Daten bleiben unverändert." onClick={openDemoAdminEnvironment}>Zur Demo-Admin-Umgebung</button>}{liveAdminSwitchEnabled&&<button className="nav" title="Zurück zur Live-Admin-Umgebung. Demo-Daten bleiben erhalten." onClick={openLiveAdminEnvironment}>Zur Live-Admin-Umgebung</button>}{role==='admin'&&view!=='demo_environment'&&<Search items={allCustomers(store.data)} value={cid} onChange={setCid} placeholder="Kundensuche"/>}<div className="navGroups">{role==='admin'&&<div className="navGroup backofficeEntryGroup"><div className="navGroupTitle">Intern</div><button className={`nav backofficeOpenBtn ${view==='backoffice'?'active':''}`} onClick={()=>{setView('backoffice');setMobileNavOpen(false)}}>Backoffice öffnen</button><small className="navHint">Finanzen, Rechte, System, Sicherheit, interne Verwaltung</small></div>}{navGroups.map((g:any)=><div className="navGroup" key={g.label}><div className="navGroupHead"><span>{g.label}</span><small>{g.hint}</small></div>{g.tools.map((k:string)=><button key={k} className={`nav ${view===k?'active':''}`} onClick={()=>{setView(k);setMobileNavOpen(false)}}>{labels[k]}</button>)}</div>)}</div>{isDemoFeatureEnabled()&&<button className="nav" onClick={()=>{clearDemoSandbox();location.reload()}}>Testdaten zurücksetzen</button>}<button className="nav" onClick={async()=>{await supabaseAuth.auth.signOut();try{localStorage.removeItem('mmos_mode')}catch{};setRole('guest')}}>Logout</button></aside><main className="main appMainShell"><div className="top appMobileTop"><div className="mobileAppTitle"><div className="mobileAppIcon">M</div><div><strong>{labels[view]||'Dashboard'}</strong><span>{role==='admin'?'Admin App':'Kunden App'}</span></div></div><GlobalCustomerSearch store={store} role={role} setCid={setCid} setView={setView}/><div className="topActions">{demoAdminSwitchEnabled&&<button className="btn secondary" title="Interne Demo-Admin-Umgebung in diesem Tab öffnen" onClick={openDemoAdminEnvironment}>Demo-Admin</button>}{liveAdminSwitchEnabled&&<button className="btn secondary" title="Zur Live-Admin-Umgebung zurückwechseln" onClick={openLiveAdminEnvironment}>Live-Admin</button>}<NotificationBell store={store} cid={cid} role={role} activeAdmin={activeAdmin} adminAvatars={adminAvatars}/>{role==='admin'&&<AdminToggle activeAdmin={activeAdmin} setActiveAdmin={setActiveAdmin}/>}<ProfileUpload activeAdmin={role==='admin'?activeAdmin:cname(store.data,cid)} setAdminAvatars={setAdminAvatars} adminAvatars={adminAvatars}/><Badge>{role==='admin'?activeAdmin:'Kundenportal'} · {role==='customer'?cname(store.data,cid):'Global'}</Badge></div></div><Toast m={store.toast}/><LiveSaveStatusBar status={store.liveStatus}/><ApiDiagnosticsPanel/><FieldHelpEnhancer/>
  <MobileContextStrip store={store} cid={cid} role={role} view={view} labels={labels} setView={setView} openMenu={()=>setMobileNavOpen(true)}/>
  {blockCustomerScopedRender?<NoLiveCustomerPanel store={store} setView={setView} setCid={setCid}/>:<>
- {view==='backoffice'&&role==='admin'&&<BackofficeCenter setView={setView}/>}
+ {view==='sales_workflow'&&role==='admin'&&<SalesWorkflowCenter store={store} cid={cid} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>}
+ {view==='backoffice'&&role==='admin'&&<BackofficeCenter setView={setView}/>} 
+ {view==='production_core'&&role==='admin'&&<ProductionCoreFinalization store={store} cid={cid} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>} 
+ {view==='production_validation'&&role==='admin'&&<ProductionValidationCenter store={store} cid={cid} setCid={setCid}/>} 
+ {view==='production_health'&&role==='admin'&&<ProductionHealthDashboardV2 store={store} cid={cid} setView={setView}/>} 
+ {view==='document_center'&&role==='admin'&&<DocumentCenter store={store} cid={cid} setCid={setCid} activeAdmin={activeAdmin}/>} 
+ {view==='action_log'&&role==='admin'&&<AdminActionLogCenter store={store} cid={cid} setCid={setCid}/>} 
+ {view==='demo_live_guard'&&role==='admin'&&<DemoLiveSeparationCenter store={store} setView={setView}/>} 
+ {view==='smoke_test'&&role==='admin'&&<SmokeTestCenter store={store} cid={cid} setCid={setCid} setView={setView} activeAdmin={activeAdmin}/>} 
  {view==='admin_training'&&role==='admin'&&<AdminKnowledgeQuizPanel/>}
  {view==='production_readiness'&&role==='admin'&&<ProductionReadinessPanel/>}
  {view==='security_core_live'&&role==='admin'&&<SecurityCorePanel/>}

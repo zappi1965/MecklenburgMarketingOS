@@ -38,3 +38,22 @@ export function customerPackageAllowsTool(profile: any, toolKey: string) {
   const tier = normalizeTier(profile?.package_name || profile?.package || profile?.tier)
   return PACKAGE_LEVEL[tier] >= PACKAGE_LEVEL[tool.packageMin]
 }
+
+export const BACKOFFICE_ROUTE_PREFIXES = [
+  '/admin',
+  '/crm/customer-health',
+  '/media/report-center',
+  '/automation/playbooks'
+]
+
+export function isBackofficeRoute(pathname: string) {
+  const path = String(pathname || '')
+  return BACKOFFICE_ROUTE_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix + '/'))
+}
+
+export function customerCanOpenPath(profile: any, pathname: string) {
+  if (isActiveAdmin(profile)) return true
+  if (!isActiveCustomer(profile)) return false
+  if (isBackofficeRoute(pathname)) return false
+  return true
+}
