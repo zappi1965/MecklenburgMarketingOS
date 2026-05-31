@@ -479,5 +479,22 @@
       "idempotent /api/store create by id",
       "QR UI hydration after backend save"
     ]
+  },
+  "slug_reviews_rewards_visibility_fix": {
+    "fixed_at": "2026-05-31 11:34:11",
+    "base": "MMOS_QR_DUPLICATE_IDEMPOTENT_SAVE_FIX_FULLBUILD.zip",
+    "files": [
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "frontend/src/app/globals.css",
+      "SLUG_REVIEWS_REWARDS_VISIBILITY_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "public reviews infer qr campaign from slug",
+      "review_feedback includes campaign id",
+      "qr campaign metadata review count",
+      "rewards visible anytime on slug page",
+      "customer rewards not hidden by campaign filter"
+    ]
   }
 }

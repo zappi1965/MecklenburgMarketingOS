@@ -43,7 +43,8 @@ export default function PublicLoyaltyPage() {
   const [loading, setLoading] = useState(false)
   const [redeeming, setRedeeming] = useState<string | null>(null)
   const [staffCodes, setStaffCodes] = useState<Record<string, string>>({})
-  const [rewardOverviewOpen, setRewardOverviewOpen] = useState(false)
+  const [rewardOverviewOpen, setRewardOverviewOpen] = useState(true)
+  const [submittedReview, setSubmittedReview] = useState<any>(null)
   const rewardOverviewRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -137,14 +138,35 @@ export default function PublicLoyaltyPage() {
           customer_id: response?.program?.customer_id || status?.customer_id,
           loyalty_program_id: response?.program?.id || status?.program?.id,
           loyalty_customer_id: response?.member?.id,
-          qr_campaign_id: response?.program?.qr_campaign_id || status?.program?.qr_campaign_id,
+          qr_campaign_id: response?.program?.qr_campaign_id || status?.program?.qr_campaign_id || status?.qr_campaign?.id,
           reviewer_name: displayName,
           reviewer_email: email,
           rating,
           feedback_text: reviewText
         })
-        setHint(review?.ok ? 'Danke für deine Bewertung.' : 'Bewertung gespeichert.')
-        if (!showLoyalty) setResult({ ...response, review_submitted: true, points_added: 0, points_balance: response?.member?.points_balance || 0 })
+        setSubmittedReview(review?.feedback || null)
+        setStatus((current: any) => current ? ({
+          ...current,
+          qr_campaign: current.qr_campaign ? {
+            ...current.qr_campaign,
+            metadata: {
+              ...(current.qr_campaign.metadata || {}),
+              review_count: Number(current.qr_campaign.metadata?.review_count || 0) + 1,
+              last_review_rating: rating
+            }
+          } : current.qr_campaign
+        }) : current)
+        setHint(review?.campaign_review_saved ? 'Danke, deine Bewertung wurde der Kampagne zugeordnet.' : review?.ok ? 'Danke für deine Bewertung.' : 'Bewertung gespeichert.')
+        setResult((current: any) => ({
+          ...(current || response || {}),
+          review_submitted: true,
+          review_feedback: review?.feedback || null,
+          points_added: showLoyalty ? (response?.points_added || current?.points_added || 0) : 0,
+          points_balance: response?.member?.points_balance || response?.points_balance || current?.points_balance || 0,
+          member: response?.member || current?.member || null,
+          program: response?.program || current?.program || status?.program || null,
+          redemptions: response?.redemptions || current?.redemptions || []
+        }))
       }
 
       // DSGVO/Drittland: Kein automatischer Redirect zu Google mehr.
@@ -252,6 +274,16 @@ export default function PublicLoyaltyPage() {
             </>
           )}
 
+          {showLoyalty && (
+            <div className="publicRewardQuickPanel">
+              <div>
+                <b>Rewards jederzeit ansehen</b>
+                <span>{visibleRewards.length ? `${visibleRewards.length} Reward(s) verfügbar` : 'Aktuell sind noch keine Rewards hinterlegt.'}</span>
+              </div>
+              <button type="button" onClick={openRewardOverview}>Rewards anzeigen</button>
+            </div>
+          )}
+
           {!result && (
             <form onSubmit={submit} className="publicForm">
               <div className="publicAuthNotice">
@@ -326,7 +358,7 @@ export default function PublicLoyaltyPage() {
                     <div key={rewardId || r.title} className={isUnlocked ? 'publicRewardItem publicRewardRedeemItem' : 'publicRewardItem'}>
                       <div className="publicRewardText">
                         <span>{r.title || r.name || 'Reward'}</span>
-                        <em>{required} Punkte Â· {isUnlocked ? 'verfügbar' : result ? `noch ${missing} Punkte` : 'nach Anmeldung prüfbar'}</em>
+                        <em>{required} Punkte · {isUnlocked ? 'verfügbar' : result ? `noch ${missing} Punkte` : 'nach Anmeldung prüfbar'}</em>
                       </div>
 
                       {isUnlocked && (
@@ -361,6 +393,13 @@ export default function PublicLoyaltyPage() {
               <p>{successMessage}</p>
               <p>Du hast {pointsAdded || 0} Punkte gesammelt. Dein aktueller Stand: <b>{points}</b> Punkte.</p>
 
+              {submittedReview && (
+                <div className="publicReviewSavedBox">
+                  <b>Bewertung gespeichert</b>
+                  <span>{rating} Sterne · der Kampagne zugeordnet</span>
+                </div>
+              )}
+
               {unlockedRewards.length > 0 && (
                 <div className="publicRewards">
                   <b>Jetzt verfügbar</b>
@@ -371,7 +410,7 @@ export default function PublicLoyaltyPage() {
                       <div key={rewardId || r.title} className="publicRewardItem publicRewardRedeemItem">
                         <div className="publicRewardText">
                           <span>{r.title || r.name || 'Reward'}</span>
-                          <em>{rewardPoints(r)} Punkte Â· {rewardAllowsMultiple(r) ? 'mehrfach einlösbar' : 'einmalig einlösbar'}</em>
+                          <em>{rewardPoints(r)} Punkte · {rewardAllowsMultiple(r) ? 'mehrfach einlösbar' : 'einmalig einlösbar'}</em>
                         </div>
                         {onceRedeemed ? (
                           <strong className="publicRedeemedBadge">Bereits eingelöst</strong>

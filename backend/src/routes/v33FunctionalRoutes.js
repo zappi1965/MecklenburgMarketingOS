@@ -494,7 +494,8 @@ function v33FunctionalRoutes(supabase) {
         }
       }
     } catch (_) {}
-    const reward = matches.find(r => r && r.active !== false && (!r.qr_campaign_id || !campaignId || String(r.qr_campaign_id) === String(campaignId))) || matches.find(r => r && r.active !== false)
+    // Kampagnen-spezifische Rewards zuerst, ansonsten jeder aktive Customer-Reward.
+    const reward = matches.find(r => r && r.active !== false && r.qr_campaign_id && campaignId && String(r.qr_campaign_id) === String(campaignId)) || matches.find(r => r && r.active !== false)
     return reward || null
   }
 
@@ -1057,12 +1058,25 @@ function v33FunctionalRoutes(supabase) {
 
       const tableRewards = rewards.error ? [] : (rewards.data || [])
       const recordRewards = rewardRecords.error ? [] : (rewardRecords.data || []).map(r => ({ id: r.local_id || r.id, customer_id: r.customer_id, ...(r.payload || {}) }))
-      const mergedRewards = [...tableRewards, ...recordRewards]
-        .filter(r => r && r.active !== false)
-        .filter(r => !r.qr_campaign_id || !campaignId || String(r.qr_campaign_id) === String(campaignId))
-        .map(r => normalizeReward(r, r.payload ? 'v33_functional_records' : 'loyalty_rewards'))
-        .sort((a, b) => Number(a.points_required || 0) - Number(b.points_required || 0))
-        .slice(0, 12)
+
+      // Rewards sollen auf der Slug-Seite jederzeit sichtbar sein.
+      // Kampagnen-spezifische Rewards werden zuerst sortiert, aber nicht-kampagnengebundene
+      // oder anders verknüpfte Customer-Rewards werden nicht mehr ausgeblendet.
+      const rewardById = new Map()
+      for (const raw of [...tableRewards, ...recordRewards]) {
+        if (!raw || raw.active === false) continue
+        const normalized = normalizeReward(raw, raw.payload ? 'v33_functional_records' : 'loyalty_rewards')
+        if (!normalized) continue
+        const key = String(normalized.id || normalized.local_id || normalized.title || Math.random())
+        if (!rewardById.has(key)) rewardById.set(key, normalized)
+      }
+      const mergedRewards = Array.from(rewardById.values())
+        .map(r => ({ ...r, campaign_match: Boolean(r.qr_campaign_id && campaignId && String(r.qr_campaign_id) === String(campaignId)) }))
+        .sort((a, b) => {
+          if (a.campaign_match !== b.campaign_match) return a.campaign_match ? -1 : 1
+          return Number(a.points_required || 0) - Number(b.points_required || 0)
+        })
+        .slice(0, 50)
       res.json({
         ok: true,
         slug,
@@ -1445,25 +1459,81 @@ function v33FunctionalRoutes(supabase) {
 
   router.post('/public/loyalty/:slug/review', async (req, res, next) => {
     try {
-      const rating = num(req.body?.rating, 0)
-      const { data, error } = await supabase.from('review_feedback').insert({
-        customer_id: req.body?.customer_id || null,
-        loyalty_program_id: req.body?.loyalty_program_id || null,
-        loyalty_customer_id: req.body?.loyalty_customer_id || null,
-        qr_campaign_id: req.body?.qr_campaign_id || null,
+      const slug = String(req.params.slug || '').trim()
+      const body = req.body || {}
+      const rating = num(body.rating, 0)
+
+      const foundProgram = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = foundProgram.error ? null : (foundProgram.data || null)
+      const qrCampaign = program
+        ? await getQrCampaignForPublicProgram(program, slug).catch(() => null)
+        : (await supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle().then(r => r.error ? null : r.data).catch(() => null))
+
+      const customerId = body.customer_id || program?.customer_id || qrCampaign?.customer_id || null
+      const loyaltyProgramId = body.loyalty_program_id || program?.id || null
+      const qrCampaignId = body.qr_campaign_id || program?.qr_campaign_id || qrCampaign?.id || null
+
+      const reviewPayload = {
+        customer_id: customerId,
+        loyalty_program_id: loyaltyProgramId,
+        loyalty_customer_id: body.loyalty_customer_id || null,
+        qr_campaign_id: qrCampaignId,
         rating,
-        feedback_text: req.body?.feedback_text || req.body?.comment || null,
-        comment: req.body?.feedback_text || req.body?.comment || null,
-        reviewer_name: req.body?.reviewer_name || req.body?.name || null,
-        reviewer_email: req.body?.reviewer_email || req.body?.email || null,
+        feedback_text: body.feedback_text || body.comment || null,
+        comment: body.feedback_text || body.comment || null,
+        reviewer_name: body.reviewer_name || body.name || null,
+        reviewer_email: body.reviewer_email || body.email || null,
         source: 'public_qr_loyalty',
         status: rating <= 3 ? 'needs_followup' : 'new',
         sentiment: rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral',
-        metadata: { slug: req.params.slug }
-      }).select('*').single()
+        metadata: {
+          slug,
+          public_slug: slug,
+          inferred_from_slug: true,
+          qr_campaign_id: qrCampaignId,
+          loyalty_program_id: loyaltyProgramId,
+          campaign_title: qrCampaign?.title || qrCampaign?.name || null
+        }
+      }
 
+      const { data, error } = await supabase.from('review_feedback').insert(reviewPayload).select('*').single()
       if (error) throw error
-      res.json({ ok: true, feedback: data })
+
+      // Review zusätzlich direkt an der QR-Kampagne spiegeln, damit die Kampagne
+      // Review-Zählung/letzte Bewertung kennt.
+      if (qrCampaignId) {
+        try {
+          const current = await supabase.from('qr_campaigns').select('metadata,conversions').eq('id', qrCampaignId).maybeSingle()
+          const currentMeta = current.error ? {} : (current.data?.metadata || {})
+          const reviewCount = Number(currentMeta.review_count || 0) + 1
+          await supabase.from('qr_campaigns').update({
+            conversions: Number(current.data?.conversions || 0) + 1,
+            metadata: {
+              ...currentMeta,
+              review_count: reviewCount,
+              last_review_id: data.id,
+              last_review_rating: rating,
+              last_review_at: new Date().toISOString(),
+              last_review_sentiment: reviewPayload.sentiment
+            },
+            updated_at: new Date().toISOString()
+          }).eq('id', qrCampaignId)
+        } catch (_) {}
+      }
+
+      try {
+        await supabase.from('customer_timeline_events').insert({
+          customer_id: customerId,
+          event_type: 'public_review_submitted',
+          title: 'Bewertung über Slug-Seite gespeichert',
+          description: `${reviewPayload.reviewer_name || reviewPayload.reviewer_email || 'Gast'} hat ${rating} Sterne über /l/${slug} abgegeben.`,
+          source_module: 'qr_review',
+          severity: rating <= 3 ? 'warning' : 'success',
+          metadata: { review_id: data.id, qr_campaign_id: qrCampaignId, loyalty_program_id: loyaltyProgramId, slug }
+        })
+      } catch (_) {}
+
+      res.json({ ok: true, feedback: data, qr_campaign_id: qrCampaignId, loyalty_program_id: loyaltyProgramId, campaign_review_saved: Boolean(qrCampaignId) })
     } catch (e) { next(e) }
   })
 
