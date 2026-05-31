@@ -390,6 +390,11 @@ function isBackendAuthError(e:any){
  const code=String(e?.payload?.code||e?.code||'').toLowerCase()
  return status===401||code.includes('unauthenticated')||code.includes('invalid_session')||code.includes('mfa')||raw.includes('nicht authentifiziert')||raw.includes('nicht angemeldet')||raw.includes('unauthenticated')||raw.includes('invalid_session')||raw.includes('mfa_required')||raw.includes('session abgelaufen')
 }
+function isDuplicateKeyError(e:any){
+ const raw=String(e?.message||e?.error||e||'').toLowerCase()
+ const code=String(e?.payload?.code||e?.code||'').toLowerCase()
+ return code==='23505'||raw.includes('23505')||raw.includes('duplicate key value')||raw.includes('violates unique constraint')
+}
 const backendAuthenticatedTables=new Set(['qr_campaigns','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','review_feedback','customer_tool_access','package_requests'])
 function requiresBackendAuthenticatedLive(table:string){
  return !allowLocalWriteFallback() && backendAuthenticatedTables.has(String(table||'').toLowerCase())
@@ -535,7 +540,8 @@ function useStore(){
   try{
    const viaBackend=await backendWrite('create',table,payload)
    if(viaBackend.ok){await load()}
-   else if(requiresBackendAuthenticatedLive(table)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
+   else if(requiresBackendAuthenticatedLive(table)&&isBackendAuthError(viaBackend.error)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
+   else if(viaBackend.error){throw viaBackend.error}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) {try{safeLocalStorageSet(DEMO_SANDBOX_KEY,{...data,[table]:[payload,...(data[table]||[])]})}catch{}}
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
@@ -566,7 +572,8 @@ function useStore(){
   try{
    const viaBackend=await backendWrite('update',table,normalized,id)
    if(viaBackend.ok){await load()}
-   else if(requiresBackendAuthenticatedLive(table)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
+   else if(requiresBackendAuthenticatedLive(table)&&isBackendAuthError(viaBackend.error)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
+   else if(viaBackend.error){throw viaBackend.error}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) persistLocal((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>String(x.id)===String(id)?{...x,...normalized}:x)}))
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
@@ -596,7 +603,8 @@ function useStore(){
   try{
    const viaBackend=await backendWrite('remove',table,null,id)
    if(viaBackend.ok){await load()}
-   else if(requiresBackendAuthenticatedLive(table)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
+   else if(requiresBackendAuthenticatedLive(table)&&isBackendAuthError(viaBackend.error)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
+   else if(viaBackend.error){throw viaBackend.error}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) persistLocal((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>String(x.id)!==String(id))}))
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
@@ -1069,11 +1077,20 @@ function QRCodes({store,cid,setCid,role='admin'}:any){
  async function v34CreateQrCampaign(){
   try{
    const r=await v33FunctionalClient.createQrCampaign(customer,{title:f.title||'Neue QR Kampagne',purpose:f.purpose,mode:f.purpose,points_per_scan:Number(f.points_per_scan||10),max_scans_per_member:Number(f.max_scans_per_member||0),daily_scan_limit_per_member:Number(f.daily_scan_limit_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70),google_review_url:f.google_review_url,create_loyalty:f.purpose!=='review'})
-   await createLocalQr({...r.qr_campaign,public_url:r.public_url_path?`${appOrigin()}${r.public_url_path}`:undefined})
-   store.notify?.(`QR Kampagne erstellt: ${r.public_url_path}`)
+   const persistedQr={...(r.qr_campaign||{}),customer_id:(r.qr_campaign?.customer_id||customer),title:(r.qr_campaign?.title||f.title||'Neue QR Kampagne'),name:(r.qr_campaign?.name||r.qr_campaign?.title||f.title||'Neue QR Kampagne'),slug:(r.qr_campaign?.slug||r.slug||''),public_url:r.public_url_path?`${appOrigin()}${r.public_url_path}`:(r.qr_campaign?.public_url||''),target_url:(r.qr_campaign?.target_url||(r.public_url_path||'')),purpose:(r.qr_campaign?.purpose||f.purpose),active:r.qr_campaign?.active!==false,status:r.qr_campaign?.status||'Aktiv',created_at:r.qr_campaign?.created_at||new Date().toISOString()}
+   // v33FunctionalClient hat den QR bereits im Backend gespeichert.
+   // Daher hier nur lokale UI hydrieren, nicht nochmal via /api/store inserten.
+   store.setData((p:any)=>({...p,qr_campaigns:[persistedQr,...(p.qr_campaigns||[]).filter((q:any)=>String(q.id)!==String(persistedQr.id))]}))
+   await store.load?.()
+   store.notify?.(`QR Kampagne gespeichert: ${r.public_url_path||persistedQr.public_url||persistedQr.slug}`)
    setF({...f,title:''})
    setCid?.(customer)
   }catch(e:any){
+   if(isDuplicateKeyError(e)){
+    await store.load?.()
+    store.notify?.('QR Kampagne war bereits gespeichert und wurde neu geladen.')
+    return
+   }
    if(isBackendAuthError(e)){
     store.notify?.('QR wurde nicht lokal gespeichert: Backend ist nicht authentifiziert. Bitte neu einloggen und 2FA bestätigen.')
     return

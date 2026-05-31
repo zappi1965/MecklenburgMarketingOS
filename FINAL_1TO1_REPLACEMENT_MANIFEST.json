@@ -464,5 +464,20 @@
       "no local-only QR on auth failure",
       "protected QR/Loyalty live writes require backend auth"
     ]
+  },
+  "qr_duplicate_idempotent_save_fix": {
+    "fixed_at": "2026-05-31 11:17:19",
+    "base": "MMOS_BACKEND_AUTH_QR_LOYALTY_FIX_FULLBUILD.zip",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "backend/src/services/storeService.js",
+      "QR_DUPLICATE_IDEMPOTENT_SAVE_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "no second /api/store insert after v33 QR creation",
+      "duplicate key no longer shown as auth error",
+      "idempotent /api/store create by id",
+      "QR UI hydration after backend save"
+    ]
   }
 }
