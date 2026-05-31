@@ -242,5 +242,101 @@
       "frontend/src/app/page.tsx",
       "FINAL_PRODUCTION_READINESS_BUILD_FIX_NOTES.md"
     ]
+  },
+  "backoffice_navigation_auth_dsar_fix": {
+    "fixed_at": "2026-05-31 07:57:51",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/components/security/RoleGate.tsx",
+      "frontend/src/components/security/ToolAccessGate.tsx",
+      "frontend/src/app/admin/e-invoice/page.tsx",
+      "frontend/src/lib/authClient.ts",
+      "backend/src/routes/gdprRoutes.js",
+      "supabase/migrations/0095_backoffice_navigation_auth_dsar_fix.sql"
+    ],
+    "fixes": [
+      "Backoffice opens /admin environment",
+      "Frontoffice link does not logout",
+      "Demo customer environment link",
+      "RoleGate local fallback",
+      "ToolAccessGate local fallback",
+      "Admin e-invoice without customer_id",
+      "dsar_requests.type compatibility"
+    ]
+  },
+  "frontoffice_sidebar_slim": {
+    "fixed_at": "2026-05-31 08:05:13",
+    "files": [
+      "frontend/src/app/page.tsx",
+      "FRONTOFFICE_SIDEBAR_SLIM_NOTES.md"
+    ],
+    "changes": [
+      "accordion sidebar",
+      "slimmer nav groups",
+      "no tool removal"
+    ]
+  },
+  "mfa_login_enforcement_fix": {
+    "fixed_at": "2026-05-31 08:50:05",
+    "files": [
+      "frontend/src/app/auth/page.tsx",
+      "backend/src/routes/authRoutes.js",
+      "backend/src/routes/securityRoutes.js",
+      "backend/src/services/mfaService.js",
+      "backend/src/middleware/auth.js",
+      "backend/src/server.js",
+      "supabase/migrations/0096_mfa_login_enforcement.sql"
+    ],
+    "fixes": [
+      "2FA prompt after password login",
+      "MFA session marker mfa_verified_until",
+      "admin API MFA enforcement",
+      "profile lookup by auth id or email"
+    ]
+  },
+  "customer_mail_package_live_binding": {
+    "fixed_at": "2026-05-31 09:08:07",
+    "company_name": "MecklenburgMarketing GbR",
+    "domain": "mecklenburgmarketing.de",
+    "files": [
+      "backend/src/services/mailService.js",
+      "backend/src/services/customerLifecycleMailService.js",
+      "backend/src/services/packageAccessService.js",
+      "backend/src/routes/customerPortalRoutes.js",
+      "backend/src/server.js",
+      "frontend/src/lib/customerPortalClient.ts",
+      "supabase/migrations/0097_customer_mail_package_live_binding.sql"
+    ],
+    "capabilities": [
+      "registration mails",
+      "invite mails",
+      "approved customer mails",
+      "package auto-grants",
+      "mail event logging",
+      "public customer portal auth route split",
+      "admin-only registration management"
+    ]
+  },
+  "final_security_live_hardening": {
+    "fixed_at": "2026-05-31 09:15:34",
+    "files": [
+      "backend/src/server.js",
+      "backend/src/routes/finalHardeningRoutes.js",
+      "backend/src/services/finalHardeningService.js",
+      "backend/src/services/storeService.js",
+      "supabase/migrations/0098_final_security_live_hardening.sql",
+      "scripts/final-live-acceptance.mjs",
+      "docs/final-security-live-hardening.md"
+    ],
+    "capabilities": [
+      "productionRoutes mounted",
+      "strict tenant audit",
+      "server-side store tool access",
+      "customer portal live check",
+      "package access validation",
+      "document/e-invoice/backup hardening",
+      "final live acceptance script"
+    ]
   }
 }

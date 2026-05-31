@@ -1,6 +1,15 @@
 
 const express = require('express')
 const crypto = require('crypto')
+const {
+  sendRegistrationReceived,
+  sendRegistrationApproved,
+  sendCustomerInvite,
+  sendInviteAcceptedAdminNotice,
+  sendAdminRegistrationNotice,
+  sendPackageRequestNotice
+} = require('../services/customerLifecycleMailService')
+const { grantPackageTools } = require('../services/packageAccessService')
 
 async function safeQuery(query) {
   try { return await query } catch { return null }
@@ -41,6 +50,12 @@ async function ensureUserProfile(supabase, { auth_user_id, customer_id, email, d
     supabase.from('user_profiles').upsert(payload, { onConflict: 'id' }).select('*').maybeSingle()
   )
   return res?.data || null
+}
+
+function requireAdminCustomerPortal(req, res, next) {
+  const role = String(req.userRole || req.userProfile?.role || '').toLowerCase()
+  if (role === 'admin' || role === 'super_admin') return next()
+  return res.status(403).json({ ok: false, code: 'ADMIN_REQUIRED', error: 'Nur interne Admin-Zugänge dürfen Kundenregistrierungen verwalten.' })
 }
 
 async function writeActivity(supabase, payload) {
@@ -140,11 +155,15 @@ function customerPortalRoutes(supabase) {
         actor_name: company_name
       }))
 
-      res.json({ ok:true, customer, registration, status:'pending' })
+      const mail_results = []
+      try { mail_results.push(await sendRegistrationReceived(supabase, registration)) } catch (mailError) { mail_results.push({ error: mailError.message, template: 'customer_registration_received' }) }
+      try { mail_results.push(await sendAdminRegistrationNotice(supabase, registration)) } catch (mailError) { mail_results.push({ error: mailError.message, template: 'customer_registration_admin' }) }
+
+      res.json({ ok:true, customer, registration, status:'pending', mail_results })
     } catch (e) { next(e) }
   })
 
-  router.get('/registrations', async (_, res, next) => {
+  router.get('/registrations', requireAdminCustomerPortal, async (req, res, next) => {
     try {
       const regs = await safeQuery(supabase
         .from('customer_registrations')
@@ -160,7 +179,7 @@ function customerPortalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
-  router.post('/approve/:id', async (req, res, next) => {
+  router.post('/approve/:id', requireAdminCustomerPortal, async (req, res, next) => {
     try {
       const { data: registration, error } = await supabase
         .from('customer_registrations')
@@ -212,12 +231,21 @@ function customerPortalRoutes(supabase) {
         actor_name: req.body?.reviewed_by || 'Admin'
       }))
 
-      await writeActivity(supabase, { type:'customer_registration_approved', title:'Kundenregistrierung freigeschaltet', message:`${registration.company_name} wurde freigeschaltet.`, ref_table:'customer_registrations', ref_id: registration.id, customer_id: registration.customer_id, severity:'success', metadata:{ reviewed_by: req.body?.reviewed_by || 'Admin' } })
-      res.json({ ok:true, registration_id: registration.id, customer_id: registration.customer_id })
+      const access_result = await grantPackageTools(supabase, {
+        customer_id: registration.customer_id,
+        package_name: registration.requested_package || 'Starter',
+        actor_name: req.body?.reviewed_by || 'Admin'
+      })
+
+      const mail_results = []
+      try { mail_results.push(await sendRegistrationApproved(supabase, registration)) } catch (mailError) { mail_results.push({ error: mailError.message, template: 'customer_registration_approved' }) }
+
+      await writeActivity(supabase, { type:'customer_registration_approved', title:'Kundenregistrierung freigeschaltet', message:`${registration.company_name} wurde freigeschaltet.`, ref_table:'customer_registrations', ref_id: registration.id, customer_id: registration.customer_id, severity:'success', metadata:{ reviewed_by: req.body?.reviewed_by || 'Admin', access_result, mail_results } })
+      res.json({ ok:true, registration_id: registration.id, customer_id: registration.customer_id, access_result, mail_results })
     } catch (e) { next(e) }
   })
 
-  router.post('/invite', async (req, res, next) => {
+  router.post('/invite', requireAdminCustomerPortal, async (req, res, next) => {
     try {
       const body = req.body || {}
       if (!body.customer_id) return res.status(400).json({ ok:false, error:'customer_id fehlt' })
@@ -259,12 +287,15 @@ function customerPortalRoutes(supabase) {
         actor_name: body.created_by || 'Admin'
       }))
 
-      await writeActivity(supabase, { type:'customer_invite_created', title:'Kundeneinladung erstellt', message:`Einladung für ${body.email} erstellt.`, ref_id: invite.id, customer_id: body.customer_id, severity:'success', metadata:{ expires_at: expiresAt } })
-      res.json({ ok:true, invite, invite_url: invite.invite_url })
+      const mail_results = []
+      try { mail_results.push(await sendCustomerInvite(supabase, invite, customer)) } catch (mailError) { mail_results.push({ error: mailError.message, template: 'customer_invite' }) }
+
+      await writeActivity(supabase, { type:'customer_invite_created', title:'Kundeneinladung erstellt', message:`Einladung für ${body.email} erstellt.`, ref_id: invite.id, customer_id: body.customer_id, severity:'success', metadata:{ expires_at: expiresAt, mail_results } })
+      res.json({ ok:true, invite, invite_url: invite.invite_url, mail_results })
     } catch (e) { next(e) }
   })
 
-  router.post('/invite/:id/revoke', async (req, res, next) => {
+  router.post('/invite/:id/revoke', requireAdminCustomerPortal, async (req, res, next) => {
     try {
       const id = req.params.id
       const { data: invite, error: lookupError } = await supabase.from('customer_invites').select('*').eq('id', id).maybeSingle()
@@ -279,7 +310,7 @@ function customerPortalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
-  router.post('/invite/:id/resend', async (req, res, next) => {
+  router.post('/invite/:id/resend', requireAdminCustomerPortal, async (req, res, next) => {
     try {
       const id = req.params.id
       const { data: oldInvite, error: lookupError } = await supabase.from('customer_invites').select('*').eq('id', id).maybeSingle()
@@ -291,8 +322,12 @@ function customerPortalRoutes(supabase) {
       const patch = { status:'open', token, invite_url: buildInviteUrl(req, token, req.body || {}), expires_at: expiresAt, resent_at: nowIso(), updated_at: nowIso(), metadata: { ...(oldInvite.metadata || {}), resent_from: id } }
       const { data, error } = await supabase.from('customer_invites').update(patch).eq('id', id).select('*').single()
       if (error) throw error
-      await writeActivity(supabase, { type:'customer_invite_resent', title:'Kundeneinladung erneuert', message:`Einladung für ${oldInvite.email} wurde erneuert.`, ref_id:id, customer_id: oldInvite.customer_id, severity:'info', metadata:{ expires_at: expiresAt } })
-      res.json({ ok:true, invite:data, invite_url:data.invite_url })
+      const { data: customer } = await safeQuery(supabase.from('customers').select('*').eq('id', oldInvite.customer_id).maybeSingle()) || { data: null }
+      const mail_results = []
+      try { mail_results.push(await sendCustomerInvite(supabase, data, customer || {})) } catch (mailError) { mail_results.push({ error: mailError.message, template: 'customer_invite_resend' }) }
+
+      await writeActivity(supabase, { type:'customer_invite_resent', title:'Kundeneinladung erneuert', message:`Einladung für ${oldInvite.email} wurde erneuert.`, ref_id:id, customer_id: oldInvite.customer_id, severity:'info', metadata:{ expires_at: expiresAt, mail_results } })
+      res.json({ ok:true, invite:data, invite_url:data.invite_url, mail_results })
     } catch (e) { next(e) }
   })
 
@@ -367,8 +402,34 @@ function customerPortalRoutes(supabase) {
         actor_name: displayName
       }))
 
-      await writeActivity(supabase, { type:'customer_invite_accepted', title:'Kundeneinladung angenommen', message:`${invite.email} hat den Portalzugang aktiviert.`, ref_id: invite.id, customer_id: invite.customer_id, severity:'success' })
-      res.json({ ok:true, customer_id: invite.customer_id, profile })
+      const access_result = await grantPackageTools(supabase, {
+        customer_id: invite.customer_id,
+        package_name: invite.package_name || 'Starter',
+        actor_name: displayName
+      })
+
+      const { data: customerAfterAccept } = await safeQuery(supabase.from('customers').select('*').eq('id', invite.customer_id).maybeSingle()) || { data: null }
+      const mail_results = []
+      try { mail_results.push(await sendInviteAcceptedAdminNotice(supabase, invite, customerAfterAccept || {})) } catch (mailError) { mail_results.push({ error: mailError.message, template: 'customer_invite_accepted_admin' }) }
+
+      await writeActivity(supabase, { type:'customer_invite_accepted', title:'Kundeneinladung angenommen', message:`${invite.email} hat den Portalzugang aktiviert.`, ref_id: invite.id, customer_id: invite.customer_id, severity:'success', metadata:{ access_result, mail_results } })
+      res.json({ ok:true, customer_id: invite.customer_id, profile, access_result, mail_results })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/sync-package-access', requireAdminCustomerPortal, async (req, res, next) => {
+    try {
+      const body = req.body || {}
+      if (!body.customer_id) return res.status(400).json({ ok:false, error:'customer_id fehlt' })
+      const { data: customer } = await supabase.from('customers').select('*').eq('id', body.customer_id).maybeSingle()
+      if (!customer) return res.status(404).json({ ok:false, error:'Kunde nicht gefunden' })
+      const result = await grantPackageTools(supabase, {
+        customer_id: body.customer_id,
+        package_name: body.package_name || customer.package_name || customer.requested_package || 'Starter',
+        actor_name: body.actor_name || 'Admin'
+      })
+      await writeActivity(supabase, { type:'customer_package_tools_synced', title:'Paket-Toolfreigaben synchronisiert', message:`Tools für ${customer.name} wurden anhand des Pakets synchronisiert.`, customer_id: body.customer_id, severity:'success', metadata:{ result } })
+      res.json({ ok:true, result })
     } catch (e) { next(e) }
   })
 
@@ -390,7 +451,13 @@ function customerPortalRoutes(supabase) {
         type: 'package_request',
         actor_name: body.requested_by || 'Kunde'
       }))
-      res.json({ ok:true, request:data })
+
+      const { data: customer } = await safeQuery(supabase.from('customers').select('*').eq('id', body.customer_id).maybeSingle()) || { data: null }
+      const mail_results = []
+      if (customer?.email) {
+        try { mail_results.push(await sendPackageRequestNotice(supabase, data, customer)) } catch (mailError) { mail_results.push({ error: mailError.message, template: 'package_request_received' }) }
+      }
+      res.json({ ok:true, request:data, mail_results })
     } catch (e) { next(e) }
   })
 

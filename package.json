@@ -17,7 +17,9 @@
     "production:check": "yarn quality:guard && yarn --cwd frontend typecheck",
     "production:live-e2e": "node scripts/production-live-e2e.mjs",
     "backup:drill": "node scripts/backup-restore-drill.mjs",
-    "production:final-check": "yarn quality:guard && yarn production:check"
+    "production:final-check": "yarn quality:guard && yarn production:check",
+    "production:final-live": "node scripts/final-live-acceptance.mjs",
+    "production:final-hardening": "yarn quality:guard && node scripts/final-live-acceptance.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.106.2",

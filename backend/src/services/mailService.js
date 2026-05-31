@@ -13,7 +13,8 @@ class MailService {
       const { Resend } = require('resend')
       this.resend = new Resend(this.apiKey)
     }
-    this.from = cleanEnv(process.env.MAIL_FROM) || cleanEnv(process.env.RESEND_FROM) || 'Mecklenburg Marketing <noreply@mecklenburgmarketing.de>'
+    this.from = cleanEnv(process.env.MAIL_FROM) || cleanEnv(process.env.RESEND_FROM) || 'MecklenburgMarketing GbR <noreply@mecklenburgmarketing.de>'
+    this.replyTo = cleanEnv(process.env.MAIL_REPLY_TO) || cleanEnv(process.env.RESEND_REPLY_TO) || 'info@mecklenburgmarketing.de'
   }
 
   diagnostics() {
@@ -21,6 +22,7 @@ class MailService {
       enabled: this.enabled,
       provider: this.enabled ? 'resend' : 'dry_run',
       from: this.from,
+      replyTo: this.replyTo,
       missing_env: this.enabled ? [] : ['RESEND_API_KEY'],
       hint: this.enabled
         ? 'RESEND_API_KEY ist gesetzt. Falls Mails nicht ankommen: MAIL_FROM muss in Resend als Domain/Sender verifiziert sein.'
@@ -33,7 +35,7 @@ class MailService {
     if (!text && body) text = body
 
     if (!this.enabled) {
-      const dryRun = { dryRun: true, provider: 'dry_run', to, subject, html, text, missing_env: ['RESEND_API_KEY'] }
+      const dryRun = { dryRun: true, provider: 'dry_run', to, subject, html, text, from: cleanEnv(from) || this.from, replyTo: replyTo || this.replyTo, missing_env: ['RESEND_API_KEY'] }
       console.log('[MAIL_DRY_RUN]', dryRun)
       if (requireDelivery) {
         const err = new Error('Mailversand nicht konfiguriert: RESEND_API_KEY fehlt.')
@@ -53,7 +55,7 @@ class MailService {
       html: html || `<pre>${String(text || '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))}</pre>`
     }
     if (text) payload.text = text
-    if (replyTo) payload.replyTo = replyTo
+    payload.replyTo = replyTo || payload.replyTo || this.replyTo
 
     const result = await this.resend.emails.send(payload)
     if (result?.error) {

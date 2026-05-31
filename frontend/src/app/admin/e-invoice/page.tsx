@@ -15,16 +15,19 @@ function money(n?: number) { return n == null ? '—' : `${Number(n).toFixed(2)}
 export default function EInvoicePage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [customerId, setCustomerId] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [preview, setPreview] = useState<{ id: string; xml: string } | null>(null)
 
-  async function load(cid: string) {
+  async function load(cid: string, adminMode = false) {
     setLoading(true); setError('')
     try {
-      const r = await storeClient.list<Invoice>('invoices', { customer_id: cid, limit: 100, order_by: 'created_at', order_dir: 'desc' })
+      const query:any = { limit: 100, order_by: 'created_at', order_dir: 'desc' }
+      if (cid) query.customer_id = cid
+      const r = await storeClient.list<Invoice>('invoices', query)
       setInvoices((r as any).data || [])
     } catch (e: any) { setError(e?.message || 'Rechnungen konnten nicht geladen werden.') }
     finally { setLoading(false) }
@@ -34,10 +37,12 @@ export default function EInvoicePage() {
     (async () => {
       const profile = await getCurrentUserProfile()
       if (!profile) { setAuthorized(false); setLoading(false); return }
+      const admin = ['admin','super_admin'].includes(String(profile.role || '').toLowerCase())
       setAuthorized(true)
+      setIsAdmin(admin)
       const cid = profile.customer_id || ''
       setCustomerId(cid)
-      if (cid) await load(cid); else setLoading(false)
+      await load(cid, admin)
     })()
   }, [])
 
@@ -67,16 +72,17 @@ export default function EInvoicePage() {
       </header>
 
       {authorized === false && <div className="adminNotice"><b>Anmeldung erforderlich.</b></div>}
-      {authorized && !customerId && <section className="adminCard"><p className="adminMuted">Dein Konto ist mit keinem Customer verknuepft.</p></section>}
+      {authorized && !customerId && !isAdmin && <section className="adminCard"><p className="adminMuted">Dein Konto ist mit keinem Customer verknuepft.</p></section>}
+      {authorized && !customerId && isAdmin && <section className="adminCard"><p className="adminMuted">Admin-Modus: Es werden alle Rechnungen angezeigt. Ein Customer-Link ist für diesen Admin-Zugang nicht nötig.</p></section>}
       {error && <div className="adminAlert">{error}</div>}
 
-      {authorized && customerId && (
+      {authorized && (customerId || isAdmin) && (
         <>
           <section className="adminCard">
             <div className="adminActions">
               <h2 style={{ margin: 0 }}>Rechnungen ({invoices.length})</h2>
               <span className="adminTabSpacer" />
-              <button type="button" className="adminBtn small" onClick={() => load(customerId)} disabled={loading}><RefreshCw size={14} /> Neu laden</button>
+              <button type="button" className="adminBtn small" onClick={() => load(customerId, isAdmin)} disabled={loading}><RefreshCw size={14} /> Neu laden</button>
             </div>
             {loading && <div className="adminMuted">Lade …</div>}
             {!loading && invoices.length === 0 && <div className="adminMuted">Keine Rechnungen vorhanden.</div>}

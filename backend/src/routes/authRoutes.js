@@ -21,7 +21,11 @@ function sanitizeProfile(profile) {
     display_name: profile.display_name || profile.username || profile.email || '',
     customer_id: profile.customer_id || null,
     package_name: profile.package_name || null,
-    metadata: profile.metadata || {}
+    metadata: profile.metadata || {},
+    mfa_enabled: Boolean(profile.mfa_enabled),
+    mfa_enrolled_at: profile.mfa_enrolled_at || null,
+    mfa_last_used_at: profile.mfa_last_used_at || null,
+    mfa_verified_until: profile.mfa_verified_until || null
   }
 }
 
@@ -80,13 +84,19 @@ function authRoutes(supabase) {
       }
 
       const normalized = sanitizeProfile(profile)
+      const isAdmin = String(normalized.role || '').toLowerCase() === 'admin' && String(normalized.status || '').toLowerCase() === 'active'
+      const mfaEnabled = Boolean(normalized.mfa_enabled)
+      const mfaVerified = !mfaEnabled || (normalized.mfa_verified_until ? Date.parse(normalized.mfa_verified_until) > Date.now() : false)
       return res.json({
         ok: true,
         authenticated: true,
         profile: normalized,
         role: String(normalized.role || '').toLowerCase(),
         status: String(normalized.status || '').toLowerCase(),
-        is_admin: String(normalized.role || '').toLowerCase() === 'admin' && String(normalized.status || '').toLowerCase() === 'active',
+        is_admin: isAdmin,
+        mfa_enabled: mfaEnabled,
+        mfa_verified: mfaVerified,
+        mfa_required: Boolean(isAdmin && mfaEnabled && !mfaVerified),
         lookup,
         auth_user: { id: authUser.id, email }
       })

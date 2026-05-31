@@ -38,7 +38,7 @@ function gdprRoutes(supabase) {
       const email = getEmail(req)
       const { data, error } = await supabase
         .from('dsar_requests')
-        .select('id, type, status, subject_email, export_url, completed_at, notes, metadata, created_at, updated_at')
+        .select('id, type, request_type, status, subject_email, export_url, completed_at, notes, metadata, created_at, updated_at')
         .eq('subject_email', email)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -65,6 +65,7 @@ function gdprRoutes(supabase) {
           subject_type: SUBJECT_TYPE,
           subject_email: email,
           type: 'export',
+          request_type: 'export',
           status: 'Offen',
           requested_by: req.user.id,
           notes,
@@ -73,7 +74,7 @@ function gdprRoutes(supabase) {
             user_agent: String(req.headers['user-agent'] || '').slice(0, 300)
           }
         })
-        .select('id, type, status, created_at, metadata')
+        .select('id, type, request_type, status, created_at, metadata')
         .maybeSingle()
       if (error) throw error
 
@@ -124,6 +125,7 @@ function gdprRoutes(supabase) {
           subject_type: SUBJECT_TYPE,
           subject_email: email,
           type: 'delete',
+          request_type: 'delete',
           status: 'Offen',
           requested_by: req.user.id,
           notes: reason,
@@ -134,7 +136,7 @@ function gdprRoutes(supabase) {
             user_agent: String(req.headers['user-agent'] || '').slice(0, 300)
           }
         })
-        .select('id, type, status, created_at, metadata')
+        .select('id, type, request_type, status, created_at, metadata')
         .maybeSingle()
       if (error) throw error
 

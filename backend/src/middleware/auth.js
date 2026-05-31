@@ -1,6 +1,24 @@
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
+const mfaService = require('../services/mfaService')
 
 const ADMIN_ROLES = new Set(['admin', 'super_admin'])
+
+function isMfaExemptPath(req) {
+  const path = String(req.originalUrl || req.url || '').split('?')[0]
+  return (
+    path.startsWith('/api/auth/') ||
+    path === '/api/security/mfa/verify' ||
+    path === '/api/security/mfa/status' ||
+    path === '/api/security/mfa/enroll' ||
+    path === '/api/security/mfa/activate'
+  )
+}
+
+function mfaStillValid(profile) {
+  const until = profile?.mfa_verified_until
+  return until ? Date.parse(until) > Date.now() : false
+}
+
 
 function authMiddleware(options = {}) {
   const required = options.required !== false
@@ -50,7 +68,7 @@ function authMiddleware(options = {}) {
       try {
         const lookup = await supabase
           .from('user_profiles')
-          .select('role, status, customer_id, email')
+          .select('role, status, customer_id, email, mfa_enabled, mfa_verified_until, mfa_last_used_at')
           .eq('id', data.user.id)
           .maybeSingle()
         if (lookup?.data) profile = lookup.data
@@ -61,7 +79,7 @@ function authMiddleware(options = {}) {
         try {
           const lookupByEmail = await supabase
             .from('user_profiles')
-            .select('role, status, customer_id, email')
+            .select('role, status, customer_id, email, mfa_enabled, mfa_verified_until, mfa_last_used_at')
             .ilike('email', email)
             .maybeSingle()
           if (lookupByEmail?.data) profile = lookupByEmail.data
@@ -78,6 +96,35 @@ function authMiddleware(options = {}) {
       req.userRole = isAdmin ? 'admin' : role
       req.userStatus = status
       req.userProfile = profile
+
+      if (isAdmin && profile?.mfa_enabled && options.enforceMfa !== false && !isMfaExemptPath(req)) {
+        const headerCode = req.headers['x-mfa-code'] || req.headers['x-mmos-mfa-code']
+        if (!mfaStillValid(profile)) {
+          if (headerCode) {
+            const result = await mfaService.verify({
+              user_id: data.user.id,
+              email: data.user.email,
+              code: headerCode,
+              ip_address: req.ip,
+              user_agent: req.get('user-agent')
+            })
+            if (!result.ok) {
+              const err = new Error('2FA-Code ungueltig')
+              err.status = 401
+              err.code = 'MFA_INVALID'
+              throw err
+            }
+            req.mfaVerified = true
+          } else {
+            const err = new Error('2FA erforderlich')
+            err.status = 401
+            err.code = 'MFA_REQUIRED'
+            throw err
+          }
+        } else {
+          req.mfaVerified = true
+        }
+      }
 
       if (allowedRoles.length && !allowedRoles.includes(req.userRole)) {
         const err = new Error('Keine Berechtigung')

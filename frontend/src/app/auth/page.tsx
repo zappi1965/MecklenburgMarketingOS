@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { supabaseAuth, getCurrentUserProfilePayload } from '@/lib/authClient'
 import { customerPortalClient } from '@/lib/customerPortalClient'
+import { BROWSER_BACKEND_BASE } from '@/lib/backendUrl'
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login'|'register'|'reset'|'invite'>('login')
@@ -17,6 +18,9 @@ export default function AuthPage() {
   const [inviteToken, setInviteToken] = useState('')
   const [inviteInfo, setInviteInfo] = useState<any>(null)
   const [message, setMessage] = useState('')
+  const [mfaPending, setMfaPending] = useState(false)
+  const [mfaCode, setMfaCode] = useState('')
+  const [pendingProfile, setPendingProfile] = useState<any>(null)
 
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get('invite')
@@ -36,6 +40,46 @@ export default function AuthPage() {
       .catch((e:any) => setMessage(e.message || 'Einladung konnte nicht geladen werden.'))
   }, [])
 
+
+  function finishLogin(profile:any) {
+    const role = String(profile?.role || '').toLowerCase() === 'admin' ? 'admin' : 'customer'
+    try {
+      localStorage.setItem('mmos_mode', 'live')
+      localStorage.setItem('mmos_role', role)
+      if (profile?.customer_id) localStorage.setItem('mmos_customer_id', profile.customer_id)
+      sessionStorage.setItem('mmos_profile_cache_v1', JSON.stringify({ profile, expiresAt: Date.now() + 1000 * 60 * 10 }))
+    } catch {}
+    window.location.href = '/?app=1&view=dashboard'
+  }
+
+  async function verifyMfaLogin() {
+    setMessage('')
+    const clean = mfaCode.trim().toUpperCase()
+    if (!clean) return setMessage('Bitte 2FA-Code oder Backup-Code eingeben.')
+    const { data } = await supabaseAuth.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return setMessage('Session abgelaufen. Bitte erneut mit Passwort anmelden.')
+    const res = await fetch(`${BROWSER_BACKEND_BASE}/api/security/mfa/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ code: clean })
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok || payload?.ok === false) return setMessage(payload?.error || '2FA-Code ist ungültig.')
+    setMfaPending(false)
+    setMfaCode('')
+    finishLogin(pendingProfile)
+  }
+
+  async function cancelMfaLogin() {
+    setMfaPending(false)
+    setMfaCode('')
+    setPendingProfile(null)
+    try { await supabaseAuth.auth.signOut() } catch {}
+    setMessage('Login abgebrochen.')
+  }
+
+
   async function login() {
     setMessage('')
     const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password })
@@ -44,8 +88,13 @@ export default function AuthPage() {
     const profile = profilePayload?.profile || null
 
     if (profilePayload?.is_admin || (String(profile?.role || '').toLowerCase() === 'admin' && String(profile?.status || '').toLowerCase() === 'active')) {
-      try { localStorage.setItem('mmos_mode','live'); localStorage.setItem('mmos_role','admin') } catch {}
-      window.location.href = '/?app=1'
+      if (profilePayload?.mfa_required || (profile?.mfa_enabled && profilePayload?.mfa_verified === false)) {
+        setPendingProfile(profile)
+        setMfaPending(true)
+        setMessage('2FA erforderlich: Bitte Code aus deiner Authenticator-App eingeben.')
+        return
+      }
+      finishLogin(profile)
       return
     }
 
@@ -61,7 +110,7 @@ export default function AuthPage() {
       return setMessage('Dein Zugang wartet noch auf Freigabe durch Mecklenburg Marketing.')
     }
 
-    window.location.href = '/?app=1'
+    finishLogin(profile)
   }
 
   async function register() {
@@ -161,13 +210,23 @@ export default function AuthPage() {
           </>
         )}
 
-        <input className="input" placeholder="E-Mail-Adresse für Login oder Kontakt" title="Diese Adresse wird für Login, Freigaben und Benachrichtigungen genutzt." value={email} onChange={e=>setEmail(e.target.value)} readOnly={isInvite && Boolean(inviteInfo?.invite?.email)} />
+        <input className="input" placeholder="E-Mail-Adresse für Login oder Kontakt" title="Diese Adresse wird für Login, Freigaben und Benachrichtigungen genutzt." value={email} onChange={e=>setEmail(e.target.value)} readOnly={(isInvite && Boolean(inviteInfo?.invite?.email)) || mfaPending} />
 
         {mode !== 'reset' && (
-          <input className="input" placeholder={isInvite ? 'Passwort für den Kundenlogin setzen' : 'Passwort eingeben'} title="Mindestens 10 Zeichen und idealerweise ein Sonderzeichen verwenden." type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+          <input className="input" placeholder={isInvite ? 'Passwort für den Kundenlogin setzen' : 'Passwort eingeben'} title="Mindestens 10 Zeichen und idealerweise ein Sonderzeichen verwenden." type="password" value={password} onChange={e=>setPassword(e.target.value)} readOnly={mfaPending} />
         )}
 
-        {mode === 'login' && <button className="btn" onClick={login}>Einloggen</button>}
+        {mfaPending && (
+          <div className="hintBox">
+            <b>2FA erforderlich</b>
+            <p>Gib den 6-stelligen Code aus deiner Authenticator-App ein. Alternativ kannst du einen Backup-Code verwenden.</p>
+            <input className="input" placeholder="2FA-Code oder Backup-Code" inputMode="numeric" autoFocus value={mfaCode} onChange={e=>setMfaCode(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')verifyMfaLogin()}} />
+            <button className="btn" onClick={verifyMfaLogin}>2FA bestätigen</button>
+            <button className="btn secondary" onClick={cancelMfaLogin}>Abbrechen</button>
+          </div>
+        )}
+
+        {mode === 'login' && !mfaPending && <button className="btn" onClick={login}>Einloggen</button>}
         {mode === 'register' && <button className="btn" onClick={register}>Kundenkonto anfragen</button>}
         {mode === 'invite' && <button className="btn" onClick={acceptInvite}>Zugang aktivieren</button>}
         {mode === 'reset' && <button className="btn" onClick={reset}>Reset-Link senden</button>}

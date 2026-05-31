@@ -25,6 +25,8 @@ const googleRoutes = require('./routes/googleRoutes')
 const businessToolsRoutes = require('./routes/businessToolsRoutes')
 const documentMediaRoutes = require('./routes/documentMediaRoutes')
 const productionReadinessRoutes = require('./routes/productionReadinessRoutes')
+const productionRoutes = require('./routes/productionRoutes')
+const finalHardeningRoutes = require('./routes/finalHardeningRoutes')
 const documentEngineV2Routes = require('./routes/documentEngineV2Routes')
 const securityCoreRoutes = require('./routes/securityCoreRoutes')
 const qrRoutes = require('./routes/qrRoutes')
@@ -71,7 +73,7 @@ app.use(cors({
   origin: true,
   credentials: false,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-MFA-Code', 'X-MMOS-MFA-Code']
 }))
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204)
@@ -107,6 +109,9 @@ const PUBLIC_PATHS = [
   /^\/api\/chatbot\/(start|message)$/,
   /^\/api\/review-widget\/embed\/[^/]+$/,
   /^\/api\/public\/package-inquiry$/,
+  /^\/api\/customer-portal\/register$/,
+  /^\/api\/customer-portal\/invite\/[^/]+$/,
+  /^\/api\/customer-portal\/accept-invite$/,
   /^\/api\/public\/v1\//,
   /^\/api\/wallet\/me(\/request-link)?$/,
   /^\/api\/booking\/[^/]+\/(services|slots|book)$/
@@ -147,6 +152,8 @@ for (const [routePath, routeFactory] of adminScopedRoutes) {
   app.use(routePath, requireAdmin, routeFactory(supabaseAdmin))
 }
 
+app.use('/api/production', requireAdmin, productionRoutes(supabaseAdmin))
+app.use('/api/production', requireAdmin, finalHardeningRoutes(supabaseAdmin))
 app.use('/api/production', requireAdmin, productionReadinessRoutes(supabaseAdmin))
 app.use('/api/document-media', documentMediaRoutes(supabaseAdmin))
 

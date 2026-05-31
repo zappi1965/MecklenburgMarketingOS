@@ -5,6 +5,21 @@ import { isActiveAdmin, isActiveCustomer } from '@/lib/routeAccessPolicy'
 
 type GateMode = 'admin' | 'customer' | 'customer_or_admin'
 
+function localProfileFallback() {
+  if (typeof window === 'undefined') return undefined
+  try {
+    const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
+    const storedCustomer = localStorage.getItem('mmos_customer_id') || ''
+    if (storedRole === 'admin') {
+      return { role: 'admin', status: 'active', customer_id: storedCustomer || null, display_name: 'Admin', source: 'local_profile_fallback' }
+    }
+    if (storedRole === 'customer' && storedCustomer) {
+      return { role: 'customer', status: 'active', customer_id: storedCustomer, display_name: 'Kunde', source: 'local_profile_fallback' }
+    }
+  } catch {}
+  return undefined
+}
+
 let cachedProfile: any = undefined
 let pendingProfile: Promise<any> | null = null
 
@@ -52,8 +67,10 @@ async function loadProfileOnce() {
         return cachedProfile
       })
       .catch(() => {
-        cachedProfile = null
-        return null
+        const fallback = localProfileFallback()
+        cachedProfile = fallback !== undefined ? fallback : null
+        if (fallback !== undefined) writeProfileCache(fallback)
+        return cachedProfile
       })
       .finally(() => {
         pendingProfile = null
@@ -73,7 +90,7 @@ export default function RoleGate({
   fallbackTitle?: string
   fallbackText?: string
 }) {
-  const [profile, setProfile] = useState<any>(() => cachedProfile !== undefined ? cachedProfile : readProfileCache())
+  const [profile, setProfile] = useState<any>(() => cachedProfile !== undefined ? cachedProfile : (readProfileCache() ?? localProfileFallback()))
 
   useEffect(() => {
     if (profile !== undefined) return

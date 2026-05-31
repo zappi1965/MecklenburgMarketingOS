@@ -20,6 +20,29 @@ const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 authenticator.options = { window: 1, step: 30 }
 
 const ISSUER = process.env.MFA_ISSUER_NAME || 'MMOS'
+const MFA_SESSION_TTL_MS = Math.max(5, Number(process.env.MFA_SESSION_TTL_HOURS || 12)) * 60 * 60 * 1000
+
+async function findProfileForMfa(supabase, { user_id, email }, columns = 'id, email, mfa_secret, mfa_enabled, mfa_backup_codes_hash, mfa_verified_until') {
+  let profile = null
+  if (user_id) {
+    try {
+      const { data } = await supabase.from('user_profiles').select(columns).eq('id', user_id).maybeSingle()
+      if (data) profile = data
+    } catch (_) {}
+  }
+  if (!profile && email) {
+    try {
+      const { data } = await supabase.from('user_profiles').select(columns).ilike('email', String(email).toLowerCase()).maybeSingle()
+      if (data) profile = data
+    } catch (_) {}
+  }
+  return profile
+}
+
+function verifiedUntil() {
+  return new Date(Date.now() + MFA_SESSION_TTL_MS).toISOString()
+}
+
 
 function generateBackupCodes(count = 10) {
   const codes = []
@@ -67,22 +90,20 @@ async function enroll({ user_id, email }) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
   const secret = authenticator.generateSecret()
+  const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email')
+  const profileId = profile?.id || user_id
   await supabase
     .from('user_profiles')
-    .update({ mfa_secret: secret, mfa_enabled: false })
-    .eq('id', user_id)
-  const otpauth = authenticator.keyuri(email || user_id, ISSUER, secret)
+    .update({ mfa_secret: secret, mfa_enabled: false, mfa_verified_until: null })
+    .eq('id', profileId)
+  const otpauth = authenticator.keyuri(email || profile?.email || user_id, ISSUER, secret)
   return { otpauth, secret }
 }
 
-async function activate({ user_id, code, ip_address, user_agent }) {
+async function activate({ user_id, email, code, ip_address, user_agent }) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('id, mfa_secret, mfa_enabled')
-    .eq('id', user_id)
-    .maybeSingle()
+  const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email, mfa_secret, mfa_enabled')
   if (!profile?.mfa_secret) { const e = new Error('Kein Enrollment vorhanden'); e.status = 400; throw e }
   if (!authenticator.verify({ token: String(code || ''), secret: profile.mfa_secret })) {
     await logMfaEvent({ user_id, event_type: 'failed', ip_address, user_agent, metadata: { phase: 'activation' } })
@@ -95,30 +116,31 @@ async function activate({ user_id, code, ip_address, user_agent }) {
     .update({
       mfa_enabled: true,
       mfa_enrolled_at: new Date().toISOString(),
+      mfa_last_used_at: new Date().toISOString(),
+      mfa_verified_until: verifiedUntil(),
       mfa_backup_codes_hash: hashed
     })
-    .eq('id', user_id)
+    .eq('id', profile.id)
   await logMfaEvent({ user_id, event_type: 'enrolled', ip_address, user_agent })
   return { backupCodes }
 }
 
-async function verify({ user_id, code, ip_address, user_agent }) {
+async function verify({ user_id, email, code, ip_address, user_agent }) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('id, mfa_secret, mfa_enabled, mfa_backup_codes_hash')
-    .eq('id', user_id)
-    .maybeSingle()
+  const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email, mfa_secret, mfa_enabled, mfa_backup_codes_hash, mfa_verified_until')
   if (!profile?.mfa_enabled || !profile.mfa_secret) return { ok: false, reason: 'mfa_disabled' }
 
   const codeStr = String(code || '').trim().toUpperCase()
+  const until = verifiedUntil()
+
   // TOTP-Pfad
   if (/^\d{6}$/.test(codeStr) && authenticator.verify({ token: codeStr, secret: profile.mfa_secret })) {
-    await supabase.from('user_profiles').update({ mfa_last_used_at: new Date().toISOString() }).eq('id', user_id)
-    await logMfaEvent({ user_id, event_type: 'verified', ip_address, user_agent })
-    return { ok: true, via: 'totp' }
+    await supabase.from('user_profiles').update({ mfa_last_used_at: new Date().toISOString(), mfa_verified_until: until }).eq('id', profile.id)
+    await logMfaEvent({ user_id, event_type: 'verified', ip_address, user_agent, metadata: { verified_until: until } })
+    return { ok: true, via: 'totp', verified_until: until }
   }
+
   // Backup-Code-Pfad
   const hashes = profile.mfa_backup_codes_hash || []
   for (let i = 0; i < hashes.length; i++) {
@@ -126,23 +148,25 @@ async function verify({ user_id, code, ip_address, user_agent }) {
       const remaining = hashes.slice(0, i).concat(hashes.slice(i + 1))
       await supabase
         .from('user_profiles')
-        .update({ mfa_backup_codes_hash: remaining, mfa_last_used_at: new Date().toISOString() })
-        .eq('id', user_id)
-      await logMfaEvent({ user_id, event_type: 'backup_used', ip_address, user_agent, metadata: { remaining: remaining.length } })
-      return { ok: true, via: 'backup', remaining: remaining.length }
+        .update({ mfa_backup_codes_hash: remaining, mfa_last_used_at: new Date().toISOString(), mfa_verified_until: until })
+        .eq('id', profile.id)
+      await logMfaEvent({ user_id, event_type: 'backup_used', ip_address, user_agent, metadata: { remaining: remaining.length, verified_until: until } })
+      return { ok: true, via: 'backup', remaining: remaining.length, verified_until: until }
     }
   }
+
   await logMfaEvent({ user_id, event_type: 'failed', ip_address, user_agent })
   return { ok: false, reason: 'invalid_code' }
 }
 
-async function disable({ user_id, ip_address, user_agent }) {
+async function disable({ user_id, email, ip_address, user_agent }) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
+  const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email')
   await supabase
     .from('user_profiles')
-    .update({ mfa_enabled: false, mfa_secret: null, mfa_backup_codes_hash: null })
-    .eq('id', user_id)
+    .update({ mfa_enabled: false, mfa_secret: null, mfa_backup_codes_hash: null, mfa_verified_until: null })
+    .eq('id', profile?.id || user_id)
   await logMfaEvent({ user_id, event_type: 'disabled', ip_address, user_agent })
   return { ok: true }
 }
@@ -155,5 +179,6 @@ module.exports = {
   // Test helpers:
   _generateBackupCodes: generateBackupCodes,
   _verifyCodeHash: verifyCodeHash,
-  _hashCode: hashCode
+  _hashCode: hashCode,
+  _findProfileForMfa: findProfileForMfa
 }

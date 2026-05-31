@@ -9,6 +9,17 @@ let cachedProfile: any = undefined
 let pendingProfile: Promise<any> | null = null
 const rulesMemoryCache = new Map<string, any[]>()
 
+function localProfileFallback() {
+  if (typeof window === 'undefined') return undefined
+  try {
+    const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
+    const storedCustomer = localStorage.getItem('mmos_customer_id') || ''
+    if (storedRole === 'admin') return { role: 'admin', status: 'active', customer_id: storedCustomer || null, display_name: 'Admin', source: 'local_profile_fallback' }
+    if (storedRole === 'customer' && storedCustomer) return { role: 'customer', status: 'active', customer_id: storedCustomer, display_name: 'Kunde', source: 'local_profile_fallback' }
+  } catch {}
+  return undefined
+}
+
 function readSessionJson(key: string) {
   if (typeof window === 'undefined') return undefined
   try {
@@ -32,7 +43,7 @@ async function loadProfileOnce() {
   if (!pendingProfile) {
     pendingProfile = getCurrentUserProfile()
       .then((profile) => { cachedProfile = profile || null; writeSessionJson('mmos_profile_cache_v1', cachedProfile); return cachedProfile })
-      .catch(() => { cachedProfile = null; return null })
+      .catch(() => { const fallback = localProfileFallback(); cachedProfile = fallback !== undefined ? fallback : null; if (fallback !== undefined) writeSessionJson('mmos_profile_cache_v1', cachedProfile); return cachedProfile })
       .finally(() => { pendingProfile = null })
   }
   return pendingProfile
@@ -65,7 +76,7 @@ export function clearToolAccessCache(customerId?: string) {
 }
 
 export default function ToolAccessGate({ toolKey, children, upgradeText }: { toolKey: string; children: ReactNode; upgradeText?: string }) {
-  const [profile, setProfile] = useState<any>(() => cachedProfile !== undefined ? cachedProfile : readSessionJson('mmos_profile_cache_v1'))
+  const [profile, setProfile] = useState<any>(() => cachedProfile !== undefined ? cachedProfile : (readSessionJson('mmos_profile_cache_v1') ?? localProfileFallback()))
   const [rules, setRules] = useState<any[]>([])
   const [loadedRules, setLoadedRules] = useState(false)
 

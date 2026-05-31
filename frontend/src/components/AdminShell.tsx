@@ -11,7 +11,7 @@ import {
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 import BrandLogo from '@/components/brand/BrandLogo'
 
-type NavItem = { href: string; label: string; icon: any; hint?: string }
+type NavItem = { href: string; label: string; icon: any; hint?: string; action?: 'frontoffice' | 'demoCustomer' | 'demoAdmin' }
 type NavSection = { label: string; items: NavItem[] }
 
 const NEW_TOOL_NAV: NavItem[] = [
@@ -33,7 +33,9 @@ const NAV: NavSection[] = [
       { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Internes Training zu MMOS, Vertrieb, Datenschutz und Betrieb' },
       { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'Monitoring, Backups, API-Kosten und Admin-Logs' },
       { href: '/admin/production/security-core', label: 'Security Core', icon: Shield, hint: 'Tenant-Isolation, Rechte, Jobs und Systemstatus' },
-      { href: '/?app=1', label: 'Zum Frontoffice', icon: BarChart3, hint: 'Zur aktuellen Kundenarbeits-Oberfläche zurückkehren' }
+      { href: '/?app=1&view=dashboard', label: 'Zum Frontoffice', icon: BarChart3, hint: 'Öffnet das Frontoffice-Dashboard ohne Logout', action: 'frontoffice' },
+      { href: '/?app=1&demo=customer', label: 'Demo-Kundenumgebung', icon: User, hint: 'Öffnet die Demo-Kundensicht im Frontoffice', action: 'demoCustomer' },
+      { href: '/?app=1&demo=admin', label: 'Demo-Admin', icon: Rocket, hint: 'Öffnet die interne Demo-Admin-Umgebung', action: 'demoAdmin' }
     ]
   },
   {
@@ -94,7 +96,16 @@ export default function AdminShell({
   useEffect(() => {
     setMounted(true)
     setCurrentPath(window.location.pathname)
-    getCurrentUserProfile().then(setProfile).catch(() => setProfile(null))
+    getCurrentUserProfile().then((p) => {
+      setProfile(p)
+      try {
+        if (p) {
+          localStorage.setItem('mmos_role', String(p.role || 'admin').toLowerCase())
+          if (p.customer_id) localStorage.setItem('mmos_customer_id', p.customer_id)
+          sessionStorage.setItem('mmos_profile_cache_v1', JSON.stringify({ profile: p, expiresAt: Date.now() + 1000 * 60 * 10 }))
+        }
+      } catch {}
+    }).catch(() => setProfile(null))
   }, [])
 
   const activePath = activeHref || currentPath
@@ -110,6 +121,44 @@ export default function AdminShell({
     if (typeof window !== 'undefined') window.location.href = '/auth'
   }
 
+  function handleNavItem(item: NavItem, event: any) {
+    if (typeof window === 'undefined') return
+    if (item.action === 'frontoffice') {
+      event.preventDefault()
+      try {
+        localStorage.setItem('mmos_mode', 'live')
+        localStorage.setItem('mmos_role', 'admin')
+        localStorage.setItem('mmos_frontoffice_view', 'dashboard')
+        sessionStorage.removeItem('mmos_profile_cache_v1')
+      } catch {}
+      window.location.href = '/?app=1&view=dashboard'
+      return
+    }
+    if (item.action === 'demoCustomer') {
+      event.preventDefault()
+      try {
+        localStorage.setItem('mmos_mode', 'demo')
+        localStorage.setItem('mmos_role', 'customer')
+        localStorage.setItem('mmos_frontoffice_view', 'dashboard')
+        sessionStorage.removeItem('mmos_profile_cache_v1')
+      } catch {}
+      window.location.href = '/?app=1&demo=customer&view=dashboard'
+      return
+    }
+    if (item.action === 'demoAdmin') {
+      event.preventDefault()
+      try {
+        localStorage.setItem('mmos_mode', 'demo')
+        localStorage.setItem('mmos_role', 'admin')
+        localStorage.setItem('mmos_frontoffice_view', 'dashboard')
+        sessionStorage.removeItem('mmos_profile_cache_v1')
+      } catch {}
+      window.location.href = '/?app=1&demo=admin&view=dashboard'
+      return
+    }
+    setDrawerOpen(false)
+  }
+
   function renderItem(item: NavItem) {
     const Icon = item.icon
     const active = isActive(item.href)
@@ -117,7 +166,7 @@ export default function AdminShell({
       <a
         key={item.href}
         href={item.href}
-        onClick={() => setDrawerOpen(false)}
+        onClick={(event) => handleNavItem(item, event)}
         className={active ? 'adminNavItem active' : 'adminNavItem'}
         aria-current={active ? 'page' : undefined}
         title={item.hint}

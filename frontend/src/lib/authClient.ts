@@ -53,6 +53,39 @@ function buildAuthClient(): SupabaseClient {
 
 export const supabaseAuth = buildAuthClient()
 
+function browserProfileFallback(session: any) {
+  if (typeof window === 'undefined' || !session?.user) return null
+  try {
+    const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
+    const storedCustomer = localStorage.getItem('mmos_customer_id') || ''
+    const email = session.user.email || ''
+    if (storedRole === 'admin') {
+      return {
+        id: session.user.id,
+        email,
+        display_name: email || 'Admin',
+        role: 'admin',
+        status: 'active',
+        customer_id: storedCustomer || null,
+        source: 'browser_fallback'
+      }
+    }
+    if (storedRole === 'customer' && storedCustomer) {
+      return {
+        id: session.user.id,
+        email,
+        display_name: email || 'Kunde',
+        role: 'customer',
+        status: 'active',
+        customer_id: storedCustomer,
+        source: 'browser_fallback'
+      }
+    }
+  } catch {}
+  return null
+}
+
+
 export async function getCurrentSession() {
   const { data } = await supabaseAuth.auth.getSession()
   return data.session
@@ -90,6 +123,9 @@ export async function getCurrentUserProfile() {
   } catch (error) {
     console.warn('[MMOS auth] Backend profile lookup failed, falling back to anon Supabase lookup.', error)
   }
+
+  const browserFallback = browserProfileFallback(session)
+  if (browserFallback) return browserFallback
 
   // Best-effort fallback for local/offline development only.
   let profile:any = null

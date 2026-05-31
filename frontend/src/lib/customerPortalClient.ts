@@ -20,4 +20,5 @@ export const customerPortalClient = {
   revokeInvite: (id: string, body: any = {}) => request(`/invite/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: JSON.stringify(body) }),
   resendInvite: (id: string, body: any = {}) => request(`/invite/${encodeURIComponent(id)}/resend`, { method: 'POST', body: JSON.stringify(body) }),
   packageRequest: (body: any) => request('/package-request', { method: 'POST', body: JSON.stringify(body) }),
+  syncPackageAccess: (body: any) => request('/sync-package-access', { method: 'POST', body: JSON.stringify(body) }),
 }
