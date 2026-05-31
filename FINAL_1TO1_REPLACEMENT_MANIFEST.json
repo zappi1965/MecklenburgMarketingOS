@@ -338,5 +338,86 @@
       "document/e-invoice/backup hardening",
       "final live acceptance script"
     ]
+  },
+  "backoffice_customer_context_bugfix": {
+    "fixed_at": "2026-05-31 09:57:37",
+    "files": [
+      "frontend/src/components/admin/AdminCustomerSearch.tsx",
+      "frontend/src/lib/adminCustomerSelection.ts",
+      "frontend/src/lib/productionClient.ts",
+      "frontend/src/app/admin/pos/page.tsx",
+      "frontend/src/app/admin/revenue-forecast/page.tsx",
+      "frontend/src/app/admin/review-intelligence/page.tsx",
+      "frontend/src/app/admin/data-quality/page.tsx",
+      "frontend/src/app/admin/tool-access-v2/page.tsx",
+      "frontend/src/app/admin/tools/page.tsx",
+      "backend/src/services/duplicateFinderService.js",
+      "backend/src/routes/dataQualityRoutes.js"
+    ],
+    "fixes": [
+      "Backoffice Kundensuche",
+      "Production Readiness Auth Refresh",
+      "Admin customer context for POS/revenue/review tools",
+      "Dubletten safe select without postal_code",
+      "AI review source and UI",
+      "Tool access UI replacement"
+    ]
+  },
+  "mobile_app_like_hardening": {
+    "fixed_at": "2026-05-31 10:15:26",
+    "base": "MMOS_BACKOFFICE_CUSTOMER_CONTEXT_BUGFIX_FULLBUILD.zip",
+    "files": [
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/globals.css",
+      "MOBILE_APP_LIKE_HARDENING_NOTES.md"
+    ],
+    "capabilities": [
+      "mobile backoffice bottom nav",
+      "app drawer sidebar",
+      "safe area iPhone support",
+      "responsive admin tables/cards/forms",
+      "frontoffice bottom nav refinement",
+      "PWA standalone polish"
+    ]
+  },
+  "mobile_ux_v3_component_optimization": {
+    "fixed_at": "2026-05-31 10:21:13",
+    "base": "MMOS_MOBILE_APP_LIKE_HARDENING_FULLBUILD.zip",
+    "files": [
+      "frontend/src/components/admin/AdminCustomerSearch.tsx",
+      "frontend/src/components/admin/ProductionReadinessPanel.tsx",
+      "frontend/src/app/admin/data-quality/page.tsx",
+      "frontend/src/app/admin/tools/page.tsx",
+      "frontend/src/app/admin/tool-access-v2/page.tsx",
+      "frontend/src/app/admin/e-invoice/page.tsx",
+      "frontend/src/app/globals.css",
+      "MOBILE_UX_V3_COMPONENT_OPTIMIZATION_NOTES.md"
+    ],
+    "capabilities": [
+      "customer search bottom sheet",
+      "mobile cards instead of tables",
+      "mobile tool toggles",
+      "mobile invoice actions",
+      "sticky mobile action bars"
+    ]
+  },
+  "admin_profiles_ui_link_fix": {
+    "fixed_at": "2026-05-31 10:23:02",
+    "base": "MMOS_MOBILE_UX_V3_COMPONENT_OPTIMIZATION_FULLBUILD.zip",
+    "files": [
+      "frontend/src/app/admin/admin-profiles/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/admin/page.tsx",
+      "frontend/src/app/page.tsx",
+      "frontend/src/app/globals.css",
+      "ADMIN_PROFILES_UI_LINK_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "dedicated backoffice admin profiles page",
+      "sidebar link",
+      "mobile bottom nav link",
+      "admin center card",
+      "mobile optimized admin profile management"
+    ]
   }
 }

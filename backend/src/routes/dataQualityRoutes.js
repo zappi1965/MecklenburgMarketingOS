@@ -56,7 +56,7 @@ function dataQualityRoutes() {
       if (!reviewId || !supabase) { return res.status(400).json({ ok: false, error: 'review_feedback_id fehlt' }) }
       const { data: review } = await supabase
         .from('review_feedback')
-        .select('id, customer_id, rating, feedback_text')
+        .select('id, customer_id, rating, feedback_text, comment, review_text, author_name, source, created_at')
         .eq('id', reviewId)
         .maybeSingle()
       if (!review) return res.status(404).json({ ok: false, error: 'Review nicht gefunden' })
@@ -65,8 +65,9 @@ function dataQualityRoutes() {
         .select('id, name, brand_voice, metadata')
         .eq('id', review.customer_id)
         .maybeSingle()
-      const r = await aiReviewResponseService.generateResponses({ review, customer })
-      res.json({ ok: true, ...r })
+      const normalizedReview = { ...review, feedback_text: review.feedback_text || review.comment || review.review_text || '' }
+      const r = await aiReviewResponseService.generateResponses({ review: normalizedReview, customer })
+      res.json({ ok: true, source: 'review_feedback', review: normalizedReview, customer: customer ? { id: customer.id, name: customer.name } : null, ...r })
     } catch (e) { next(e) }
   })
 

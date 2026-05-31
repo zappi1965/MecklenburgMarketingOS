@@ -1507,7 +1507,7 @@ function BackofficeCenter({setView}:any){
    {label:'API-Keys',href:'/admin/api-keys',text:'Schlüssel und Integrationszugänge.'}
   ]},
   {title:'Interne Verwaltung',tools:[
-   {label:'Admin Profile',view:'admin_profiles',text:'Admin-Konten und Zuständigkeiten.'},
+   {label:'Adminprofile',href:'/admin/admin-profiles',text:'Live-Adminzugänge anlegen, sperren und verwalten.'},
    {label:'Haupt-Landingpage',view:'main_landing',text:'Öffentliche Startseite verwalten.'},
    {label:'Interne Testumgebung',view:'demo_environment',text:'Demo- und Testmodus.'},
    {label:'Demo-Daten',href:'/admin/demo-data',text:'Demo-Daten und Testinhalte.'},

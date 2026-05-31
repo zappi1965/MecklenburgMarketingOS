@@ -10,8 +10,8 @@ const eur = (value: number) => new Intl.NumberFormat('de-DE', {
 
 export default function AdminToolsPage() {
   return (
-    <>
-      <div className="adminPageHeader">
+    <main className="adminPage">
+      <header className="adminHeader">
         <div>
           <p className="eyebrow">V44 Functional Fullbuild</p>
           <h1>Kundentools, Paketlogik & Add-ons</h1>
@@ -20,7 +20,7 @@ export default function AdminToolsPage() {
           </p>
         </div>
         <a className="btn secondary" href="/tools" target="_blank">Oeffentliche Uebersicht</a>
-      </div>
+      </header>
 
       <section className="adminCardsGrid">
         {customerPackageComposition.map((pkg) => (
@@ -40,7 +40,7 @@ export default function AdminToolsPage() {
       <section className="adminCard">
         <h2>Verkaufbare Einzelmodule</h2>
         <div className="adminTableWrap">
-          <table className="adminTable">
+          <table className="adminTable adminDesktopTable">
             <thead>
               <tr>
                 <th>Modul</th>
@@ -65,7 +65,19 @@ export default function AdminToolsPage() {
             </tbody>
           </table>
         </div>
+        <div className="adminMobileCardList">
+          {customerToolModules.map((tool) => (
+            <article className="adminMobileDataCard" key={`mobile-${tool.key}`}>
+              <div><span>Modul</span><strong>{tool.shortTitle}</strong></div>
+              <div><span>Kategorie</span><strong>{tool.category}</strong></div>
+              <div><span>Preis</span><strong>{eur(tool.singlePrice)}</strong></div>
+              <p>{tool.customerValue}</p>
+              <small>Ab Paket: {tool.packageMin} · Setup: {tool.setupFee ? eur(tool.setupFee) : 'inkl.'}</small>
+              <a className="adminBtn small mobileWideBtn" href={tool.adminRoute || tool.route}>Öffnen</a>
+            </article>
+          ))}
+        </div>
       </section>
-    </>
+    </main>
   )
 }

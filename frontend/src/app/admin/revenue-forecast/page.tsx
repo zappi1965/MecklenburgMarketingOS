@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { TrendingUp, RefreshCw, ArrowUpRight, Gauge } from 'lucide-react'
 import { getCurrentUserProfile } from '@/lib/authClient'
+import { getAdminSelectedCustomerId, onAdminCustomerSelected } from '@/lib/adminCustomerSelection'
 import { revenueDynamicBillingClient } from '@/lib/revenueDynamicBillingClient'
 
 function money(n?: any) { return n == null || isNaN(Number(n)) ? '—' : `${Number(n).toFixed(2)} €` }
@@ -12,6 +13,7 @@ function money(n?: any) { return n == null || isNaN(Number(n)) ? '—' : `${Numb
 export default function RevenueForecastPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [customerId, setCustomerId] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [forecasts, setForecasts] = useState<any[]>([])
   const [recommendations, setRecommendations] = useState<any[]>([])
   const [usage, setUsage] = useState<any[]>([])
@@ -36,14 +38,24 @@ export default function RevenueForecastPage() {
   }
 
   useEffect(() => {
-    (async () => {
+    let mounted = true
+    ;(async () => {
       const p = await getCurrentUserProfile()
+      if (!mounted) return
       if (!p) { setAuthorized(false); setLoading(false); return }
+      const role = String(p.role || '').toLowerCase()
+      const admin = role === 'admin' || role === 'super_admin'
+      setIsAdmin(admin)
       setAuthorized(true)
-      const cid = p.customer_id || ''
+      const cid = p.customer_id || (admin ? getAdminSelectedCustomerId() : '') || ''
       setCustomerId(cid)
       if (cid) await load(cid); else setLoading(false)
     })()
+    const off = onAdminCustomerSelected((cid) => {
+      setCustomerId(cid)
+      if (cid) void load(cid)
+    })
+    return () => { mounted = false; off() }
   }, [])
 
   async function run(fn: () => Promise<any>, msg: string) {
@@ -64,7 +76,7 @@ export default function RevenueForecastPage() {
       </header>
 
       {authorized === false && <div className="adminNotice"><b>Anmeldung erforderlich.</b></div>}
-      {authorized && !customerId && <section className="adminCard"><p className="adminMuted">Dein Konto ist mit keinem Customer verknuepft.</p></section>}
+      {authorized && !customerId && <section className="adminCard"><p className="adminMuted">{isAdmin ? 'Bitte oben in der Backoffice-Kundensuche einen Kunden wählen.' : 'Dein Konto ist mit keinem Customer verknuepft.'}</p></section>}
       {error && <div className="adminAlert">{error}</div>}
       {info && <div className="adminAlertInfo">{info}</div>}
 

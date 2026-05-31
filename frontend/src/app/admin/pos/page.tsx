@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { CreditCard, RefreshCw } from 'lucide-react'
 import { getCurrentUserProfile } from '@/lib/authClient'
+import { getAdminSelectedCustomerId, onAdminCustomerSelected } from '@/lib/adminCustomerSelection'
 import { posClient, type PosTransaction } from '@/lib/deToolsClients'
 
 function money(n?: number, cur = 'EUR') { return n == null ? '—' : `${Number(n).toFixed(2)} ${cur}` }
@@ -19,6 +20,7 @@ function statusBadge(s?: string) {
 export default function PosPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [customerId, setCustomerId] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [tx, setTx] = useState<PosTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -33,14 +35,24 @@ export default function PosPage() {
   }
 
   useEffect(() => {
-    (async () => {
+    let mounted = true
+    ;(async () => {
       const profile = await getCurrentUserProfile()
+      if (!mounted) return
       if (!profile) { setAuthorized(false); setLoading(false); return }
+      const role = String(profile.role || '').toLowerCase()
+      const admin = role === 'admin' || role === 'super_admin'
+      setIsAdmin(admin)
       setAuthorized(true)
-      const cid = profile.customer_id || ''
+      const cid = profile.customer_id || (admin ? getAdminSelectedCustomerId() : '') || ''
       setCustomerId(cid)
       if (cid) await load(cid); else setLoading(false)
     })()
+    const off = onAdminCustomerSelected((cid) => {
+      setCustomerId(cid)
+      if (cid) void load(cid)
+    })
+    return () => { mounted = false; off() }
   }, [])
 
   const total = tx.filter((t) => statusBadge(t.status) === 'on').reduce((s, t) => s + (Number(t.amount) || 0), 0)
@@ -53,7 +65,7 @@ export default function PosPage() {
       </header>
 
       {authorized === false && <div className="adminNotice"><b>Anmeldung erforderlich.</b></div>}
-      {authorized && !customerId && <section className="adminCard"><p className="adminMuted">Dein Konto ist mit keinem Customer verknuepft.</p></section>}
+      {authorized && !customerId && <section className="adminCard"><p className="adminMuted">{isAdmin ? 'Bitte oben in der Backoffice-Kundensuche einen Kunden wählen.' : 'Dein Konto ist mit keinem Customer verknuepft.'}</p></section>}
       {error && <div className="adminAlert">{error}</div>}
 
       {authorized && customerId && (

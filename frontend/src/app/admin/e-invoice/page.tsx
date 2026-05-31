@@ -87,7 +87,7 @@ export default function EInvoicePage() {
             {loading && <div className="adminMuted">Lade …</div>}
             {!loading && invoices.length === 0 && <div className="adminMuted">Keine Rechnungen vorhanden.</div>}
             {!loading && invoices.length > 0 && (
-              <table className="adminTable">
+              <table className="adminTable adminDesktopTable">
                 <thead><tr><th>Nummer</th><th>Betrag</th><th>Status</th><th>Datum</th><th>E-Rechnung</th></tr></thead>
                 <tbody>
                   {invoices.map((inv) => (
@@ -107,6 +107,23 @@ export default function EInvoicePage() {
                   ))}
                 </tbody>
               </table>
+            )}
+            {!loading && invoices.length > 0 && (
+              <div className="adminMobileCardList">
+                {invoices.map((inv) => (
+                  <article className="adminMobileDataCard" key={`mobile-${inv.id}`}>
+                    <div><span>Nummer</span><strong>{inv.invoice_number || inv.id.slice(0, 8)}</strong></div>
+                    <div><span>Betrag</span><strong>{money(inv.total ?? inv.amount)}</strong></div>
+                    <div><span>Status</span><strong>{inv.status || '—'}</strong></div>
+                    <p>{(inv.issued_at || inv.created_at || '').slice(0, 10) || 'Kein Datum'}</p>
+                    <div className="adminMobileCardActions">
+                      <button type="button" className="adminBtn small" onClick={() => showPreview(inv.id)} disabled={!!busy}><Eye size={12} /> XML</button>
+                      <button type="button" className="adminBtn small" onClick={() => dl(inv.id, 'xml')} disabled={!!busy}><Download size={12} /> XRechnung</button>
+                      <button type="button" className="adminBtn small" onClick={() => dl(inv.id, 'zugferd')} disabled={!!busy}><Download size={12} /> ZUGFeRD</button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             )}
           </section>
 

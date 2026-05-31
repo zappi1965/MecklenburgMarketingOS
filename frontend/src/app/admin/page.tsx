@@ -6,7 +6,8 @@ import {
   FileText,
   Shield,
   Target,
-  Wrench
+  Wrench,
+  UserPlus
 } from 'lucide-react'
 
 export const metadata = { title: 'Admin Tool-Zentrale · MMOS' }
@@ -48,6 +49,13 @@ const NEW_TOOLS = [
     text: 'Tenant-Isolation, Rechteprüfung, Job Queue, Idempotency und Migration Guard.'
   },
   {
+    href: '/admin/admin-profiles',
+    title: 'Adminprofile',
+    eyebrow: 'Interne Verwaltung',
+    icon: UserPlus,
+    text: 'Live-Adminzugänge anlegen, aktivieren, sperren und Startpasswörter setzen.'
+  },
+  {
     href: '/portal/reports',
     title: 'Kundenportal Reports',
     eyebrow: 'Portal',
@@ -76,6 +84,7 @@ const CORE_LINKS = [
   { href: '/admin/customer-intelligence', label: 'Customer Intelligence' },
   { href: '/crm/customer-health', label: 'Customer Health' },
   { href: '/admin/data-quality', label: 'Datenqualität' },
+  { href: '/admin/admin-profiles', label: 'Adminprofile' },
   { href: '/admin/compliance', label: 'DSGVO-Cockpit' },
   { href: '/admin/api-keys', label: 'API-Keys' },
   { href: '/admin/demo-data', label: 'Demo-Daten' }

@@ -57,16 +57,35 @@ function pairScore(c1, c2) {
   return Math.round((nameSim * 0.4 + emailSim * 0.3 + phoneSim * 0.15 + postalSim * 0.15) * 100) / 100
 }
 
+async function getCustomerColumns(supabase) {
+  try {
+    const { data } = await supabase.rpc('mmos_table_columns', { p_table: 'customers' })
+    if (Array.isArray(data) && data.length) return data.map((r) => r.column_name || r)
+  } catch (_) {}
+  return ['id', 'name', 'email', 'phone', 'city', 'created_at']
+}
+
 async function findDuplicates({ threshold = 0.8, limit = 500 } = {}) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
 
-  const { data: customers, error } = await supabase
+  const availableColumns = await getCustomerColumns(supabase)
+  const wanted = ['id', 'name', 'email', 'phone', 'postal_code', 'zip', 'plz', 'city', 'created_at']
+  const selectColumns = wanted.filter((c) => availableColumns.includes(c))
+  if (!selectColumns.includes('id')) selectColumns.unshift('id')
+
+  let query = supabase
     .from('customers')
-    .select('id, name, email, phone, postal_code, city, created_at')
-    .order('created_at', { ascending: false })
+    .select(selectColumns.join(', '))
     .limit(limit)
+  if (selectColumns.includes('created_at')) query = query.order('created_at', { ascending: false })
+  const { data: rawCustomers, error } = await query
   if (error) throw error
+  const customers = (rawCustomers || []).map((c) => ({
+    ...c,
+    postal_code: c.postal_code || c.zip || c.plz || '',
+    city: c.city || ''
+  }))
 
   // Cluster nach (postal_code, ersten 2 Zeichen des normalisierten Namens).
   const buckets = new Map()
@@ -86,6 +105,8 @@ async function findDuplicates({ threshold = 0.8, limit = 500 } = {}) {
         if (score >= threshold) {
           clusters.push({
             confidence: score,
+            reason: 'Ähnlicher Name, E-Mail, Telefon oder Ort',
+            records: [bucket[i], bucket[j]],
             members: [bucket[i], bucket[j]]
           })
         }

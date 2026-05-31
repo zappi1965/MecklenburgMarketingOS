@@ -6,10 +6,11 @@ import {
   Star, Mail, Megaphone, AlarmClock, CreditCard, ChartLine,
   Wallet, Menu, X, LogOut, User, ScanLine, Search, Activity,
   Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles,
-  BrainCircuit, Gauge, TrendingUp, Target
+  BrainCircuit, Gauge, TrendingUp, Target, UserPlus
 } from 'lucide-react'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 import BrandLogo from '@/components/brand/BrandLogo'
+import AdminCustomerSearch from '@/components/admin/AdminCustomerSearch'
 
 type NavItem = { href: string; label: string; icon: any; hint?: string; action?: 'frontoffice' | 'demoCustomer' | 'demoAdmin' }
 type NavSection = { label: string; items: NavItem[] }
@@ -60,6 +61,7 @@ const NAV: NavSection[] = [
   {
     label: 'System & Sicherheit',
     items: [
+      { href: '/admin/admin-profiles', label: 'Adminprofile', icon: UserPlus, hint: 'Live-Adminzugänge anlegen und verwalten' },
       { href: '/admin/security', label: 'Sicherheit & 2FA', icon: Shield },
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
@@ -79,6 +81,14 @@ const NAV: NavSection[] = [
 
 const PERSONAL_NAV: NavItem[] = [
   { href: '/privacy/me', label: 'Meine Daten', icon: User }
+]
+
+const MOBILE_ADMIN_NAV: NavItem[] = [
+  { href: '/admin', label: 'Start', icon: BarChart3 },
+  { href: '/admin/sales/lead-engine', label: 'Leads', icon: Target },
+  { href: '/admin/admin-profiles', label: 'Admins', icon: UserPlus },
+  { href: '/admin/tools', label: 'Tools', icon: Shield },
+  { href: '/admin/production', label: 'Live', icon: Activity }
 ]
 
 export default function AdminShell({
@@ -107,6 +117,12 @@ export default function AdminShell({
       } catch {}
     }).catch(() => setProfile(null))
   }, [])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.body.classList.toggle('adminDrawerLocked', drawerOpen)
+    return () => document.body.classList.remove('adminDrawerLocked')
+  }, [drawerOpen])
 
   const activePath = activeHref || currentPath
 
@@ -221,7 +237,13 @@ export default function AdminShell({
         <button type="button" className="adminMenuBtn" aria-label="Menü öffnen" onClick={() => setDrawerOpen(true)}>
           <Menu size={22} />
         </button>
-        <BrandLogo href="/admin" variant="topbar" subline="Intern" />
+        <div className="adminTopbarIdentity">
+          <BrandLogo href="/admin" variant="topbar" subline="Intern" />
+          <span className="adminTopbarContext">Backoffice</span>
+        </div>
+        <div className="adminTopbarSearch">
+          <AdminCustomerSearch />
+        </div>
       </header>
 
       <main className="adminContent">
@@ -229,6 +251,23 @@ export default function AdminShell({
       </main>
 
       {drawerOpen && <div className="adminDrawerOverlay" onClick={() => setDrawerOpen(false)} />}
+
+      <nav className="adminMobileBottomNav" aria-label="Mobile Backoffice-Navigation">
+        {MOBILE_ADMIN_NAV.map((item) => {
+          const Icon = item.icon
+          const active = isActive(item.href)
+          return (
+            <a key={item.href} href={item.href} className={active ? 'active' : undefined} onClick={(event) => handleNavItem(item, event)} aria-current={active ? 'page' : undefined}>
+              <Icon size={18} strokeWidth={2.2} />
+              <span>{item.label}</span>
+            </a>
+          )
+        })}
+        <button type="button" onClick={() => setDrawerOpen(true)}>
+          <Menu size={18} strokeWidth={2.2} />
+          <span>Mehr</span>
+        </button>
+      </nav>
     </div>
   )
 }
