@@ -237,7 +237,7 @@ export default function DataQualityPage() {
               <div className="adminActions">
                 <h2 style={{ margin: 0 }}>Bewertungen</h2>
                 <span className="adminTabSpacer" />
-                <button type="button" className="adminBtn small" onClick={loadReviews} disabled={busy}>Neu laden</button>
+                <button type="button" className="adminBtn small" onClick={() => void loadReviews()} disabled={busy}>Neu laden</button>
               </div>
               {!isAdmin && <div className="adminNotice">AI-Antwort-Generierung ist nur fuer Admins verfuegbar.</div>}
               {!customerId && isAdmin && <div className="adminNotice">Kein Kundenfilter aktiv. Es werden beim Laden globale Review-Feedbacks aus der Tabelle <code>review_feedback</code> angezeigt. Wähle oben einen Kunden, um die Quelle eindeutig einzugrenzen.</div>}

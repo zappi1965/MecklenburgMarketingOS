@@ -419,5 +419,14 @@
       "admin center card",
       "mobile optimized admin profile management"
     ]
+  },
+  "vercel_data_quality_onclick_buildfix": {
+    "fixed_at": "2026-05-31 10:27:29",
+    "error": "Type '(selectedCustomerId?: string) => Promise<void>' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.",
+    "files": [
+      "frontend/src/app/admin/data-quality/page.tsx",
+      "VERCEL_DATA_QUALITY_ONCLICK_BUILDFIX_NOTES.md"
+    ],
+    "fix": "Changed onClick={loadReviews} to onClick={() => void loadReviews()}."
   }
 }
