@@ -277,8 +277,8 @@ export default function PublicLoyaltyPage() {
           {showLoyalty && (
             <div className="publicRewardQuickPanel">
               <div>
-                <b>Rewards jederzeit ansehen</b>
-                <span>{visibleRewards.length ? `${visibleRewards.length} Reward(s) verfügbar` : 'Aktuell sind noch keine Rewards hinterlegt.'}</span>
+                <b>Aktive Rewards ansehen</b>
+                <span>{visibleRewards.length ? `${visibleRewards.length} Reward(s) verfügbar` : 'Aktuell sind keine aktiven Rewards hinterlegt.'}</span>
               </div>
               <button type="button" onClick={openRewardOverview}>Rewards anzeigen</button>
             </div>

@@ -496,5 +496,21 @@
       "rewards visible anytime on slug page",
       "customer rewards not hidden by campaign filter"
     ]
+  },
+  "slug_reward_deleted_scope_fix": {
+    "fixed_at": "2026-05-31 11:43:27",
+    "base": "MMOS_SLUG_REVIEWS_REWARDS_VISIBILITY_FIX_FULLBUILD.zip",
+    "files": [
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "SLUG_REWARD_DELETED_SCOPE_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "current loyalty_rewards table is source of truth",
+      "deleted inactive archived rewards hidden",
+      "rewards from deleted campaigns hidden",
+      "legacy v33 reward records only fallback when reward table unavailable",
+      "redemption blocks deleted rewards"
+    ]
   }
 }

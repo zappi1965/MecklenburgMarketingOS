@@ -457,6 +457,27 @@ function v33FunctionalRoutes(supabase) {
     return true
   }
 
+  function isPublicActiveEntity(row) {
+    if (!row) return false
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {}
+    const merged = { ...row, ...payload }
+    const status = String(merged.status || '').trim().toLowerCase()
+    const lifecycle = String(merged.lifecycle_status || merged.lifecycle || '').trim().toLowerCase()
+    const deletedAt = merged.deleted_at || merged.archived_at || merged.removed_at
+    const deletedFlag = merged.is_deleted === true || merged.deleted === true || merged.archived === true || merged.removed === true
+    const inactiveStatus = ['deleted', 'gelöscht', 'geloescht', 'archiviert', 'archived', 'removed', 'inactive', 'inaktiv', 'disabled', 'deaktiviert', 'blocked', 'gesperrt'].includes(status)
+    const inactiveLifecycle = ['deleted', 'archived', 'removed', 'inactive', 'disabled'].includes(lifecycle)
+    return merged.active !== false && !deletedFlag && !deletedAt && !inactiveStatus && !inactiveLifecycle
+  }
+
+  function isPublicActiveReward(row) {
+    return isPublicActiveEntity(row)
+  }
+
+  function isPublicActiveCampaign(row) {
+    return isPublicActiveEntity(row)
+  }
+
   function normalizeReward(raw, source = 'unknown') {
     if (!raw) return null
     const payload = raw.payload && typeof raw.payload === 'object' ? raw.payload : {}
@@ -476,26 +497,45 @@ function v33FunctionalRoutes(supabase) {
   }
 
   async function findPublicReward(customerId, rewardId, campaignId = null) {
+    let tableQueryFailed = false
     const matches = []
     try {
       const byId = await supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('id', rewardId).maybeSingle()
-      if (!byId.error && byId.data) matches.push(normalizeReward(byId.data, 'loyalty_rewards'))
-    } catch (_) {}
-    try {
-      const records = await supabase.from('v33_functional_records')
-        .select('*')
-        .eq('customer_id', customerId)
-        .eq('resource', 'loyalty_rewards')
-        .limit(200)
-      if (!records.error) {
-        for (const rec of (records.data || [])) {
-          const nr = normalizeReward(rec, 'v33_functional_records')
-          if (String(nr?.id || '') === String(rewardId) || String(rec.local_id || '') === String(rewardId) || String(rec.payload?.id || '') === String(rewardId)) matches.push(nr)
+      if (byId.error) tableQueryFailed = true
+      if (!byId.error && byId.data && isPublicActiveReward(byId.data)) matches.push(normalizeReward(byId.data, 'loyalty_rewards'))
+    } catch (_) {
+      tableQueryFailed = true
+    }
+
+    // Nur Legacy-Fallback, wenn loyalty_rewards nicht lesbar ist. Wenn der Reward
+    // aus der Reward-Liste gelöscht wurde, soll kein alter v33-Snapshot einlösbar bleiben.
+    if (tableQueryFailed) {
+      try {
+        const records = await supabase.from('v33_functional_records')
+          .select('*')
+          .eq('customer_id', customerId)
+          .eq('resource', 'loyalty_rewards')
+          .limit(200)
+        if (!records.error) {
+          for (const rec of (records.data || [])) {
+            const nr = normalizeReward(rec, 'v33_functional_records_legacy')
+            if (!nr || !isPublicActiveReward(nr)) continue
+            if (String(nr?.id || '') === String(rewardId) || String(rec.local_id || '') === String(rewardId) || String(rec.payload?.id || '') === String(rewardId)) matches.push(nr)
+          }
         }
+      } catch (_) {}
+    }
+
+    const activeCampaignIds = new Set()
+    try {
+      const campaignRows = await supabase.from('qr_campaigns').select('id,active,status,deleted_at,archived_at,is_deleted,metadata').eq('customer_id', customerId).limit(500)
+      if (!campaignRows.error) {
+        for (const c of (campaignRows.data || [])) if (isPublicActiveCampaign(c)) activeCampaignIds.add(String(c.id))
       }
     } catch (_) {}
-    // Kampagnen-spezifische Rewards zuerst, ansonsten jeder aktive Customer-Reward.
-    const reward = matches.find(r => r && r.active !== false && r.qr_campaign_id && campaignId && String(r.qr_campaign_id) === String(campaignId)) || matches.find(r => r && r.active !== false)
+    if (campaignId) activeCampaignIds.add(String(campaignId))
+
+    const reward = matches.find(r => r && (!r.qr_campaign_id || activeCampaignIds.has(String(r.qr_campaign_id))))
     return reward || null
   }
 
@@ -1059,21 +1099,43 @@ function v33FunctionalRoutes(supabase) {
       const tableRewards = rewards.error ? [] : (rewards.data || [])
       const recordRewards = rewardRecords.error ? [] : (rewardRecords.data || []).map(r => ({ id: r.local_id || r.id, customer_id: r.customer_id, ...(r.payload || {}) }))
 
-      // Rewards sollen auf der Slug-Seite jederzeit sichtbar sein.
-      // Kampagnen-spezifische Rewards werden zuerst sortiert, aber nicht-kampagnengebundene
-      // oder anders verknüpfte Customer-Rewards werden nicht mehr ausgeblendet.
+      // Nur noch die aktuelle Reward-Liste ist maßgeblich.
+      // v33_functional_records werden nur als Legacy-Fallback genutzt, wenn die
+      // loyalty_rewards-Tabelle nicht lesbar ist. Dadurch erscheinen gelöschte
+      // Rewards nicht mehr weiter über alte Record-Snapshots.
+      const rewardSourceRows = rewards.error ? recordRewards : tableRewards
+
+      const activeCampaignIds = new Set()
+      try {
+        const campaignRows = await supabase.from('qr_campaigns').select('id,active,status,deleted_at,archived_at,is_deleted,metadata').eq('customer_id', customerId).limit(500)
+        if (!campaignRows.error) {
+          for (const c of (campaignRows.data || [])) {
+            if (isPublicActiveCampaign(c)) activeCampaignIds.add(String(c.id))
+          }
+        }
+      } catch (_) {}
+      if (campaignId) activeCampaignIds.add(String(campaignId))
+
       const rewardById = new Map()
-      for (const raw of [...tableRewards, ...recordRewards]) {
-        if (!raw || raw.active === false) continue
-        const normalized = normalizeReward(raw, raw.payload ? 'v33_functional_records' : 'loyalty_rewards')
+      for (const raw of rewardSourceRows) {
+        if (!raw || !isPublicActiveReward(raw)) continue
+        const normalized = normalizeReward(raw, raw.payload ? 'v33_functional_records_legacy' : 'loyalty_rewards')
         if (!normalized) continue
+        // Kampagnengebundene Rewards nur anzeigen, wenn die Kampagne noch aktiv existiert.
+        if (normalized.qr_campaign_id && !activeCampaignIds.has(String(normalized.qr_campaign_id))) continue
         const key = String(normalized.id || normalized.local_id || normalized.title || Math.random())
         if (!rewardById.has(key)) rewardById.set(key, normalized)
       }
+
       const mergedRewards = Array.from(rewardById.values())
-        .map(r => ({ ...r, campaign_match: Boolean(r.qr_campaign_id && campaignId && String(r.qr_campaign_id) === String(campaignId)) }))
+        .map(r => ({
+          ...r,
+          campaign_match: Boolean(r.qr_campaign_id && campaignId && String(r.qr_campaign_id) === String(campaignId)),
+          global_customer_reward: !r.qr_campaign_id
+        }))
         .sort((a, b) => {
           if (a.campaign_match !== b.campaign_match) return a.campaign_match ? -1 : 1
+          if (a.global_customer_reward !== b.global_customer_reward) return a.global_customer_reward ? -1 : 1
           return Number(a.points_required || 0) - Number(b.points_required || 0)
         })
         .slice(0, 50)
