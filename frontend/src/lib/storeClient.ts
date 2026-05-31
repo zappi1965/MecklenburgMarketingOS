@@ -8,8 +8,13 @@ import { getCurrentSession } from './authClient'
 
 async function authHeaders(): Promise<Record<string, string>> {
   const session = await getCurrentSession()
-  if (!session?.access_token) throw new Error('Nicht angemeldet.')
+  if (!session?.access_token) throw new Error('Nicht authentifiziert: Bitte neu einloggen, bevor Live-Daten gespeichert werden.')
   return { Authorization: `Bearer ${session.access_token}` }
+}
+
+export async function ensureStoreBackendAuthenticated() {
+  const headers = await authHeaders()
+  return headers.Authorization
 }
 
 type ListQuery = {

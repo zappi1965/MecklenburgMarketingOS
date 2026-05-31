@@ -384,6 +384,19 @@ function allowLocalWriteFallback(){
  return process.env.NEXT_PUBLIC_ENABLE_LOCAL_WRITE_FALLBACK==='true'
 }
 function liveWriteUnavailableMessage(table:string){return `Live-Speicherung für ${table} nicht möglich: Backend/Supabase nicht erreichbar oder keine gültige Session.`}
+function isBackendAuthError(e:any){
+ const raw=String(e?.message||e?.error||e||'').toLowerCase()
+ const status=Number(e?.status||e?.payload?.status||0)
+ const code=String(e?.payload?.code||e?.code||'').toLowerCase()
+ return status===401||code.includes('unauthenticated')||code.includes('invalid_session')||code.includes('mfa')||raw.includes('nicht authentifiziert')||raw.includes('nicht angemeldet')||raw.includes('unauthenticated')||raw.includes('invalid_session')||raw.includes('mfa_required')||raw.includes('session abgelaufen')
+}
+const backendAuthenticatedTables=new Set(['qr_campaigns','public_landing_pages','loyalty_programs','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_customers','loyalty_transactions','loyalty_reward_redemptions','loyalty_security_settings','loyalty_member_security_scores','review_feedback','customer_tool_access','package_requests'])
+function requiresBackendAuthenticatedLive(table:string){
+ return !allowLocalWriteFallback() && backendAuthenticatedTables.has(String(table||'').toLowerCase())
+}
+function backendAuthRequiredMessage(table:string,e:any){
+ return `Backend-Speicherung für ${table} nicht authentifiziert. Bitte neu einloggen, 2FA bestätigen und erneut speichern. Details: ${compactLiveError(e)}`
+}
 function compactLiveError(e:any){
  const raw=String(e?.message||e?.error||e||'Unbekannter Live-Fehler').replace(/\s+/g,' ').trim()
  if(!raw)return 'Unbekannter Live-Fehler'
@@ -503,9 +516,9 @@ function useStore(){
   try{if(hasSupabase&&supabase){void Promise.resolve(supabase.from('activity_logs').insert(log)).then(()=>undefined,()=>undefined)}}catch{}
  }
  // Schreibt bevorzugt ueber das gehaertete /api/store-Backend (Service-Role,
- // serverseitige Scope-Pruefung -> umgeht die RLS-Lotterie). Faellt bei jedem
- // Backend-Fehler (Tabelle nicht erlaubt, nicht eingeloggt, etc.) transparent
- // auf den bisherigen Browser-Supabase-Pfad zurueck -> keine Regression.
+ // serverseitige Scope-Pruefung). Für QR/Loyalty/Customer-Tools wird Live-Speicherung
+ // nur noch akzeptiert, wenn das Backend wirklich authentifiziert ist. Kein
+ // stiller Lokal- oder Browser-Supabase-Fallback bei Auth-Fehlern.
  async function backendWrite(op:'create'|'update'|'remove',table:string,payload:any,id?:string):Promise<{ok:boolean,error?:any}>{
   try{
    if(op==='create') await storeClient.create(table,payload)
@@ -522,6 +535,7 @@ function useStore(){
   try{
    const viaBackend=await backendWrite('create',table,payload)
    if(viaBackend.ok){await load()}
+   else if(requiresBackendAuthenticatedLive(table)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).insert(payload);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) {try{safeLocalStorageSet(DEMO_SANDBOX_KEY,{...data,[table]:[payload,...(data[table]||[])]})}catch{}}
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
@@ -552,6 +566,7 @@ function useStore(){
   try{
    const viaBackend=await backendWrite('update',table,normalized,id)
    if(viaBackend.ok){await load()}
+   else if(requiresBackendAuthenticatedLive(table)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).update(normalized).eq('id',id);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) persistLocal((p:any)=>({...p,[table]:(p[table]||[]).map((x:any)=>String(x.id)===String(id)?{...x,...normalized}:x)}))
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
@@ -581,6 +596,7 @@ function useStore(){
   try{
    const viaBackend=await backendWrite('remove',table,null,id)
    if(viaBackend.ok){await load()}
+   else if(requiresBackendAuthenticatedLive(table)){throw new Error(backendAuthRequiredMessage(table,viaBackend.error))}
    else if(hasSupabase&&supabase){const {error}=await supabase.from(table).delete().eq('id',id);if(error)throw error;await load()}
    else if(allowLocalWriteFallback()) persistLocal((p:any)=>({...p,[table]:(p[table]||[]).filter((x:any)=>String(x.id)!==String(id))}))
    else throw viaBackend.error || new Error(liveWriteUnavailableMessage(table))
@@ -1058,6 +1074,14 @@ function QRCodes({store,cid,setCid,role='admin'}:any){
    setF({...f,title:''})
    setCid?.(customer)
   }catch(e:any){
+   if(isBackendAuthError(e)){
+    store.notify?.('QR wurde nicht lokal gespeichert: Backend ist nicht authentifiziert. Bitte neu einloggen und 2FA bestätigen.')
+    return
+   }
+   if(!allowLocalWriteFallback()){
+    store.notify?.(`QR nicht gespeichert: ${compactLiveError(e)}`)
+    return
+   }
    await createLocalQr()
    store.notify?.(`Backend nicht erreichbar, QR lokal erstellt`)
   }
@@ -2465,7 +2489,7 @@ function V42CustomerLoyaltySettings({cid}:any){
    await v33FunctionalClient.saveStaffAndRules(cid,{...form,rules:[rule]})
    setMsg('QR & Loyalty Einstellungen gespeichert')
    await load()
-  }catch(e:any){setMsg(e.message)}
+  }catch(e:any){setMsg(isBackendAuthError(e)?'Backend-Speicherung fehlgeschlagen: Nicht authentifiziert. Bitte neu einloggen, 2FA bestätigen und erneut speichern.':e.message)}
  }
  return <><Head title="QR & Loyalty Einstellungen" sub="Kundenbereich · Mitarbeitercode · Punkte · Reward-Regeln"/><div className="grid2"><Card title="Mitarbeitercode & Punkte"><input className="input" value={form.staff_label} onChange={e=>setForm({...form,staff_label:e.target.value})} placeholder="Bezeichnung, z. B. Thekencode"/><input className="input" value={form.staff_code} onChange={e=>setForm({...form,staff_code:e.target.value})} placeholder="Mitarbeitercode, z. B. 2468"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan, z. B. 10"/><input className="input" type="number" value={form.daily_scan_limit} onChange={e=>setForm({...form,daily_scan_limit:e.target.value})} placeholder="Tageslimit pro Gast, z. B. 1"/><input className="input" type="number" value={form.weekly_scan_limit} onChange={e=>setForm({...form,weekly_scan_limit:e.target.value})} placeholder="Wochenlimit pro Gast, z. B. 5"/><input className="input" type="number" value={form.daily_point_limit_per_member} onChange={e=>setForm({...form,daily_point_limit_per_member:e.target.value})} placeholder="Punkte-Tageslimit pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" value={form.suspicion_score_threshold} onChange={e=>setForm({...form,suspicion_score_threshold:e.target.value})} placeholder="Verdachts-Score Warnschwelle, z. B. 70"/><button className="btn" onClick={save}>Speichern</button></Card><Card title="Reward-Regel erstellen"><select className="input" value={rule.trigger} onChange={e=>setRule({...rule,trigger:e.target.value})}><option value="qr_scan">Wenn QR gescannt wird</option><option value="review_positive">Wenn positive Bewertung abgegeben wird</option><option value="birthday">Wenn Geburtstag erreicht</option><option value="referral">Wenn Empfehlung eingeht</option><option value="level_up">Wenn Level erreicht</option></select><select className="input" value={rule.condition} onChange={e=>setRule({...rule,condition:e.target.value})}><option value="always">Immer</option><option value="first_scan">Nur beim ersten Scan</option><option value="weekday">Nur Wochentag</option><option value="weekend">Nur Wochenende</option><option value="points_over_100">Punkte größer 100</option><option value="vip_only">Nur VIP</option></select><select className="input" value={rule.action} onChange={e=>setRule({...rule,action:e.target.value})}><option value="add_points">Punkte vergeben</option><option value="multiply_points">Punkte multiplizieren</option><option value="unlock_reward">Reward freischalten</option><option value="create_followup">Follow-up erzeugen</option></select><input className="input" type="number" value={rule.points} onChange={e=>setRule({...rule,points:e.target.value})} placeholder="Punkte / Multiplikator, z. B. 50"/><button className="btn secondary" onClick={save}>Regel speichern</button></Card></div><Card title="Bestehende Programme & Regeln">{(data?.loyalty_programs||[]).map((p:any)=><div className="item" key={p.id}><b>{p.name||p.title}</b><span>{p.points_per_scan} Punkte pro Scan · {p.active?'aktiv':'inaktiv'}</span></div>)}{(data?.rules||[]).map((r:any)=><div className="item" key={r.id}><b>{r.payload?.trigger} → {r.payload?.action}</b><span>{r.payload?.condition} · {r.payload?.points||0} Punkte</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
 }

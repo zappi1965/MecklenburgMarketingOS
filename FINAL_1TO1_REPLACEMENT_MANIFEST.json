@@ -448,5 +448,21 @@
       "mobile landing hero no clipping",
       "mobile landing mockups stack as cards"
     ]
+  },
+  "backend_auth_qr_loyalty_fix": {
+    "fixed_at": "2026-05-31 11:08:55",
+    "base": "MMOS_MFA_EVERY_LOGIN_LANDING_MOBILE_FIX_FULLBUILD.zip",
+    "files": [
+      "frontend/src/lib/v33FunctionalClient.ts",
+      "frontend/src/lib/storeClient.ts",
+      "frontend/src/app/page.tsx",
+      "BACKEND_AUTH_QR_LOYALTY_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "v33 backend authenticated requests",
+      "same-origin proxy Authorization forwarding",
+      "no local-only QR on auth failure",
+      "protected QR/Loyalty live writes require backend auth"
+    ]
   }
 }

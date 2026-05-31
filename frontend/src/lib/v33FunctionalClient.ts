@@ -1,3 +1,4 @@
+import { getCurrentSession } from './authClient'
 const DEFAULT_PUBLIC_BACKEND_URL = 'https://mecklenburgmarketingos-production.up.railway.app'
 const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const directBackendFallback =
@@ -33,6 +34,36 @@ function formatProxyAttempts(payload: any) {
     .join(' | ')}`
 }
 
+async function authHeaders(initHeaders?: HeadersInit): Promise<Record<string, string>> {
+  const current = new Headers(initHeaders || {})
+  if (current.has('Authorization')) return {}
+  try {
+    const session = await getCurrentSession()
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
+function isPublicV33Path(path: string) {
+  return (
+    path.startsWith('/v42/health') ||
+    path.startsWith('/public/loyalty/')
+  )
+}
+
+function isAuthError(error: any) {
+  const message = String(error?.message || error || '').toLowerCase()
+  const status = Number(error?.status || 0)
+  return status === 401 || message.includes('nicht authentifiziert') || message.includes('unauthenticated') || message.includes('invalid_session') || message.includes('mfa_required')
+}
+
+export async function ensureV33BackendAuthenticated() {
+  const session = await getCurrentSession()
+  if (!session?.access_token) throw new Error('Nicht authentifiziert: Bitte neu einloggen, bevor Live-Tools gespeichert werden.')
+  return session.access_token
+}
+
 async function request(path: string, init: RequestInit = {}) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const targets: Array<{ url: string; label: string }> = []
@@ -55,6 +86,7 @@ async function request(path: string, init: RequestInit = {}) {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 15000)
+      const authHeader = isPublicV33Path(normalizedPath) ? {} : await authHeaders(init.headers)
       let res: Response
       try {
         res = await fetch(target.url, {
@@ -62,7 +94,8 @@ async function request(path: string, init: RequestInit = {}) {
           signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
-            ...(init.headers || {})
+            ...(init.headers || {}),
+            ...authHeader
           },
           cache: 'no-store'
         })
@@ -100,6 +133,9 @@ async function request(path: string, init: RequestInit = {}) {
       return payload
     } catch (error: any) {
       lastError = error
+      // Auth-Fehler nicht durch weitere Fallbacks kaschieren.
+      // Sonst wirkt das Backend "verbunden", aber Live-Speicherung ist nicht authentifiziert.
+      if (!isPublicV33Path(normalizedPath) && isAuthError(error)) throw error
     }
   }
 
