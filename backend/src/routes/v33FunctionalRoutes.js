@@ -215,6 +215,18 @@ function v33FunctionalRoutes(supabase) {
       scan_cooldown_minutes_configured: Boolean(cooldownMinutes.configured),
       daily_point_limit_per_member: Math.max(0, Math.floor(dailyPointLimit.value)),
       daily_point_limit_per_member_configured: Boolean(dailyPointLimit.configured),
+      weekly_point_limit_per_member: Math.max(0, Math.floor(configuredNumberInfo(sources, [
+        'weekly_point_limit_per_member',
+        'weekly_points_limit_per_member',
+        'points_weekly_limit',
+        'metadata.weekly_point_limit_per_member'
+      ], 0).value)),
+      weekly_point_limit_per_member_configured: Boolean(configuredNumberInfo(sources, [
+        'weekly_point_limit_per_member',
+        'weekly_points_limit_per_member',
+        'points_weekly_limit',
+        'metadata.weekly_point_limit_per_member'
+      ], 0).configured),
       suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(suspicionThreshold.value || 70)))
     }
   }
@@ -322,6 +334,26 @@ function v33FunctionalRoutes(supabase) {
       return { ok: false, code: 'DAILY_POINT_LIMIT_REACHED', status: 429, limit, points_today: pointsToday, error: `Punkte-Tageslimit erreicht. Heute sind maximal ${limit} Punkte pro Bonuskonto möglich.` }
     }
     return { ok: true, limit, points_today: pointsToday }
+  }
+
+  async function checkWeeklyPointLimit({ customerId, member, pointsToAdd, program, qrCampaign }) {
+    const qrSettings = qrScanLimitSettings(qrCampaign, program)
+    const limit = Math.max(0, Math.floor(num(qrSettings.weekly_point_limit_per_member, 0)))
+    if (!limit || !member?.id || !pointsToAdd) return { ok: true, limit, points_week: 0 }
+    const sinceWeek = new Date(Date.now() - 7*24*60*60*1000).toISOString()
+    const q = await supabase.from('loyalty_transactions')
+      .select('points')
+      .eq('customer_id', customerId)
+      .eq('loyalty_customer_id', member.id)
+      .eq('action', 'qr_scan')
+      .gte('created_at', sinceWeek)
+      .limit(2000)
+    if (q.error) return { ok: true, limit, points_week: 0, warning: q.error.message }
+    const pointsWeek = (q.data || []).reduce((s, t) => s + Math.max(0, num(t.points, 0)), 0)
+    if (pointsWeek + Math.max(0, num(pointsToAdd, 0)) > limit) {
+      return { ok: false, code: 'WEEKLY_POINT_LIMIT_REACHED', status: 429, limit, points_week: pointsWeek, error: `Punkte-Wochenlimit erreicht. Diese Woche sind maximal ${limit} Punkte pro Bonuskonto möglich.` }
+    }
+    return { ok: true, limit, points_week: pointsWeek }
   }
 
   async function updateMemberSuspicionScore({ customerId, member, program, qrCampaign }) {
@@ -1205,15 +1237,20 @@ function v33FunctionalRoutes(supabase) {
         }
         if (!authOnly) {
           const sinceDay = new Date(Date.now() - 24*60*60*1000).toISOString()
-          const sinceWeek = new Date(Date.now() - 7*24*60*60*1000).toISOString()
           const dayTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceDay)
-          const weekTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceWeek)
           const dailyScanLimit = qrLimitsForProgram.daily_scan_limit_per_member_configured ? Number(qrLimitsForProgram.daily_scan_limit_per_member || 0) : Number(settings.daily_scan_limit || 0)
           if (dailyScanLimit > 0 && (dayTx.data || []).length >= dailyScanLimit) {
             return res.status(429).json({ ok: false, error: 'Tageslimit erreicht', code:'QR_DAILY_SCAN_LIMIT_REACHED', limit: dailyScanLimit })
           }
-          if (Number(settings.weekly_scan_limit || 0) > 0 && (weekTx.data || []).length >= Number(settings.weekly_scan_limit)) {
-            return res.status(429).json({ ok: false, error: 'Wochenlimit erreicht', limit: settings.weekly_scan_limit })
+          // Kein verstecktes Wochenlimit mehr. Wochenlimits greifen nur noch,
+          // wenn sie ausdrücklich aktiviert/konfiguriert wurden.
+          const weeklyScanLimitEnabled = settings.weekly_scan_limit_enabled === true || settings.metadata?.weekly_scan_limit_enabled === true
+          if (weeklyScanLimitEnabled && Number(settings.weekly_scan_limit || 0) > 0) {
+            const sinceWeek = new Date(Date.now() - 7*24*60*60*1000).toISOString()
+            const weekTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceWeek)
+            if ((weekTx.data || []).length >= Number(settings.weekly_scan_limit)) {
+              return res.status(429).json({ ok: false, error: 'Wochenlimit erreicht', code:'QR_WEEKLY_SCAN_LIMIT_REACHED', limit: settings.weekly_scan_limit })
+            }
           }
           const qrLimit = await checkQrScanRedemptionLimits({ customerId, program, qrCampaign, member, slug })
           if (!qrLimit.ok) {
@@ -1225,12 +1262,17 @@ function v33FunctionalRoutes(supabase) {
           const pointLimit = await checkDailyPointLimit({ customerId, member, pointsToAdd: points, program, qrCampaign })
           if (!pointLimit.ok) return res.status(pointLimit.status || 429).json({ ok:false, error: pointLimit.error, code: pointLimit.code, limit: pointLimit.limit, points_today: pointLimit.points_today })
           if (pointLimit.warning) warnings.push({ code:'POINT_LIMIT_WARNING', message: pointLimit.warning })
+          const weeklyPointLimit = await checkWeeklyPointLimit({ customerId, member, pointsToAdd: points, program, qrCampaign })
+          if (!weeklyPointLimit.ok) return res.status(weeklyPointLimit.status || 429).json({ ok:false, error: weeklyPointLimit.error, code: weeklyPointLimit.code, limit: weeklyPointLimit.limit, points_week: weeklyPointLimit.points_week })
+          if (weeklyPointLimit.warning) warnings.push({ code:'WEEKLY_POINT_LIMIT_WARNING', message: weeklyPointLimit.warning })
         }
       }
 
       if (!member) {
         const pointLimitNew = await checkDailyPointLimit({ customerId, member: { id: '__new__' }, pointsToAdd: points, program, qrCampaign })
         if (!authOnly && pointLimitNew.limit > 0 && points > pointLimitNew.limit) return res.status(429).json({ ok:false, error: pointLimitNew.error || `Punkte-Tageslimit erreicht. Heute sind maximal ${pointLimitNew.limit} Punkte pro Bonuskonto möglich.`, code:'DAILY_POINT_LIMIT_REACHED', limit: pointLimitNew.limit, points_today: 0 })
+        const weeklyPointLimitNew = await checkWeeklyPointLimit({ customerId, member: { id: '__new__' }, pointsToAdd: points, program, qrCampaign })
+        if (!authOnly && weeklyPointLimitNew.limit > 0 && points > weeklyPointLimitNew.limit) return res.status(429).json({ ok:false, error: weeklyPointLimitNew.error || `Punkte-Wochenlimit erreicht. Diese Woche sind maximal ${weeklyPointLimitNew.limit} Punkte pro Bonuskonto möglich.`, code:'WEEKLY_POINT_LIMIT_REACHED', limit: weeklyPointLimitNew.limit, points_week: 0 })
         const created = await supabase.from('loyalty_customers').insert({
           customer_id: customerId,
           loyalty_program_id: program.id,
@@ -1784,7 +1826,8 @@ function v33FunctionalRoutes(supabase) {
       qr_background: '#ffffff',
       qr_logo_text: customerName.slice(0, 2).toUpperCase(),
       daily_scan_limit: 1,
-      weekly_scan_limit: 5,
+      weekly_scan_limit: 0,
+      weekly_scan_limit_enabled: false,
       birthday_bonus_points: 100,
       referral_bonus_referrer: 100,
       referral_bonus_friend: 50,
@@ -1864,7 +1907,9 @@ function v33FunctionalRoutes(supabase) {
         qr_background: body.qr_background,
         qr_logo_text: body.qr_logo_text,
         daily_scan_limit: body.daily_scan_limit,
-        weekly_scan_limit: body.weekly_scan_limit,
+        weekly_scan_limit: body.weekly_scan_limit_enabled === true ? body.weekly_scan_limit : 0,
+        weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true,
+        metadata: { ...(body.metadata || {}), weekly_point_limit_per_member: Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, body.metadata?.weekly_point_limit_per_member || 0))), weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true },
         birthday_bonus_points: body.birthday_bonus_points,
         referral_bonus_referrer: body.referral_bonus_referrer,
         referral_bonus_friend: body.referral_bonus_friend,
@@ -2890,21 +2935,30 @@ function v33FunctionalRoutes(supabase) {
         })
       }
 
-      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit || body.daily_point_limit_per_member || body.suspicion_score_threshold) {
+      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit || body.daily_point_limit_per_member || body.weekly_point_limit_per_member || body.suspicion_score_threshold) {
         const provisioned = await provisionCustomer(customerId, {})
+        const programMeta = { ...(provisioned.loyalty_program?.metadata || {}) }
+        programMeta.weekly_point_limit_per_member = Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, programMeta.weekly_point_limit_per_member || 0)))
+        programMeta.weekly_scan_limit_enabled = body.weekly_scan_limit_enabled === true
         await supabase.from('loyalty_programs').update({
           points_per_scan: Number(body.points_per_scan || provisioned.loyalty_program?.points_per_scan || 10),
           daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, provisioned.loyalty_program?.daily_point_limit_per_member || 0))),
           suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, provisioned.loyalty_program?.suspicion_score_threshold || 70)))),
+          metadata: programMeta,
           updated_at: new Date().toISOString()
         }).eq('id', provisioned.loyalty_program.id)
 
         const settings = await v37GetOrCreateLoyaltySettings(customerId)
+        const settingsMeta = { ...(settings.metadata || {}) }
+        settingsMeta.weekly_point_limit_per_member = Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, settingsMeta.weekly_point_limit_per_member || 0)))
+        settingsMeta.weekly_scan_limit_enabled = body.weekly_scan_limit_enabled === true
         await supabase.from('v37_loyalty_settings').update({
           daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
-          weekly_scan_limit: Number(body.weekly_scan_limit || settings.weekly_scan_limit || 5),
+          weekly_scan_limit: body.weekly_scan_limit_enabled === true ? Math.max(0, Math.floor(num(body.weekly_scan_limit, settings.weekly_scan_limit || 0))) : 0,
+          weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true,
           daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, settings.daily_point_limit_per_member || 0))),
           suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, settings.suspicion_score_threshold || 70)))),
+          metadata: settingsMeta,
           updated_at: new Date().toISOString()
         }).eq('customer_id', customerId)
       }

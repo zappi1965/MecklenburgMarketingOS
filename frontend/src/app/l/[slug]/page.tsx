@@ -107,7 +107,8 @@ export default function PublicLoyaltyPage() {
   function friendlyHint(message: string) {
     const m = String(message || '')
     if (m.includes('Tageslimit')) return 'Du hast heute bereits Punkte gesammelt.'
-    if (m.includes('Wochenlimit')) return 'Diese Woche ist dein Limit erreicht.'
+    if (m.includes('Punkte-Wochenlimit')) return 'Diese Woche ist dein Punkte-Limit erreicht.'
+    if (m.includes('Wochenlimit')) return 'Diese Woche ist dein Einlöse-Limit erreicht.'
     if (m.includes('nicht gefunden') || m.includes('Kein Loyalty')) return 'Dieser QR-Link ist noch nicht aktiv. Bitte prüfe die Kampagne im Adminbereich.'
     if (m.includes('Failed to fetch') || m.includes('Network') || m.includes('fetch failed')) return 'Der Server ist gerade nicht erreichbar. Bitte versuche es gleich erneut.'
     return 'Wir konnten deine Aktion gerade nicht speichern. Bitte versuche es später erneut.'

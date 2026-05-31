@@ -512,5 +512,22 @@
       "legacy v33 reward records only fallback when reward table unavailable",
       "redemption blocks deleted rewards"
     ]
+  },
+  "weekly_limit_config_fix": {
+    "fixed_at": "2026-05-31 11:52:44",
+    "base": "MMOS_SLUG_REWARD_DELETED_SCOPE_FIX_FULLBUILD.zip",
+    "files": [
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "frontend/src/app/page.tsx",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "WEEKLY_LIMIT_CONFIG_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "no hidden weekly scan default",
+      "weekly scan limit requires explicit enable",
+      "weekly point limit supported via metadata",
+      "UI weekly point limit field",
+      "clear weekly error wording"
+    ]
   }
 }
