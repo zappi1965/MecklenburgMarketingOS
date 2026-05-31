@@ -84,9 +84,14 @@ function authRoutes(supabase) {
       }
 
       const normalized = sanitizeProfile(profile)
-      const isAdmin = String(normalized.role || '').toLowerCase() === 'admin' && String(normalized.status || '').toLowerCase() === 'active'
+      const isAdmin = ['admin', 'super_admin'].includes(String(normalized.role || '').toLowerCase()) && String(normalized.status || '').toLowerCase() === 'active'
       const mfaEnabled = Boolean(normalized.mfa_enabled)
-      const mfaVerified = !mfaEnabled || (normalized.mfa_verified_until ? Date.parse(normalized.mfa_verified_until) > Date.now() : false)
+      const requireEveryLogin = process.env.MFA_REQUIRE_EVERY_LOGIN === 'true'
+      const ttlVerified = normalized.mfa_verified_until ? Date.parse(normalized.mfa_verified_until) > Date.now() : false
+      const lastSignInMs = authUser.last_sign_in_at ? Date.parse(authUser.last_sign_in_at) : 0
+      const lastMfaMs = normalized.mfa_last_used_at ? Date.parse(normalized.mfa_last_used_at) : 0
+      const loginVerified = lastMfaMs > 0 && lastSignInMs > 0 ? (lastMfaMs + 5000 >= lastSignInMs) : ttlVerified
+      const mfaVerified = !mfaEnabled || (requireEveryLogin ? loginVerified : ttlVerified)
       return res.json({
         ok: true,
         authenticated: true,
@@ -97,8 +102,9 @@ function authRoutes(supabase) {
         mfa_enabled: mfaEnabled,
         mfa_verified: mfaVerified,
         mfa_required: Boolean(isAdmin && mfaEnabled && !mfaVerified),
+        mfa_policy: requireEveryLogin ? 'every_login' : 'session_ttl',
         lookup,
-        auth_user: { id: authUser.id, email }
+        auth_user: { id: authUser.id, email, last_sign_in_at: authUser.last_sign_in_at || null }
       })
     } catch (e) { next(e) }
   })

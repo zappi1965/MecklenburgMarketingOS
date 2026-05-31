@@ -428,5 +428,25 @@
       "VERCEL_DATA_QUALITY_ONCLICK_BUILDFIX_NOTES.md"
     ],
     "fix": "Changed onClick={loadReviews} to onClick={() => void loadReviews()}."
+  },
+  "mfa_every_login_and_landing_mobile_fix": {
+    "fixed_at": "2026-05-31 10:38:11",
+    "base": "MMOS_VERCEL_DATA_QUALITY_ONCLICK_BUILDFIX_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/mfaService.js",
+      "backend/src/routes/authRoutes.js",
+      "backend/src/middleware/auth.js",
+      "backend/src/routes/securityRoutes.js",
+      "frontend/src/app/auth/page.tsx",
+      "frontend/src/app/globals.css",
+      "MFA_EVERY_LOGIN_AND_LANDING_MOBILE_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "MFA_REQUIRE_EVERY_LOGIN",
+      "MFA compares mfa_last_used_at with auth.last_sign_in_at",
+      "robust TOTP input normalization",
+      "mobile landing hero no clipping",
+      "mobile landing mockups stack as cards"
+    ]
   }
 }

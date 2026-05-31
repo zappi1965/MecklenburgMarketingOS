@@ -1,48 +1,103 @@
 // 2FA / MFA-Service. Nutzt TOTP (RFC 6238) ueber otplib.
 //
-// Workflow:
-//   1. Admin ruft /api/security/mfa/enroll auf -> Service liefert Secret
-//      + Otpauth-URL fuer QR-Code-Scanner.
-//   2. Admin scannt QR in Authenticator-App (z.B. 1Password, Google Auth).
-//   3. Admin sendet ersten Code an /api/security/mfa/activate. Service
-//      verifiziert + schaltet mfa_enabled=true frei + generiert
-//      Backup-Codes.
-//   4. Bei Login mit role IN (admin, super_admin) verlangt die Auth-
-//      Middleware einen zweiten Code im Header X-MFA-Code.
+// Wichtige ENV:
+//   MFA_ISSUER_NAME=MecklenburgMarketing
+//   MFA_SESSION_TTL_HOURS=12
+//   MFA_TOTP_WINDOW=2
+//   MFA_REQUIRE_EVERY_LOGIN=true
 //
-// Backup-Codes werden gehashed gespeichert (scrypt mit Salt), Klartext
-// nur einmal beim Enrollen ausgeliefert.
+// Wenn MFA_REQUIRE_EVERY_LOGIN=true gesetzt ist, entscheidet nicht nur
+// mfa_verified_until, sondern ob mfa_last_used_at nach dem aktuellen
+// auth.users.last_sign_in_at liegt. Dadurch wird bei jedem neuen
+// Passwort-Login wieder 2FA verlangt.
 
 const crypto = require('crypto')
 const { authenticator } = require('otplib')
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
-authenticator.options = { window: 1, step: 30 }
+authenticator.options = { window: Number(process.env.MFA_TOTP_WINDOW || 2), step: 30 }
 
 const ISSUER = process.env.MFA_ISSUER_NAME || 'MMOS'
-const MFA_SESSION_TTL_MS = Math.max(5, Number(process.env.MFA_SESSION_TTL_HOURS || 12)) * 60 * 60 * 1000
+const MFA_SESSION_TTL_HOURS = Number(process.env.MFA_SESSION_TTL_HOURS ?? 12)
+const MFA_SESSION_TTL_MS = Math.max(0, Number.isFinite(MFA_SESSION_TTL_HOURS) ? MFA_SESSION_TTL_HOURS : 12) * 60 * 60 * 1000
 
-async function findProfileForMfa(supabase, { user_id, email }, columns = 'id, email, mfa_secret, mfa_enabled, mfa_backup_codes_hash, mfa_verified_until') {
-  let profile = null
+async function findProfileCandidates(supabase, { user_id, email }, columns = 'id, email, mfa_secret, mfa_enabled, mfa_backup_codes_hash, mfa_verified_until, mfa_last_used_at') {
+  const rows = []
+  const seen = new Set()
+
+  async function pushQuery(query) {
+    try {
+      const { data } = await query
+      const list = Array.isArray(data) ? data : (data ? [data] : [])
+      for (const row of list) {
+        const key = String(row?.id || row?.email || JSON.stringify(row))
+        if (!seen.has(key)) {
+          seen.add(key)
+          rows.push(row)
+        }
+      }
+    } catch (_) {}
+  }
+
   if (user_id) {
-    try {
-      const { data } = await supabase.from('user_profiles').select(columns).eq('id', user_id).maybeSingle()
-      if (data) profile = data
-    } catch (_) {}
+    await pushQuery(supabase.from('user_profiles').select(columns).eq('id', user_id).limit(5))
   }
-  if (!profile && email) {
-    try {
-      const { data } = await supabase.from('user_profiles').select(columns).ilike('email', String(email).toLowerCase()).maybeSingle()
-      if (data) profile = data
-    } catch (_) {}
+  if (email) {
+    await pushQuery(supabase.from('user_profiles').select(columns).ilike('email', String(email).trim().toLowerCase()).limit(10))
   }
-  return profile
+
+  return rows
+}
+
+async function findProfileForMfa(supabase, { user_id, email }, columns = 'id, email, mfa_secret, mfa_enabled, mfa_backup_codes_hash, mfa_verified_until, mfa_last_used_at') {
+  const rows = await findProfileCandidates(supabase, { user_id, email }, columns)
+  return rows.find((r) => r?.mfa_enabled && r?.mfa_secret) ||
+         rows.find((r) => r?.mfa_secret) ||
+         rows[0] ||
+         null
 }
 
 function verifiedUntil() {
   return new Date(Date.now() + MFA_SESSION_TTL_MS).toISOString()
 }
 
+function normalizeMfaCode(code) {
+  const raw = String(code || '').trim().toUpperCase()
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length === 6) return { raw, totp: digits, backup: raw.replace(/\s+/g, '') }
+  return { raw, totp: '', backup: raw.replace(/\s+/g, '') }
+}
+
+function secretCandidates(secret) {
+  const raw = String(secret || '').trim()
+  const out = []
+  if (raw) out.push(raw)
+  try {
+    if (raw.startsWith('otpauth://')) {
+      const url = new URL(raw)
+      const fromUrl = url.searchParams.get('secret')
+      if (fromUrl) out.push(fromUrl)
+    }
+  } catch (_) {}
+  const compact = raw.replace(/\s+/g, '').replace(/-/g, '').toUpperCase()
+  if (compact && compact !== raw) out.push(compact)
+  return Array.from(new Set(out.filter(Boolean)))
+}
+
+function verifyTotpCode(code, secret) {
+  const normalized = normalizeMfaCode(code)
+  if (!normalized.totp) return { ok: false, reason: 'not_totp_format' }
+  for (const candidate of secretCandidates(secret)) {
+    try {
+      const delta = authenticator.checkDelta(normalized.totp, candidate)
+      if (delta !== null && delta !== undefined) return { ok: true, delta, normalized_code: normalized.totp }
+    } catch (_) {}
+    try {
+      if (authenticator.verify({ token: normalized.totp, secret: candidate })) return { ok: true, delta: null, normalized_code: normalized.totp }
+    } catch (_) {}
+  }
+  return { ok: false, reason: 'totp_mismatch', normalized_code: normalized.totp }
+}
 
 function generateBackupCodes(count = 10) {
   const codes = []
@@ -84,8 +139,6 @@ async function logMfaEvent({ user_id, event_type, ip_address, user_agent, metada
   } catch (_) {}
 }
 
-// Enrollment: erzeugt Secret, schreibt es ABER setzt mfa_enabled=false.
-// Erst die Activation-Verifikation aktiviert es.
 async function enroll({ user_id, email }) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
@@ -94,7 +147,7 @@ async function enroll({ user_id, email }) {
   const profileId = profile?.id || user_id
   await supabase
     .from('user_profiles')
-    .update({ mfa_secret: secret, mfa_enabled: false, mfa_verified_until: null })
+    .update({ mfa_secret: secret, mfa_enabled: false, mfa_verified_until: null, mfa_last_used_at: null })
     .eq('id', profileId)
   const otpauth = authenticator.keyuri(email || profile?.email || user_id, ISSUER, secret)
   return { otpauth, secret }
@@ -105,18 +158,20 @@ async function activate({ user_id, email, code, ip_address, user_agent }) {
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
   const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email, mfa_secret, mfa_enabled')
   if (!profile?.mfa_secret) { const e = new Error('Kein Enrollment vorhanden'); e.status = 400; throw e }
-  if (!authenticator.verify({ token: String(code || ''), secret: profile.mfa_secret })) {
-    await logMfaEvent({ user_id, event_type: 'failed', ip_address, user_agent, metadata: { phase: 'activation' } })
+  const totp = verifyTotpCode(code, profile.mfa_secret)
+  if (!totp.ok) {
+    await logMfaEvent({ user_id, event_type: 'failed', ip_address, user_agent, metadata: { phase: 'activation', reason: totp.reason } })
     const e = new Error('Code ungueltig'); e.status = 400; throw e
   }
+  const now = new Date().toISOString()
   const backupCodes = generateBackupCodes(10)
   const hashed = backupCodes.map((c) => hashCode(c))
   await supabase
     .from('user_profiles')
     .update({
       mfa_enabled: true,
-      mfa_enrolled_at: new Date().toISOString(),
-      mfa_last_used_at: new Date().toISOString(),
+      mfa_enrolled_at: now,
+      mfa_last_used_at: now,
       mfa_verified_until: verifiedUntil(),
       mfa_backup_codes_hash: hashed
     })
@@ -128,35 +183,36 @@ async function activate({ user_id, email, code, ip_address, user_agent }) {
 async function verify({ user_id, email, code, ip_address, user_agent }) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
-  const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email, mfa_secret, mfa_enabled, mfa_backup_codes_hash, mfa_verified_until')
+  const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email, mfa_secret, mfa_enabled, mfa_backup_codes_hash, mfa_verified_until, mfa_last_used_at')
   if (!profile?.mfa_enabled || !profile.mfa_secret) return { ok: false, reason: 'mfa_disabled' }
 
-  const codeStr = String(code || '').trim().toUpperCase()
+  const normalized = normalizeMfaCode(code)
+  const codeStr = normalized.backup
   const until = verifiedUntil()
+  const now = new Date().toISOString()
 
-  // TOTP-Pfad
-  if (/^\d{6}$/.test(codeStr) && authenticator.verify({ token: codeStr, secret: profile.mfa_secret })) {
-    await supabase.from('user_profiles').update({ mfa_last_used_at: new Date().toISOString(), mfa_verified_until: until }).eq('id', profile.id)
-    await logMfaEvent({ user_id, event_type: 'verified', ip_address, user_agent, metadata: { verified_until: until } })
-    return { ok: true, via: 'totp', verified_until: until }
+  const totpResult = verifyTotpCode(code, profile.mfa_secret)
+  if (totpResult.ok) {
+    await supabase.from('user_profiles').update({ mfa_last_used_at: now, mfa_verified_until: until }).eq('id', profile.id)
+    await logMfaEvent({ user_id, event_type: 'verified', ip_address, user_agent, metadata: { verified_until: until, delta: totpResult.delta } })
+    return { ok: true, via: 'totp', verified_until: until, delta: totpResult.delta }
   }
 
-  // Backup-Code-Pfad
   const hashes = profile.mfa_backup_codes_hash || []
   for (let i = 0; i < hashes.length; i++) {
     if (verifyCodeHash(codeStr, hashes[i])) {
       const remaining = hashes.slice(0, i).concat(hashes.slice(i + 1))
       await supabase
         .from('user_profiles')
-        .update({ mfa_backup_codes_hash: remaining, mfa_last_used_at: new Date().toISOString(), mfa_verified_until: until })
+        .update({ mfa_backup_codes_hash: remaining, mfa_last_used_at: now, mfa_verified_until: until })
         .eq('id', profile.id)
       await logMfaEvent({ user_id, event_type: 'backup_used', ip_address, user_agent, metadata: { remaining: remaining.length, verified_until: until } })
       return { ok: true, via: 'backup', remaining: remaining.length, verified_until: until }
     }
   }
 
-  await logMfaEvent({ user_id, event_type: 'failed', ip_address, user_agent })
-  return { ok: false, reason: 'invalid_code' }
+  await logMfaEvent({ user_id, event_type: 'failed', ip_address, user_agent, metadata: { reason: totpResult.reason, normalized_totp: normalized.totp ? 'present' : 'missing' } })
+  return { ok: false, reason: 'invalid_code', detail: totpResult.reason }
 }
 
 async function disable({ user_id, email, ip_address, user_agent }) {
@@ -165,7 +221,7 @@ async function disable({ user_id, email, ip_address, user_agent }) {
   const profile = await findProfileForMfa(supabase, { user_id, email }, 'id, email')
   await supabase
     .from('user_profiles')
-    .update({ mfa_enabled: false, mfa_secret: null, mfa_backup_codes_hash: null, mfa_verified_until: null })
+    .update({ mfa_enabled: false, mfa_secret: null, mfa_backup_codes_hash: null, mfa_verified_until: null, mfa_last_used_at: null })
     .eq('id', profile?.id || user_id)
   await logMfaEvent({ user_id, event_type: 'disabled', ip_address, user_agent })
   return { ok: true }
@@ -176,9 +232,10 @@ module.exports = {
   activate,
   verify,
   disable,
-  // Test helpers:
   _generateBackupCodes: generateBackupCodes,
   _verifyCodeHash: verifyCodeHash,
   _hashCode: hashCode,
-  _findProfileForMfa: findProfileForMfa
+  _findProfileForMfa: findProfileForMfa,
+  _normalizeMfaCode: normalizeMfaCode,
+  _verifyTotpCode: verifyTotpCode
 }

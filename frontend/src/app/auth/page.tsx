@@ -54,7 +54,7 @@ export default function AuthPage() {
 
   async function verifyMfaLogin() {
     setMessage('')
-    const clean = mfaCode.trim().toUpperCase()
+    const clean = mfaCode.replace(/\s+/g,'').toUpperCase()
     if (!clean) return setMessage('Bitte 2FA-Code oder Backup-Code eingeben.')
     const { data } = await supabaseAuth.auth.getSession()
     const token = data.session?.access_token
@@ -65,7 +65,7 @@ export default function AuthPage() {
       body: JSON.stringify({ code: clean })
     })
     const payload = await res.json().catch(() => ({}))
-    if (!res.ok || payload?.ok === false) return setMessage(payload?.error || '2FA-Code ist ungültig.')
+    if (!res.ok || payload?.ok === false) return setMessage(payload?.error || '2FA-Code ist ungültig. Prüfe bitte auch, ob die Uhrzeit auf deinem Handy automatisch synchronisiert wird.')
     setMfaPending(false)
     setMfaCode('')
     finishLogin(pendingProfile)
@@ -220,7 +220,7 @@ export default function AuthPage() {
           <div className="hintBox">
             <b>2FA erforderlich</b>
             <p>Gib den 6-stelligen Code aus deiner Authenticator-App ein. Alternativ kannst du einen Backup-Code verwenden.</p>
-            <input className="input" placeholder="2FA-Code oder Backup-Code" inputMode="numeric" autoFocus value={mfaCode} onChange={e=>setMfaCode(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')verifyMfaLogin()}} />
+            <input className="input" placeholder="2FA-Code oder Backup-Code" inputMode="numeric" autoFocus value={mfaCode} onChange={e=>setMfaCode(e.target.value.replace(/\s+/g,''))} onKeyDown={e=>{if(e.key==='Enter')verifyMfaLogin()}} />
             <button className="btn" onClick={verifyMfaLogin}>2FA bestätigen</button>
             <button className="btn secondary" onClick={cancelMfaLogin}>Abbrechen</button>
           </div>

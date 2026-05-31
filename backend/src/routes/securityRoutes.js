@@ -18,7 +18,7 @@ function securityRoutes() {
         profile = byEmail
       }
       const verified = profile?.mfa_verified_until ? Date.parse(profile.mfa_verified_until) > Date.now() : false
-      res.json({ ok: true, mfa_enabled: Boolean(profile?.mfa_enabled), mfa_verified: verified, mfa_verified_until: profile?.mfa_verified_until || null, mfa_last_used_at: profile?.mfa_last_used_at || null })
+      res.json({ ok: true, mfa_enabled: Boolean(profile?.mfa_enabled), mfa_verified: verified, mfa_verified_until: profile?.mfa_verified_until || null, mfa_last_used_at: profile?.mfa_last_used_at || null, mfa_policy: process.env.MFA_REQUIRE_EVERY_LOGIN === 'true' ? 'every_login' : 'session_ttl', server_time: new Date().toISOString(), totp_window: Number(process.env.MFA_TOTP_WINDOW || 2) })
     } catch (e) { next(e) }
   })
 

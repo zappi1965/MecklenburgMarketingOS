@@ -14,9 +14,15 @@ function isMfaExemptPath(req) {
   )
 }
 
-function mfaStillValid(profile) {
+function mfaStillValid(profile, authUser) {
+  const requireEveryLogin = process.env.MFA_REQUIRE_EVERY_LOGIN === 'true'
   const until = profile?.mfa_verified_until
-  return until ? Date.parse(until) > Date.now() : false
+  const ttlValid = until ? Date.parse(until) > Date.now() : false
+  if (!requireEveryLogin) return ttlValid
+  const lastSignInMs = authUser?.last_sign_in_at ? Date.parse(authUser.last_sign_in_at) : 0
+  const lastMfaMs = profile?.mfa_last_used_at ? Date.parse(profile.mfa_last_used_at) : 0
+  if (!lastSignInMs || !lastMfaMs) return ttlValid
+  return lastMfaMs + 5000 >= lastSignInMs
 }
 
 
@@ -99,7 +105,7 @@ function authMiddleware(options = {}) {
 
       if (isAdmin && profile?.mfa_enabled && options.enforceMfa !== false && !isMfaExemptPath(req)) {
         const headerCode = req.headers['x-mfa-code'] || req.headers['x-mmos-mfa-code']
-        if (!mfaStillValid(profile)) {
+        if (!mfaStillValid(profile, data.user)) {
           if (headerCode) {
             const result = await mfaService.verify({
               user_id: data.user.id,
