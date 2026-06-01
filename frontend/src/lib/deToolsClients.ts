@@ -97,10 +97,54 @@ export const socialClient = {
 
 // === POS ===
 export type PosTransaction = {
-  id: string; provider?: string; amount?: number; currency?: string; status?: string
-  transaction_time?: string; reference?: string
+  id: string
+  provider?: string
+  provider_transaction_id?: string
+  amount?: number
+  currency?: string
+  payment_type?: string
+  status?: string
+  transaction_time?: string
+  reference?: string
+  metadata?: any
+}
+export type PosSummary = {
+  count: number
+  successful_count: number
+  total_revenue: number
+  today_revenue: number
+  month_revenue: number
+  avg_transaction: number
+  by_provider: Record<string, number>
+  by_payment_type: Record<string, number>
+  daily: Array<{ date: string; amount: number }>
 }
 export const posClient = {
-  listTransactions: (customer_id: string) =>
-    call<{ ok: boolean; transactions: PosTransaction[] }>(`/api/pos/transactions/${encodeURIComponent(customer_id)}`)
+  listTransactions: (customer_id: string, params: { limit?: number; from?: string; to?: string } = {}) => {
+    const qs = new URLSearchParams()
+    if (params.limit) qs.set('limit', String(params.limit))
+    if (params.from) qs.set('from', params.from)
+    if (params.to) qs.set('to', params.to)
+    const query = qs.toString() ? `?${qs.toString()}` : ''
+    return call<{ ok: boolean; transactions: PosTransaction[] }>(`/api/pos/transactions/${encodeURIComponent(customer_id)}${query}`)
+  },
+  summary: (customer_id: string, days = 90) =>
+    call<{ ok: boolean; summary: PosSummary; transactions: PosTransaction[] }>(`/api/pos/summary/${encodeURIComponent(customer_id)}?days=${days}`),
+  sumupStatus: (customer_id: string) =>
+    call<{ ok: boolean; provider: string; config: any }>(`/api/pos/providers/sumup/status/${encodeURIComponent(customer_id)}`),
+  sumupConnect: (customer_id: string, payload: { access_token: string; merchant_code?: string; api_base?: string }) =>
+    call<{ ok: boolean; config?: any; error?: string }>(`/api/pos/providers/sumup/connect/${encodeURIComponent(customer_id)}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  sumupSync: (customer_id: string, payload: { from?: string; to?: string; limit?: number } = {}) =>
+    call<{ ok: boolean; fetched?: number; inserted?: number; updated?: number; error?: string; results?: PosTransaction[] }>(`/api/pos/providers/sumup/sync/${encodeURIComponent(customer_id)}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  linkTransaction: (transaction_id: string, payload: any) =>
+    call<{ ok: boolean; transaction?: PosTransaction; error?: string }>(`/api/pos/transactions/${encodeURIComponent(transaction_id)}/link`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    })
 }

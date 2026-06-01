@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { v33FunctionalClient } from '@/lib/v33FunctionalClient'
 import { requireConsent } from '@/lib/consent'
 import { safeLocalStorageSet, safeLocalStorageText } from '@/lib/safeStorage'
@@ -28,13 +28,31 @@ function deviceId() {
   return id
 }
 
+function qrScanSessionId(slug: string) {
+  if (typeof window === 'undefined' || !slug) return ''
+  const key = `mmos_qr_scan_session:${slug}`
+  const existing = sessionStorage.getItem(key)
+  if (existing) return existing
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(16).slice(2)}`
+  const next = `scan_${slug}_${random}`
+  sessionStorage.setItem(key, next)
+  return next
+}
+
+function consumeQrScanSession(slug: string) {
+  try { sessionStorage.removeItem(`mmos_qr_scan_session:${slug}`) } catch {}
+}
+
 export default function PublicLoyaltyPage() {
   const params = useParams<{ slug: string }>()
+  const searchParams = useSearchParams()
   const slug = String(params?.slug || '')
+  const scanToken = String(searchParams?.get('scan_token') || '')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [reviewText, setReviewText] = useState('')
+  const [marketingConsent, setMarketingConsent] = useState(false)
   const [rating, setRating] = useState(5)
   const [result, setResult] = useState<any>(null)
   const [status, setStatus] = useState<any>(null)
@@ -45,10 +63,12 @@ export default function PublicLoyaltyPage() {
   const [staffCodes, setStaffCodes] = useState<Record<string, string>>({})
   const [rewardOverviewOpen, setRewardOverviewOpen] = useState(true)
   const [submittedReview, setSubmittedReview] = useState<any>(null)
+  const [scanTokenConsumed, setScanTokenConsumed] = useState(false)
   const rewardOverviewRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!slug) return
+    setScanTokenConsumed(false)
     v33FunctionalClient.publicStatus(slug)
       .then(setStatus)
       .catch((e: any) => setHint(friendlyHint(e?.message || 'Status konnte nicht geladen werden.')))
@@ -58,6 +78,7 @@ export default function PublicLoyaltyPage() {
   const mode = String(status?.mode || status?.qr_campaign?.metadata?.purpose || 'loyalty')
   const showLoyalty = mode === 'loyalty' || mode === 'both'
   const showReview = mode === 'review' || mode === 'both'
+  const requireRescanForPoints = Boolean(status?.scan_limits?.require_rescan_for_points || status?.qr_campaign?.metadata?.require_rescan_for_points || status?.program?.metadata?.require_rescan_for_points || settings?.metadata?.require_rescan_for_points)
 
   const points = Number(result?.points_balance || result?.member?.points_balance || 0)
   const pointsAdded = Number(result?.points_added || status?.qr_campaign?.points_per_scan || status?.qr_campaign?.metadata?.points_per_scan || status?.program?.points_per_scan || 10)
@@ -87,6 +108,8 @@ export default function PublicLoyaltyPage() {
   const successTitle = campaignTexts.success_title || 'Deine Punkte wurden gespeichert.'
   const successMessage = campaignTexts.success_message || 'Danke für deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.'
   const fineprint = campaignTexts.fineprint || 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Deine Angaben werden dem jeweiligen Anbieter zugeordnet.'
+  const marketingConsentVersion = campaignTexts.marketing_consent_version || 'marketing-reminders-v1-2026-06-01'
+  const marketingConsentText = campaignTexts.marketing_consent_text || 'Ich möchte per E-Mail zu Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen dieses Anbieters kontaktiert werden. Ich kann die Einwilligung jederzeit widerrufen.'
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return `/l/${slug}`
@@ -107,6 +130,7 @@ export default function PublicLoyaltyPage() {
   function friendlyHint(message: string) {
     const m = String(message || '')
     if (m.includes('Tageslimit')) return 'Du hast heute bereits Punkte gesammelt.'
+    if (m.includes('QR_SCAN_TOKEN') || m.includes('QR_RESCAN_REQUIRED') || m.includes('erneut gescannt') || m.includes('Scan-Token')) return 'Für neue Punkte musst du den QR-Code erneut scannen.'
     if (m.includes('Punkte-Wochenlimit')) return 'Diese Woche ist dein Punkte-Limit erreicht.'
     if (m.includes('Wochenlimit')) return 'Diese Woche ist dein Einlöse-Limit erreicht.'
     if (m.includes('nicht gefunden') || m.includes('Kein Loyalty')) return 'Dieser QR-Link ist noch nicht aktiv. Bitte prüfe die Kampagne im Adminbereich.'
@@ -127,11 +151,24 @@ export default function PublicLoyaltyPage() {
         email,
         password,
         auth_only: !showLoyalty,
-        device_id: deviceId()
+        device_id: deviceId(),
+        scan_token: scanToken,
+        marketing_consent: marketingConsent,
+        marketing_consent_version: marketingConsentVersion,
+        marketing_consent_text: marketingConsentText,
+        marketing_consent_source: 'public_slug_page',
+        marketing_consent_purposes: ['loyalty_reminders','reward_reminders','coupon_offers','reactivation']
       })
 
       if (showLoyalty) {
         setResult(response)
+        if (response?.scan_token_consumed) {
+          setScanTokenConsumed(true)
+          setHint('Punkte gesammelt. Für weitere Punkte ist ein erneutes Scannen des QR-Codes erforderlich.')
+        }
+        if (response?.marketing_consent?.granted) {
+          setHint(response.marketing_consent?.email_sent ? 'Punkte gespeichert. Bitte bestätige deine Werbeeinwilligung über die E-Mail, die wir dir gerade gesendet haben.' : 'Punkte gespeichert. Deine Werbeeinwilligung wurde als Double-Opt-in-Anfrage vorbereitet. Bitte prüfe dein E-Mail-Postfach.')
+        }
       }
 
       if (showReview) {
@@ -275,6 +312,13 @@ export default function PublicLoyaltyPage() {
             </>
           )}
 
+          {requireRescanForPoints && showLoyalty && (
+            <div className={scanToken && !scanTokenConsumed ? "publicRescanNotice" : "publicRescanNotice publicNoScanTokenNotice"}>
+              <b>QR-Scan erforderlich</b>
+              <span>{scanToken && !scanTokenConsumed ? 'Dieser QR-Scan ist bereit. Nach Punktevergabe wird er verbraucht.' : 'Für neue Punkte muss diese Seite erneut über den QR-Code geöffnet werden.'}</span>
+            </div>
+          )}
+
           {showLoyalty && (
             <div className="publicRewardQuickPanel">
               <div>
@@ -314,6 +358,18 @@ export default function PublicLoyaltyPage() {
                   </label>
                 </>
               )}
+
+              <label className="publicMarketingConsentBox">
+                <input
+                  type="checkbox"
+                  checked={marketingConsent}
+                  onChange={(e) => setMarketingConsent(e.target.checked)}
+                />
+                <span>
+                  <b>Kontakt zu Werbezwecken erlauben</b>
+                  {marketingConsentText} Nach dem Absenden erhältst du eine Bestätigungs-E-Mail. Erst nach dieser Bestätigung werden Werbe-/Reminder-Mails aktiviert.
+                </span>
+              </label>
 
               <p className="publicConsentNotice">
                 Mit dem Absenden willige ich in die Verarbeitung meiner Daten (E-Mail
@@ -393,6 +449,13 @@ export default function PublicLoyaltyPage() {
               <h2>{successTitle}</h2>
               <p>{successMessage}</p>
               <p>Du hast {pointsAdded || 0} Punkte gesammelt. Dein aktueller Stand: <b>{points}</b> Punkte.</p>
+
+              {result?.marketing_consent?.double_opt_in_required && (
+                <div className="publicReviewSavedBox">
+                  <b>Bestätigungsmail versendet</b>
+                  <span>Bitte bestätige deine Werbeeinwilligung per Double-Opt-in-Link. Erst danach erhältst du Reminder- oder Angebotsmails.</span>
+                </div>
+              )}
 
               {submittedReview && (
                 <div className="publicReviewSavedBox">

@@ -88,6 +88,24 @@ function storageKey(table: string) {
   return `mmos:v45:${table}`
 }
 
+function localFallbackAllowed() {
+  if (demoActive()) return true
+  try {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('demo')) return true
+  } catch {}
+  return process.env.NEXT_PUBLIC_ENABLE_LOCAL_WRITE_FALLBACK === 'true'
+}
+
+function assertLiveStorageAllowed(table: string) {
+  if (localFallbackAllowed()) return
+  throw new Error(`Live-Speicherung für ${table} fehlgeschlagen: kein LocalStorage-Fallback im Livebetrieb. Bitte Backend/Supabase prüfen.`)
+}
+
+function isDeletedOrArchived(row: any) {
+  const status = String(row?.status || '').toLowerCase()
+  return row?.is_deleted === true || row?.deleted === true || row?.archived === true || Boolean(row?.deleted_at || row?.archived_at || row?.removed_at) || ['deleted','gelöscht','geloescht','archived','archiviert','removed'].includes(status)
+}
+
 function readLocal(table: string) {
   if (typeof window === 'undefined') return []
   try {
@@ -118,8 +136,8 @@ async function selectRemote(table: V44TableName): Promise<any[]> {
 }
 
 export async function selectTable(table: V44TableName): Promise<any[]> {
-  const remoteRows = await selectRemote(table)
-  const localRows = readLocal(table)
+  const remoteRows = (await selectRemote(table)).filter((row) => !isDeletedOrArchived(row))
+  const localRows = localFallbackAllowed() ? readLocal(table).filter((row: any) => !isDeletedOrArchived(row)) : []
   const demoRows = getV45DemoRows(table)
 
   if (demoActive()) {
@@ -154,6 +172,7 @@ export async function insertRow(table: V44TableName, row: any): Promise<any> {
     }
   }
 
+  assertLiveStorageAllowed(table)
   const rows = readLocal(table)
   writeLocal(table, mergeRowsById([payload], rows))
   return payload
@@ -171,6 +190,7 @@ export async function updateRow(table: V44TableName, id: string, patch: any): Pr
     }
   }
 
+  assertLiveStorageAllowed(table)
   const rows = readLocal(table)
   const next = rows.map((row: any) => String(row.id) === String(id) ? { ...row, ...payload } : row)
   writeLocal(table, next)

@@ -30,12 +30,12 @@ class MailService {
     }
   }
 
-  async send({ to, subject, html, text, body, replyTo, requireDelivery = false, from }) {
+  async send({ to, subject, html, text, body, replyTo, requireDelivery = false, from, attachments = [] }) {
     if (!to) throw new Error('Mail Empfänger fehlt')
     if (!text && body) text = body
 
     if (!this.enabled) {
-      const dryRun = { dryRun: true, provider: 'dry_run', to, subject, html, text, from: cleanEnv(from) || this.from, replyTo: replyTo || this.replyTo, missing_env: ['RESEND_API_KEY'] }
+      const dryRun = { dryRun: true, provider: 'dry_run', to, subject, html, text, from: cleanEnv(from) || this.from, replyTo: replyTo || this.replyTo, attachments: attachments.map((a) => ({ filename: a.filename, content_type: a.content_type || a.contentType || 'application/octet-stream', size: String(a.content || '').length })), missing_env: ['RESEND_API_KEY'] }
       console.log('[MAIL_DRY_RUN]', dryRun)
       if (requireDelivery) {
         const err = new Error('Mailversand nicht konfiguriert: RESEND_API_KEY fehlt.')
@@ -55,6 +55,7 @@ class MailService {
       html: html || `<pre>${String(text || '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))}</pre>`
     }
     if (text) payload.text = text
+    if (Array.isArray(attachments) && attachments.length) payload.attachments = attachments
     payload.replyTo = replyTo || payload.replyTo || this.replyTo
 
     const result = await this.resend.emails.send(payload)

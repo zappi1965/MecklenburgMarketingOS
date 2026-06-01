@@ -1,7 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const crypto = require('crypto')
-const { normalize, verifySignature, _normalizeSumUp, PROVIDERS } = require('../src/services/posService')
+const { normalize, verifySignature, _normalizeSumUp, PROVIDERS, normalizeSumUpTransaction, summarizeTransactions } = require('../src/services/posService')
 
 test('PROVIDERS enthaelt sumup, lightspeed, gastrosoft, mock', () => {
   assert.deepEqual([...PROVIDERS].sort(), ['gastrosoft', 'lightspeed', 'mock', 'sumup'])
@@ -39,4 +39,26 @@ test('verifySignature: korrekter HMAC matched', () => {
   const sig = crypto.createHmac('sha256', 'secret123').update(payload).digest('hex')
   assert.equal(verifySignature({ provider: 'sumup', payload, signature: sig }), true)
   assert.equal(verifySignature({ provider: 'sumup', payload, signature: 'wrong' }), false)
+})
+
+
+test('normalizeSumUpTransaction: akzeptiert History-Items mit transaction_code', () => {
+  const n = normalizeSumUpTransaction({ transaction_code: 'sum_456', amount: '29.90', currency: 'EUR', status: 'SUCCESSFUL', created_at: '2026-06-01T10:00:00Z', merchant_code: 'M123' })
+  assert.equal(n.provider_transaction_id, 'sum_456')
+  assert.equal(n.amount, 29.9)
+  assert.equal(n.status, 'successful')
+  assert.equal(n.metadata.merchant_code, 'M123')
+})
+
+test('summarizeTransactions: berechnet Tages-/Monats-/Gesamtumsatz', () => {
+  const rows = [
+    { amount: 10, status: 'successful', provider: 'sumup', payment_type: 'card', transaction_time: new Date().toISOString() },
+    { amount: 5, status: 'failed', provider: 'sumup', payment_type: 'card', transaction_time: new Date().toISOString() },
+    { amount: 20, status: 'successful', provider: 'mock', payment_type: 'cash', transaction_time: new Date().toISOString() }
+  ]
+  const s = summarizeTransactions(rows)
+  assert.equal(s.successful_count, 2)
+  assert.equal(s.total_revenue, 30)
+  assert.equal(s.by_provider.sumup, 10)
+  assert.equal(s.by_payment_type.cash, 20)
 })

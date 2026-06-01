@@ -77,6 +77,50 @@ async function writeActivity(supabase, payload) {
 function customerPortalRoutes(supabase) {
   const router = express.Router()
 
+
+  router.get('/overview', async (req, res, next) => {
+    try {
+      const role = String(req.userRole || req.userProfile?.role || '').toLowerCase()
+      const profileCustomerId = req.userProfile?.customer_id || null
+      const customerId = (role === 'admin' || role === 'super_admin') ? (req.query.customer_id || profileCustomerId) : profileCustomerId
+      if (!customerId) return res.status(400).json({ ok:false, error:'customer_id fehlt' })
+
+      const [customer, docs, consents, withdrawals, reminders, campaigns, reports] = await Promise.all([
+        safeQuery(supabase.from('customers').select('*').eq('id', customerId).maybeSingle()),
+        safeQuery(supabase.from('output_documents').select('*').eq('customer_id', customerId).order('created_at', { ascending:false }).limit(20)),
+        safeQuery(supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource','marketing_consents').order('created_at', { ascending:false }).limit(100)),
+        safeQuery(supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource','marketing_consent_withdrawals').order('created_at', { ascending:false }).limit(100)),
+        safeQuery(supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource','marketing_reminder_drafts').order('created_at', { ascending:false }).limit(50)),
+        safeQuery(supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).in('resource',['loyalty_campaigns','segment_campaigns']).order('created_at', { ascending:false }).limit(50)),
+        safeQuery(supabase.from('monthly_reports').select('*').eq('customer_id', customerId).order('created_at', { ascending:false }).limit(12))
+      ])
+
+      const activeConsents = (consents?.data || []).filter((c) => c.status === 'granted').length
+      const sentReminders = (reminders?.data || []).filter((r) => r.status === 'sent').length
+      const draftReminders = (reminders?.data || []).filter((r) => r.status === 'draft').length
+
+      res.json({
+        ok:true,
+        customer_id: customerId,
+        customer: customer?.data || null,
+        metrics: {
+          documents: (docs?.data || []).length,
+          reports: (reports?.data || []).length,
+          active_consents: activeConsents,
+          withdrawals: (withdrawals?.data || []).length,
+          reminder_drafts: draftReminders,
+          reminders_sent: sentReminders,
+          campaigns: (campaigns?.data || []).length
+        },
+        latest_documents: docs?.data || [],
+        latest_reports: reports?.data || [],
+        latest_campaigns: campaigns?.data || [],
+        latest_reminders: reminders?.data || []
+      })
+    } catch (e) { next(e) }
+  })
+
+
   router.post('/register', async (req, res, next) => {
     try {
       const body = req.body || {}
@@ -460,6 +504,48 @@ function customerPortalRoutes(supabase) {
       res.json({ ok:true, request:data, mail_results })
     } catch (e) { next(e) }
   })
+
+
+  router.get('/marketing-consents', async (req, res, next) => {
+    try {
+      const role = String(req.userRole || req.userProfile?.role || '').toLowerCase()
+      const profileCustomerId = req.userProfile?.customer_id || null
+      const customerId = (role === 'admin' || role === 'super_admin') ? (req.query.customer_id || profileCustomerId) : profileCustomerId
+      if (!customerId) return res.status(400).json({ ok:false, error:'customer_id fehlt' })
+
+      const [consents, withdrawals, drafts, members] = await Promise.all([
+        safeQuery(supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource','marketing_consents').order('created_at', { ascending:false }).limit(500)),
+        safeQuery(supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource','marketing_consent_withdrawals').order('created_at', { ascending:false }).limit(500)),
+        safeQuery(supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource','marketing_reminder_drafts').order('created_at', { ascending:false }).limit(500)),
+        safeQuery(supabase.from('loyalty_customers').select('id,email,display_name,metadata,created_at,last_activity_at').eq('customer_id', customerId).limit(1000))
+      ])
+
+      const memberRows = members?.data || []
+      const activeMembers = memberRows.filter((m) => m.metadata?.consent_marketing === true && m.metadata?.marketing_consent_status === 'granted')
+      const pendingMembers = memberRows.filter((m) => m.metadata?.marketing_consent_status === 'pending_double_opt_in')
+      const withdrawnMembers = memberRows.filter((m) => m.metadata?.marketing_consent_status === 'withdrawn')
+
+      res.json({
+        ok:true,
+        customer_id: customerId,
+        counts: {
+          active_consents: activeMembers.length,
+          pending_double_opt_in: pendingMembers.length,
+          withdrawn: withdrawnMembers.length,
+          consent_records: (consents?.data || []).length,
+          withdrawal_records: (withdrawals?.data || []).length,
+          reminder_drafts: (drafts?.data || []).length
+        },
+        active_members: activeMembers.map((m) => ({ id:m.id, email:m.email, display_name:m.display_name, consent_at:m.metadata?.marketing_consent_at, version:m.metadata?.marketing_consent_version, last_activity_at:m.last_activity_at })),
+        pending_members: pendingMembers.map((m) => ({ id:m.id, email:m.email, display_name:m.display_name, requested_at:m.metadata?.marketing_consent_pending_at, version:m.metadata?.marketing_consent_version })),
+        withdrawn_members: withdrawnMembers.map((m) => ({ id:m.id, email:m.email, display_name:m.display_name, withdrawn_at:m.metadata?.marketing_consent_withdrawn_at })),
+        consent_records: consents?.data || [],
+        withdrawal_records: withdrawals?.data || [],
+        reminder_drafts: drafts?.data || []
+      })
+    } catch (e) { next(e) }
+  })
+
 
   return router
 }

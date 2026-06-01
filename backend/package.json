@@ -27,7 +27,17 @@
     "backup:once": "node src/workers/backupWorker.js",
     "worker:jobs": "node src/workers/jobWorker.js",
     "worker:jobs:once": "node src/workers/jobWorker.js --once",
-    "test:security-core": "node --test tests/permissionService.test.js tests/jobQueueService.test.js"
+    "test:security-core": "node --test tests/permissionService.test.js tests/jobQueueService.test.js",
+    "test:final-hardening": "node --test tests/productionSmokeFinal.test.js",
+    "test:operations": "node --test tests/operationsLayer.test.js",
+    "test:qr-growth": "node --test tests/qrCampaignGrowth.test.js",
+    "test:loyalty-growth": "node --test tests/loyaltyGrowthSuite.test.js",
+    "test:retention": "node --test tests/retentionIntelligenceSuite.test.js",
+    "test:marketing-consent": "node --test tests/marketingConsent.test.js",
+    "test:mail-domain": "node --test tests/mailDomainLiveReadiness.test.js",
+    "test:portal-golive": "node --test tests/portalReportsCampaignsGoLive.test.js",
+    "test:completeness-audit": "node --test tests/completenessAudit.test.js",
+    "test:tool-readiness": "node --test tests/toolReadiness.test.js"
   },
   "dependencies": {
     "@sentry/node": "8.55.2",

@@ -7,12 +7,34 @@ import {
   Shield,
   Target,
   Wrench,
-  UserPlus
+  UserPlus,
+  Rocket
 } from 'lucide-react'
 
 export const metadata = { title: 'Admin Tool-Zentrale · MMOS' }
 
 const NEW_TOOLS = [
+  {
+    href: '/admin/production/tool-readiness',
+    title: 'Tool-Reife 1–100',
+    eyebrow: 'Produktionsreife',
+    icon: Activity,
+    text: 'Bewertet jedes verkaufbare Tool, zeigt fehlende Punkte und Live-Nachweise.'
+  },
+  {
+    href: '/admin/production/completeness-audit',
+    title: 'Completeness Audit',
+    eyebrow: 'Pilot Readiness',
+    icon: Activity,
+    text: 'Prüft Systemvollständigkeit, Live-Blocker, Kundenportal, SumUp, PDF, Consent, Billing und Migrationen.'
+  },
+  {
+    href: '/admin/go-live',
+    title: 'Go-Live Cockpit',
+    eyebrow: 'Live',
+    icon: Rocket,
+    text: 'Zentrale Startseite für Pilotfähigkeit, Mail-Domain, Kunden-Go-Live, Retention und Blocker.'
+  },
   {
     href: '/admin/training',
     title: 'Wissenstest',

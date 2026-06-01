@@ -529,5 +529,587 @@
       "UI weekly point limit field",
       "clear weekly error wording"
     ]
+  },
+  "global_live_write_legacy_cleanup_fix": {
+    "fixed_at": "2026-05-31 13:14:15",
+    "base": "MMOS_WEEKLY_LIMIT_CONFIG_FIX_FULLBUILD.zip",
+    "files": [
+      "frontend/src/lib/v44FunctionalToolsClient.ts",
+      "backend/src/services/storeService.js",
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "backend/src/services/packageAccessService.js",
+      "frontend/src/app/page.tsx",
+      "GLOBAL_LIVE_WRITE_LEGACY_CLEANUP_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "disable live LocalStorage fallback for V44/V45",
+      "central deleted/archived row filtering",
+      "v33 functional record soft delete and active filter",
+      "reward weekly limit explicit enable only",
+      "package sync preserves manual disables"
+    ]
+  },
+  "unified_guards_public_shield_fullsystem_fix": {
+    "fixed_at": "2026-05-31 13:24:40",
+    "base": "MMOS_GLOBAL_LIVE_WRITE_LEGACY_CLEANUP_FIX_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/publicEndpointShieldService.js",
+      "backend/src/services/criticalAuditService.js",
+      "backend/src/services/documentIntegrityService.js",
+      "backend/src/services/schemaMigrationDoctorService.js",
+      "backend/src/services/unifiedLimitEngineService.js",
+      "backend/src/services/toolAccessPolicyService.js",
+      "backend/src/routes/globalGuardRoutes.js",
+      "backend/src/server.js",
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "backend/src/services/storeService.js",
+      "frontend/src/lib/globalGuardClient.ts",
+      "frontend/src/app/admin/production/global-guards/page.tsx",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "frontend/src/app/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/globals.css",
+      "UNIFIED_GUARDS_PUBLIC_SHIELD_FULLSYSTEM_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "public endpoint shield",
+      "unified limit policy view",
+      "require QR rescan for further points",
+      "critical action audit",
+      "document integrity guard",
+      "schema migration doctor",
+      "tool access policy engine",
+      "admin customer context guard",
+      "global guards admin page"
+    ]
+  },
+  "server_qr_scan_token_guard": {
+    "fixed_at": "2026-05-31 13:30:13",
+    "base": "MMOS_UNIFIED_GUARDS_PUBLIC_SHIELD_FULLSYSTEM_FIX_FULLBUILD.zip",
+    "files": [
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "backend/src/server.js",
+      "frontend/src/lib/v33FunctionalClient.ts",
+      "frontend/src/app/q/[slug]/page.tsx",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "frontend/src/app/globals.css",
+      "SERVER_QR_SCAN_TOKEN_GUARD_NOTES.md"
+    ],
+    "capabilities": [
+      "server issued QR scan tokens",
+      "one-time token consumption",
+      "reload/new tab/direct slug cannot produce more points",
+      "QR public target changed to /q/[slug]",
+      "scan-start public endpoint"
+    ]
+  },
+  "customer_golive_document_data_qr_hardening": {
+    "fixed_at": "2026-05-31 13:37:07",
+    "base": "MMOS_SERVER_QR_SCAN_TOKEN_GUARD_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/qrMaintenanceService.js",
+      "backend/src/services/customerPortalPermissionGuardService.js",
+      "backend/src/services/dataQualityRulesEngineService.js",
+      "backend/src/services/mailDeliveryGuardService.js",
+      "backend/src/services/bookingConsistencyGuardService.js",
+      "backend/src/services/trashRestoreService.js",
+      "backend/src/services/documentVersioningGuardService.js",
+      "backend/src/services/auditOfferConsistencyService.js",
+      "backend/src/services/adminRbacGuardService.js",
+      "backend/src/services/customerGoLiveChecklistService.js",
+      "backend/src/routes/customerReadinessRoutes.js",
+      "backend/src/server.js",
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "frontend/src/lib/customerReadinessClient.ts",
+      "frontend/src/app/admin/production/customer-readiness/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "CUSTOMER_GOLIVE_DOCUMENT_DATA_QR_HARDENING_NOTES.md"
+    ],
+    "capabilities": [
+      "Customer Go-Live Checklist",
+      "Invoice and Document Integrity Guard",
+      "Customer Portal Permission Guard",
+      "Document Versioning Guard",
+      "Audit-to-Offer Consistency Guard",
+      "Admin RBAC Guard",
+      "Data Quality Rules Engine",
+      "Mail Delivery Guard",
+      "Booking Consistency Guard",
+      "Trash & Restore Center",
+      "QR Legacy Target Migration",
+      "QR Token Cleanup Job",
+      "QR End-to-End Diagnostic"
+    ]
+  },
+  "final_production_hardening_99": {
+    "fixed_at": "2026-05-31 13:42:35",
+    "base": "MMOS_CUSTOMER_GOLIVE_DOCUMENT_DATA_QR_HARDENING_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/productionSmokeTestService.js",
+      "backend/src/services/backgroundJobSchedulerService.js",
+      "backend/src/services/tenantIsolationAuditService.js",
+      "backend/src/services/webhookSignatureGuardService.js",
+      "backend/src/services/fileUploadSecurityGuardService.js",
+      "backend/src/services/rbacPermissionMatrixService.js",
+      "backend/src/services/mailComplianceTemplateVersioningService.js",
+      "backend/src/services/productionErrorCenterService.js",
+      "backend/src/routes/finalProductionHardeningRoutes.js",
+      "backend/src/server.js",
+      "backend/package.json",
+      "frontend/src/lib/finalProductionHardeningClient.ts",
+      "frontend/src/app/admin/production/final-hardening/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/tests/final-hardening.spec.ts",
+      "backend/tests/productionSmokeFinal.test.js",
+      "supabase/migrations/0099_final_production_performance_indexes.sql",
+      "docs/FINAL_PRODUCTION_99_READINESS_CHECKLIST.md",
+      "FINAL_PRODUCTION_HARDENING_99_IMPLEMENTATION_NOTES.md"
+    ],
+    "capabilities": [
+      "Production Smoke Test Runner",
+      "Background Job Scheduler",
+      "Supabase Performance Index Pack",
+      "Tenant Isolation Final Audit",
+      "Webhook Signature Guard",
+      "File Upload Security Guard",
+      "Full RBAC Permission Matrix",
+      "Playwright E2E Test Pack",
+      "Mail Compliance Template Versioning",
+      "Production Error Center",
+      "Final Hardening Admin UI"
+    ]
+  },
+  "final_99_live_activation_pack": {
+    "fixed_at": "2026-05-31 13:45:43",
+    "base": "MMOS_FINAL_PRODUCTION_HARDENING_99_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/final99ActivationService.js",
+      "backend/src/routes/finalProductionHardeningRoutes.js",
+      "frontend/src/lib/finalProductionHardeningClient.ts",
+      "frontend/src/app/admin/production/final-hardening/page.tsx",
+      "scripts/production-99-live-runner.mjs",
+      "scripts/verify-production-99-env.mjs",
+      ".github/workflows/production-99-live.yml",
+      "docs/PRODUCTION_99_LIVE_EXECUTION_RUNBOOK.md",
+      "docs/LEGAL_REVIEW_HANDOFF_99.md",
+      "MMOS_99_LIVE_ACTIVATION_PACK_NOTES.md"
+    ],
+    "capabilities": [
+      "99 activation readiness endpoint",
+      "99 missing proof checklist in UI",
+      "live runner script",
+      "env verification script",
+      "GitHub Actions live check workflow",
+      "legal review handoff",
+      "production 99 live execution runbook"
+    ]
+  },
+  "operations_layer_support_onboarding_reporting": {
+    "fixed_at": "2026-05-31 14:10:26",
+    "base": "MMOS_99_LIVE_ACTIVATION_PACK_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/supportDiagnosticsService.js",
+      "backend/src/services/billingConsistencyGuardService.js",
+      "backend/src/services/monthlyReportGeneratorService.js",
+      "backend/src/services/customerOnboardingWorkflowService.js",
+      "backend/src/services/customerLifecycleService.js",
+      "backend/src/services/incidentCenterService.js",
+      "backend/src/services/backupRestoreReadinessService.js",
+      "backend/src/middleware/permissionGuard.js",
+      "backend/src/routes/operationsRoutes.js",
+      "backend/src/server.js",
+      "backend/package.json",
+      "backend/tests/operationsLayer.test.js",
+      "frontend/src/lib/operationsClient.ts",
+      "frontend/src/app/admin/production/support-diagnostics/page.tsx",
+      "frontend/src/app/admin/onboarding/customer-wizard/page.tsx",
+      "frontend/src/app/admin/reports/monthly/page.tsx",
+      "frontend/src/app/admin/production/incident-center/page.tsx",
+      "frontend/src/app/admin/production/backup-restore/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "MMOS_OPERATIONS_LAYER_SUPPORT_ONBOARDING_REPORTING_NOTES.md"
+    ],
+    "capabilities": [
+      "Support diagnosis cockpit",
+      "Customer onboarding wizard",
+      "Monthly report generator",
+      "Billing consistency guard",
+      "Route permission guard",
+      "Backup restore readiness",
+      "Customer lifecycle status",
+      "Incident center"
+    ]
+  },
+  "qr_campaign_growth_center": {
+    "fixed_at": "2026-05-31 14:18:50",
+    "base": "MMOS_OPERATIONS_LAYER_SUPPORT_ONBOARDING_REPORTING_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/qrCampaignGrowthService.js",
+      "backend/src/routes/qrCampaignGrowthRoutes.js",
+      "backend/src/server.js",
+      "backend/package.json",
+      "backend/tests/qrCampaignGrowth.test.js",
+      "frontend/src/lib/qrCampaignGrowthClient.ts",
+      "frontend/src/app/admin/qr-campaigns/growth/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "MMOS_QR_CAMPAIGN_GROWTH_CENTER_NOTES.md"
+    ],
+    "capabilities": [
+      "QR campaign type templates",
+      "QR placement tracking",
+      "QR funnel events",
+      "QR campaign traffic light/issues",
+      "QR auto-fix recommendations",
+      "QR print package generator",
+      "QR Growth Center admin UI"
+    ]
+  },
+  "loyalty_growth_suite": {
+    "fixed_at": "2026-05-31 14:23:40",
+    "base": "MMOS_QR_CAMPAIGN_GROWTH_CENTER_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/loyaltyGrowthSuiteService.js",
+      "backend/src/routes/loyaltyGrowthSuiteRoutes.js",
+      "backend/src/server.js",
+      "backend/package.json",
+      "backend/tests/loyaltyGrowthSuite.test.js",
+      "frontend/src/lib/loyaltyGrowthSuiteClient.ts",
+      "frontend/src/app/admin/loyalty/growth-suite/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "MMOS_LOYALTY_GROWTH_SUITE_NOTES.md"
+    ],
+    "capabilities": [
+      "Loyalty Growth Suite admin UI",
+      "Loyalty campaign ideas",
+      "Campaign calendar drafts",
+      "Happy Hour points booster",
+      "Birthday campaigns",
+      "VIP level rules",
+      "Coupon wallet",
+      "Referral program",
+      "Winback campaign recommendations",
+      "Loyalty ROI calculator",
+      "Next-best loyalty tool recommendations"
+    ]
+  },
+  "retention_intelligence_suite": {
+    "fixed_at": "2026-06-01 15:10:45",
+    "base": "MMOS_LOYALTY_GROWTH_SUITE_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/retentionIntelligenceSuiteService.js",
+      "backend/src/routes/retentionIntelligenceRoutes.js",
+      "backend/src/services/rbacPermissionMatrixService.js",
+      "backend/src/server.js",
+      "backend/package.json",
+      "backend/tests/retentionIntelligenceSuite.test.js",
+      "frontend/src/lib/retentionIntelligenceClient.ts",
+      "frontend/src/app/admin/retention/intelligence/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "MMOS_RETENTION_INTELLIGENCE_SUITE_NOTES.md"
+    ],
+    "capabilities": [
+      "Customer Segment Builder",
+      "Churn Prevention Center",
+      "Inactive customer detection",
+      "Concrete reactivation suggestions",
+      "Customer Value Score",
+      "Feedback-to-Action Board",
+      "Service Recovery Tool",
+      "Retention recommendations",
+      "Reactivation plan generator",
+      "Explainable scoring",
+      "Consent-aware contact suggestions"
+    ]
+  },
+  "public_slug_marketing_consent_reminders": {
+    "fixed_at": "2026-06-01 15:17:15",
+    "base": "MMOS_RETENTION_INTELLIGENCE_SUITE_FULLBUILD.zip",
+    "files": [
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "backend/src/services/marketingReminderAutomationService.js",
+      "backend/src/routes/retentionIntelligenceRoutes.js",
+      "backend/package.json",
+      "backend/tests/marketingConsent.test.js",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "frontend/src/lib/v33FunctionalClient.ts",
+      "frontend/src/lib/retentionIntelligenceClient.ts",
+      "frontend/src/app/admin/retention/intelligence/page.tsx",
+      "frontend/src/app/globals.css",
+      "MMOS_PUBLIC_SLUG_MARKETING_CONSENT_REMINDERS_NOTES.md"
+    ],
+    "capabilities": [
+      "Public slug marketing consent checkbox",
+      "Consent evidence logging",
+      "Consent metadata on loyalty member",
+      "Consent withdrawal endpoint",
+      "Consent-aware marketing reminder drafts",
+      "Retention UI reminder draft generation",
+      "No automatic sending without approval"
+    ]
+  },
+  "double_opt_in_mail_consent_send_portal_legal_guard": {
+    "fixed_at": "2026-06-01 15:29:19",
+    "base": "MMOS_PUBLIC_SLUG_MARKETING_CONSENT_REMINDERS_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/marketingConsentMailService.js",
+      "backend/src/services/marketingReminderAutomationService.js",
+      "backend/src/services/marketingConsentComplianceService.js",
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "backend/src/routes/retentionIntelligenceRoutes.js",
+      "backend/src/routes/customerPortalRoutes.js",
+      "backend/package.json",
+      "backend/tests/marketingConsent.test.js",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "frontend/src/app/marketing/confirm/page.tsx",
+      "frontend/src/app/marketing/unsubscribe/page.tsx",
+      "frontend/src/app/portal/consents/page.tsx",
+      "frontend/src/lib/v33FunctionalClient.ts",
+      "frontend/src/lib/retentionIntelligenceClient.ts",
+      "frontend/src/lib/customerPortalClient.ts",
+      "frontend/src/app/admin/retention/intelligence/page.tsx",
+      "frontend/src/app/globals.css",
+      "MMOS_DOUBLE_OPT_IN_MAIL_CONSENT_SEND_PORTAL_LEGAL_GUARD_NOTES.md"
+    ],
+    "capabilities": [
+      "Real Resend/Mail sending for double-opt-in and reminders",
+      "Double-opt-in email confirmation",
+      "Marketing consent pending state",
+      "Confirmation page",
+      "Unsubscribe page",
+      "Unsubscribe token in every reminder mail",
+      "Customer portal consent overview",
+      "Technical legal wording guard",
+      "Consent-aware send route",
+      "Mail event logging"
+    ]
+  },
+  "mail_domain_live_privacy_legal": {
+    "fixed_at": "2026-06-01 15:34:54",
+    "base": "MMOS_DOUBLE_OPT_IN_MAIL_CONSENT_SEND_PORTAL_LEGAL_GUARD_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/mailDomainLiveReadinessService.js",
+      "backend/src/routes/mailDomainComplianceRoutes.js",
+      "backend/package.json",
+      "backend/tests/mailDomainLiveReadiness.test.js",
+      "backend/src/server.js",
+      "frontend/src/lib/mailDomainComplianceClient.ts",
+      "frontend/src/app/admin/production/mail-domain/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/datenschutz/page.tsx",
+      "docs/MAIL_DOMAIN_RESEND_LIVE_RUNBOOK.md",
+      "MMOS_MAIL_DOMAIN_LIVE_PRIVACY_LEGAL_PACKAGE_NOTES.md"
+    ],
+    "capabilities": [
+      "Mail domain readiness checker",
+      "SPF/DKIM/DMARC readiness",
+      "Resend test mail sender",
+      "Unsubscribe self-test",
+      "Privacy policy update for marketing reminders",
+      "Technical legal guard exposure",
+      "Mail domain admin page",
+      "Live runbook"
+    ]
+  },
+  "portal_reports_segment_campaigns_consent_golive": {
+    "fixed_at": "2026-06-01 15:48:26",
+    "base": "MMOS_MAIL_DOMAIN_LIVE_PRIVACY_LEGAL_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/monthlyReportDeliveryService.js",
+      "backend/src/services/retentionSegmentCampaignService.js",
+      "backend/src/services/goLiveCockpitService.js",
+      "backend/src/routes/goLiveCockpitRoutes.js",
+      "backend/src/routes/operationsRoutes.js",
+      "backend/src/routes/retentionIntelligenceRoutes.js",
+      "backend/src/routes/customerPortalRoutes.js",
+      "backend/src/routes/v33FunctionalRoutes.js",
+      "backend/src/services/gotenbergService.js",
+      "backend/src/services/mailService.js",
+      "backend/src/server.js",
+      "backend/package.json",
+      "backend/tests/portalReportsCampaignsGoLive.test.js",
+      "frontend/src/app/portal/page.tsx",
+      "frontend/src/app/portal/consents/page.tsx",
+      "frontend/src/app/admin/reports/monthly/page.tsx",
+      "frontend/src/app/admin/retention/intelligence/page.tsx",
+      "frontend/src/app/marketing/consent-center/page.tsx",
+      "frontend/src/app/marketing/confirm/page.tsx",
+      "frontend/src/app/marketing/unsubscribe/page.tsx",
+      "frontend/src/app/admin/go-live/page.tsx",
+      "frontend/src/lib/customerPortalClient.ts",
+      "frontend/src/lib/operationsClient.ts",
+      "frontend/src/lib/retentionIntelligenceClient.ts",
+      "frontend/src/lib/v33FunctionalClient.ts",
+      "frontend/src/lib/goLiveCockpitClient.ts",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/admin/page.tsx",
+      "frontend/src/app/globals.css",
+      "MMOS_PORTAL_REPORTS_SEGMENT_CAMPAIGNS_CONSENT_GOLIVE_NOTES.md"
+    ],
+    "capabilities": [
+      "Improved customer portal home",
+      "Monthly report PDF generation",
+      "Monthly report email sending with PDF attachment",
+      "Segment-based campaigns from Retention Intelligence",
+      "Public end-customer consent center",
+      "Double-opt-in resend",
+      "Consent status view",
+      "Admin Go-Live Cockpit",
+      "Central go-live blocker overview"
+    ]
+  },
+  "login_mobile_optimization": {
+    "fixed_at": "2026-06-01 16:04:08",
+    "base": "MMOS_PORTAL_REPORTS_SEGMENT_CAMPAIGNS_CONSENT_GOLIVE_FULLBUILD.zip",
+    "files": [
+      "frontend/src/app/auth/page.tsx",
+      "frontend/src/app/globals.css",
+      "MMOS_LOGIN_MOBILE_OPTIMIZATION_NOTES.md"
+    ],
+    "capabilities": [
+      "Mobile-safe auth shell",
+      "Scrollable login page",
+      "Safe-area iPhone support",
+      "Responsive auth card",
+      "Improved mobile input behavior",
+      "Touch-friendly buttons and inputs",
+      "Landscape auth layout fix"
+    ]
+  },
+  "update_password_ux_validation": {
+    "fixed_at": "2026-06-01 16:07:26",
+    "base": "MMOS_LOGIN_MOBILE_OPTIMIZATION_FULLBUILD.zip",
+    "files": [
+      "frontend/src/app/auth/update-password/page.tsx",
+      "frontend/src/app/globals.css",
+      "MMOS_UPDATE_PASSWORD_UX_VALIDATION_NOTES.md"
+    ],
+    "capabilities": [
+      "Improved update password page",
+      "Frontend password rules",
+      "Password confirmation",
+      "Expired reset link detection",
+      "Success state with login button",
+      "Mobile friendly update-password layout"
+    ]
+  },
+  "package_matrix_landing_tools_integration": {
+    "fixed_at": "2026-06-01 16:32:47",
+    "base": "MMOS_UPDATE_PASSWORD_UX_VALIDATION_FULLBUILD.zip",
+    "files": [
+      "frontend/src/lib/customerToolModules.ts",
+      "frontend/src/lib/toolRegistry.ts",
+      "frontend/src/lib/packageConfig.ts",
+      "frontend/src/app/tools/page.tsx",
+      "frontend/src/app/admin/tools/page.tsx",
+      "frontend/src/app/admin/tool-access-v2/page.tsx",
+      "frontend/src/app/page.tsx",
+      "MMOS_PACKAGE_MATRIX_LANDING_TOOLS_INTEGRATION_NOTES.md"
+    ],
+    "capabilities": [
+      "Expanded sellable customer modules",
+      "Updated Starter/Growth/Premium package matrix",
+      "New retention/consent/report/go-live modules in package logic",
+      "Updated central tool registry",
+      "Landingpage package card defaults updated",
+      "Optional addon tools expanded",
+      "Admin tools and tool-access-v2 inherit new modules"
+    ]
+  },
+  "sumup_revenue_payments_v1": {
+    "fixed_at": "2026-06-01 16:43:42",
+    "base": "MMOS_PACKAGE_MATRIX_LANDING_TOOLS_INTEGRATION_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/posService.js",
+      "backend/src/routes/posRoutes.js",
+      "backend/tests/posService.test.js",
+      "frontend/src/lib/deToolsClients.ts",
+      "frontend/src/app/admin/pos/page.tsx",
+      "frontend/src/app/globals.css",
+      "frontend/src/lib/customerToolModules.ts",
+      "frontend/src/lib/toolRegistry.ts",
+      "frontend/src/app/page.tsx",
+      "supabase/migrations/0100_sumup_revenue_connection_v1.sql",
+      "MMOS_SUMUP_REVENUE_PAYMENTS_V1_NOTES.md"
+    ],
+    "capabilities": [
+      "SumUp V1 revenue data connection",
+      "Customer-specific SumUp token config",
+      "SumUp transactions sync",
+      "POS revenue summary",
+      "Daily/monthly revenue metrics",
+      "Manual transaction linking",
+      "Admin POS page renamed to Umsatz & Zahlungen",
+      "Package matrix and landingpage addon integration"
+    ]
+  },
+  "completeness_pilot_readiness_audit": {
+    "fixed_at": "2026-06-01 17:13:40",
+    "base": "MMOS_SUMUP_REVENUE_PAYMENTS_V1_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/completenessAuditService.js",
+      "backend/src/routes/completenessAuditRoutes.js",
+      "backend/src/server.js",
+      "frontend/src/lib/completenessAuditClient.ts",
+      "frontend/src/app/admin/production/completeness-audit/page.tsx",
+      "frontend/src/app/portal/backoffice/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/admin/page.tsx",
+      "frontend/src/lib/toolRegistry.ts",
+      "frontend/src/lib/customerToolModules.ts",
+      "frontend/src/app/page.tsx",
+      "MMOS_COMPLETENESS_PILOT_READINESS_AUDIT_NOTES.md"
+    ],
+    "capabilities": [
+      "System Completeness Audit",
+      "Pilot Readiness Score",
+      "External live proof flags",
+      "Hard blocker list",
+      "Module completeness checks",
+      "ENV readiness checks",
+      "Migration readiness checks",
+      "Customer portal backoffice basis",
+      "Admin navigation integration",
+      "Package and landing integration"
+    ]
+  },
+  "tool_readiness_backoffice_completion": {
+    "fixed_at": "2026-06-01 17:23:18",
+    "base": "MMOS_COMPLETENESS_PILOT_READINESS_AUDIT_FULLBUILD.zip",
+    "files": [
+      "backend/src/services/toolReadinessService.js",
+      "backend/src/routes/toolReadinessRoutes.js",
+      "backend/src/server.js",
+      "frontend/src/lib/toolReadinessClient.ts",
+      "frontend/src/app/admin/production/tool-readiness/page.tsx",
+      "frontend/src/app/portal/dashboard/page.tsx",
+      "frontend/src/app/portal/qr-campaigns/page.tsx",
+      "frontend/src/app/portal/loyalty/page.tsx",
+      "frontend/src/app/portal/reviews/page.tsx",
+      "frontend/src/app/portal/campaigns/page.tsx",
+      "frontend/src/app/portal/settings/page.tsx",
+      "frontend/src/app/portal/team/page.tsx",
+      "frontend/src/app/portal/billing/page.tsx",
+      "frontend/src/components/AdminShell.tsx",
+      "frontend/src/app/admin/page.tsx",
+      "frontend/src/lib/toolRegistry.ts",
+      "frontend/src/lib/customerToolModules.ts",
+      "frontend/src/app/page.tsx",
+      "docs/production/TOOL_PRODUCTION_READINESS_RUNBOOK.md",
+      "docs/contracts/LEISTUNGSBESCHREIBUNG_NEUE_TOOLS.md",
+      "docs/contracts/ADDON_PREISLISTE_NEUE_TOOLS.md",
+      "docs/legal/SUMUP_ABGRENZUNG_KASSE.md",
+      "MMOS_TOOL_READINESS_BACKOFFICE_COMPLETION_NOTES.md"
+    ],
+    "capabilities": [
+      "Tool production readiness 1-100 center",
+      "Per-tool missing items",
+      "External live proof checks",
+      "Markdown export",
+      "Customer portal backoffice v1 pages",
+      "Production runbook",
+      "New tools service description",
+      "Add-on price list",
+      "SumUp cash register scope disclaimer"
+    ]
   }
 }

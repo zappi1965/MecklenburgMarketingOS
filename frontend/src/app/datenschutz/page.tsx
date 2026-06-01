@@ -563,36 +563,131 @@ export default function Datenschutz() {
             </p>
           </Section>
 
-          <Section title="14. Newsletter und Werbekommunikation">
+          <Section title="14. Newsletter, Werbeeinwilligungen und Reminder-Mails">
             <p>
-              Optional – nur verwenden, wenn Newsletter oder regelmäßige
-              Werbe-E-Mails verschickt werden:
+              Wenn Sie sich für werbliche Informationen, Newsletter, Bonusprogramm-
+              Erinnerungen oder vergleichbare Kundenbindungsnachrichten anmelden,
+              verarbeiten wir Ihre E-Mail-Adresse und gegebenenfalls weitere
+              freiwillige Angaben, um Ihnen die gewünschten Informationen zuzusenden.
             </p>
 
             <p>
-              Wenn Sie sich für unseren Newsletter anmelden, verarbeiten wir Ihre
-              E-Mail-Adresse und gegebenenfalls weitere freiwillige Angaben, um
-              Ihnen Informationen zu unseren Leistungen, Angeboten und
-              Neuigkeiten zuzusenden.
+              Bei Bonus-, Loyalty- oder Slug-Seiten kann eine gesonderte
+              Einwilligung abgefragt werden, damit der jeweilige Anbieter Sie per
+              E-Mail zu Bonuspunkten, Rewards, Coupons, Reaktivierungsaktionen
+              oder ähnlichen Kundenbindungsmaßnahmen kontaktieren darf. Diese
+              Einwilligung ist freiwillig und nicht Voraussetzung für die
+              Teilnahme am Bonusprogramm.
             </p>
 
             <p>
-              Der Versand erfolgt nur mit Ihrer Einwilligung.
+              Die Anmeldung erfolgt über ein Double-Opt-in-Verfahren. Das bedeutet,
+              dass nach dem Ankreuzen der Einwilligung zunächst eine
+              Bestätigungs-E-Mail versendet wird. Erst nach Klick auf den
+              Bestätigungslink wird die Werbeeinwilligung aktiv.
+            </p>
+
+            <p>Dabei können insbesondere folgende Daten verarbeitet werden:</p>
+
+            <List
+              items={[
+                "E-Mail-Adresse",
+                "Name oder Anzeigename, sofern angegeben",
+                "zugehöriges Bonusprogramm oder Kundenunternehmen",
+                "Zeitpunkt der Einwilligungsanfrage",
+                "Zeitpunkt der Double-Opt-in-Bestätigung",
+                "Version und Text der Einwilligung",
+                "Zwecke der Einwilligung, z. B. Rewards, Coupons oder Reaktivierung",
+                "technische Nachweisdaten, insbesondere IP-Hash und User-Agent",
+                "Widerrufs- und Abmeldestatus",
+              ]}
+            />
+
+            <p>
+              Jede werbliche E-Mail oder Reminder-Mail enthält einen Abmeldelink.
+              Eine erteilte Einwilligung kann jederzeit mit Wirkung für die
+              Zukunft widerrufen werden.
             </p>
 
             <p>
               <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. a DSGVO.
             </p>
+          </Section>
 
+          <Section title="15. E-Mail-Dienstleister Resend">
             <p>
-              Sie können Ihre Einwilligung jederzeit widerrufen, zum Beispiel
-              über den Abmeldelink im Newsletter oder durch eine Nachricht an
-              uns.
+              Für den Versand von System-, Double-Opt-in-, Benachrichtigungs-
+              und Reminder-E-Mails kann der Dienstleister Resend eingesetzt
+              werden.
             </p>
 
-            <p className="rounded-2xl bg-amber-50 p-4 text-amber-900">
-              Wenn kein Newsletter angeboten wird, sollte dieser Abschnitt
-              entfernt werden.
+            <p>
+              Beim E-Mail-Versand können insbesondere Empfängeradresse,
+              Betreff, Nachrichteninhalt, Versandzeitpunkt, Zustellstatus und
+              technische Versanddaten verarbeitet werden.
+            </p>
+
+            <p>
+              Soweit Resend personenbezogene Daten in unserem Auftrag verarbeitet,
+              erfolgt dies auf Grundlage eines Vertrags zur Auftragsverarbeitung
+              nach Art. 28 DSGVO.
+            </p>
+
+            <p>
+              <strong>Rechtsgrundlage:</strong>
+              <br />
+              Art. 6 Abs. 1 lit. b DSGVO für vertrags- und servicebezogene
+              E-Mails.
+              <br />
+              Art. 6 Abs. 1 lit. a DSGVO für Werbe-, Reminder- und
+              Kundenbindungs-E-Mails.
+              <br />
+              Art. 6 Abs. 1 lit. f DSGVO für technische Versandprotokolle und
+              Missbrauchsschutz.
+            </p>
+          </Section>
+
+          <Section title="16. Bonusprogramm, Kundenbindung und Reaktivierung">
+            <p>
+              Im Rahmen eines Bonus- oder Loyalty-Programms können Daten genutzt
+              werden, um Punkte, Rewards, Coupons, VIP-Level, Kundenbindungs-
+              Aktionen oder Reaktivierungsvorschläge bereitzustellen.
+            </p>
+
+            <p>
+              Das System kann erkennen, wenn ein Bonusmitglied über einen
+              längeren Zeitraum inaktiv war oder Rewards nicht genutzt wurden.
+              Daraus können interne Vorschläge oder Entwürfe für
+              Reaktivierungsmaßnahmen entstehen. Eine werbliche Kontaktaufnahme
+              erfolgt nur, wenn eine hierfür geeignete Rechtsgrundlage,
+              insbesondere eine bestätigte Einwilligung, vorliegt.
+            </p>
+
+            <p>Dabei können insbesondere folgende Daten verarbeitet werden:</p>
+
+            <List
+              items={[
+                "Bonusmitglied-ID",
+                "E-Mail-Adresse, sofern angegeben",
+                "Punktestand",
+                "Reward- und Coupon-Nutzung",
+                "letzte Aktivität",
+                "Kampagnen- und Reaktivierungsvorschläge",
+                "Einwilligungs- und Widerrufsnachweise",
+              ]}
+            />
+
+            <p>
+              <strong>Rechtsgrundlage:</strong>
+              <br />
+              Art. 6 Abs. 1 lit. b DSGVO, soweit die Verarbeitung zur
+              Durchführung des Bonusprogramms erforderlich ist.
+              <br />
+              Art. 6 Abs. 1 lit. a DSGVO, soweit werbliche Kontaktaufnahmen oder
+              Reminder-Mails erfolgen.
+              <br />
+              Art. 6 Abs. 1 lit. f DSGVO für interne Auswertungen,
+              Missbrauchsschutz und technische Sicherheit.
             </p>
           </Section>
 

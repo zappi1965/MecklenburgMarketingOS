@@ -33,6 +33,8 @@ const NAV: NavSection[] = [
       { href: '/admin', label: 'Backoffice-Zentrale', icon: BarChart3, hint: 'Zentrale Übersicht der internen Backoffice-Tools' },
       { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Internes Training zu MMOS, Vertrieb, Datenschutz und Betrieb' },
       { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'Monitoring, Backups, API-Kosten und Admin-Logs' },
+      { href: '/admin/production/completeness-audit', label: 'Completeness Audit', icon: Gauge, hint: 'Systemvollständigkeit, Pilotfähigkeit und Blocker zentral prüfen' },
+      { href: '/admin/production/tool-readiness', label: 'Tool-Reife 1–100', icon: Gauge, hint: 'Produktionsreife je Tool bewerten und fehlende Punkte sehen' },
       { href: '/admin/production/security-core', label: 'Security Core', icon: Shield, hint: 'Tenant-Isolation, Rechte, Jobs und Systemstatus' },
       { href: '/?app=1&view=dashboard', label: 'Zum Frontoffice', icon: BarChart3, hint: 'Öffnet das Frontoffice-Dashboard ohne Logout', action: 'frontoffice' },
       { href: '/?app=1&demo=customer', label: 'Demo-Kundenumgebung', icon: User, hint: 'Öffnet die Demo-Kundensicht im Frontoffice', action: 'demoCustomer' },
@@ -55,7 +57,8 @@ const NAV: NavSection[] = [
     items: [
       { href: '/admin/tools', label: 'Pakete & Kundentools', icon: Megaphone, hint: 'Verkaufbare Module, Add-ons und Paketlogik' },
       { href: '/admin/tool-access-v2', label: 'Tool-Freigaben Pro', icon: Shield, hint: 'Freischaltungen pro Kunde und Paket' },
-      { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText, hint: 'Value-Angebote aus Audit und Paketlogik' }
+      { href: '/admin/sales/value-offers', label: 'Angebote', icon: FileText, hint: 'Value-Angebote aus Audit und Paketlogik' },
+      { href: '/admin/reports/monthly', label: 'Monatsreports', icon: FileText, hint: 'Automatische Kundenreports als Entwurf erzeugen' }
     ]
   },
   {
@@ -66,7 +69,19 @@ const NAV: NavSection[] = [
       { href: '/admin/compliance', label: 'DSGVO-Cockpit', icon: FileText },
       { href: '/admin/api-keys', label: 'API-Keys', icon: KeyRound },
       { href: '/admin/data-quality', label: 'Datenqualität', icon: Database, hint: 'Dubletten, E-Mail-Check und Datenpflege' },
-      { href: '/admin/demo-data', label: 'Demo-Daten', icon: FileText }
+      { href: '/admin/production/global-guards', label: 'Global Guards', icon: Shield, hint: 'Public Shield, Limit Engine, Schema Doctor und Tool Access Policy' },
+      { href: '/admin/production/customer-readiness', label: 'Go-Live Center', icon: Activity, hint: 'Customer Go-Live, Dokumente, Datenqualität, Mail, Booking und QR-Fixes' },
+      { href: '/admin/production/final-hardening', label: 'Final Hardening', icon: Shield, hint: 'Smoke Tests, Tenant-Isolation, Jobs, Webhooks, Uploads, RBAC und Errors' },
+      { href: '/admin/production/support-diagnostics', label: 'Support-Diagnose', icon: Wrench, hint: 'QR, Slug, Loyalty, Billing und Fehler je Kunde prüfen' },
+      { href: '/admin/qr-campaigns/growth', label: 'QR Growth Center', icon: ScanLine, hint: 'Placement Tracking, Funnel, Empfehlungen und Druckpakete' },
+      { href: '/admin/loyalty/growth-suite', label: 'Loyalty Growth Suite', icon: Sparkles, hint: 'Kampagnenkalender, VIP-Level, Coupon Wallet, Referral und ROI' },
+      { href: '/admin/retention/intelligence', label: 'Retention Intelligence', icon: BrainCircuit, hint: 'Segmente, Churn, Value Score, Feedback Actions und Reaktivierung' },
+      { href: '/admin/production/incident-center', label: 'Incident Center', icon: AlarmClock, hint: 'Störungen, Ursachen und Lösungen dokumentieren' },
+      { href: '/admin/production/backup-restore', label: 'Backup & Restore', icon: Database, hint: 'Backup-Readiness und Restore-Test Nachweise' },
+      { href: '/admin/go-live', label: 'Go-Live Cockpit', icon: Rocket, hint: 'Zentrale Pilot- und Live-Bereitschaft prüfen' },
+      { href: '/admin/production/mail-domain', label: 'Mail-Domain & Consent', icon: Mail, hint: 'Resend, SPF/DKIM/DMARC, Testmail, Abmeldung und Consent-Text' },
+      { href: '/admin/demo-data', label: 'Demo-Daten', icon: FileText },
+      { href: '/admin/onboarding/customer-wizard', label: 'Onboarding-Wizard', icon: Rocket, hint: 'Kunden von Lead bis Live führen' }
     ]
   },
   {
@@ -102,6 +117,7 @@ export default function AdminShell({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [currentPath, setCurrentPath] = useState('')
+  const [selectedCustomerLabel, setSelectedCustomerLabel] = useState('Kein Kunde gewählt')
 
   useEffect(() => {
     setMounted(true)
@@ -123,6 +139,24 @@ export default function AdminShell({
     document.body.classList.toggle('adminDrawerLocked', drawerOpen)
     return () => document.body.classList.remove('adminDrawerLocked')
   }, [drawerOpen])
+
+  useEffect(() => {
+    function refreshContextLabel() {
+      try {
+        const customerId = localStorage.getItem('mmos_admin_selected_customer_id') || localStorage.getItem('mmos_customer_id') || ''
+        setSelectedCustomerLabel(customerId ? `Kundenkontext aktiv · ${customerId.slice(0, 8)}…` : 'Kein Kundenkontext gewählt')
+      } catch {
+        setSelectedCustomerLabel('Kein Kundenkontext gewählt')
+      }
+    }
+    refreshContextLabel()
+    window.addEventListener('storage', refreshContextLabel)
+    window.addEventListener('mmos:admin-customer-selected', refreshContextLabel as any)
+    return () => {
+      window.removeEventListener('storage', refreshContextLabel)
+      window.removeEventListener('mmos:admin-customer-selected', refreshContextLabel as any)
+    }
+  }, [])
 
   const activePath = activeHref || currentPath
 
@@ -240,6 +274,7 @@ export default function AdminShell({
         <div className="adminTopbarIdentity">
           <BrandLogo href="/admin" variant="topbar" subline="Intern" />
           <span className="adminTopbarContext">Backoffice</span>
+          <span className={selectedCustomerLabel.startsWith('Kein') ? 'adminContextGuardChip missing' : 'adminContextGuardChip'}>{selectedCustomerLabel}</span>
         </div>
         <div className="adminTopbarSearch">
           <AdminCustomerSearch />

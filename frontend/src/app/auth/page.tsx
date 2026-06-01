@@ -182,9 +182,9 @@ export default function AuthPage() {
         </p>
 
         {!isInvite && (
-          <div className="row">
-            <button className={mode==='login'?'btn':'btn secondary'} onClick={()=>setMode('login')}>Login</button>
-            <button className={mode==='register'?'btn':'btn secondary'} onClick={()=>setMode('register')}>Registrieren</button>
+          <div className="row authModeSwitch">
+            <button type="button" className={mode==='login'?'btn':'btn secondary'} onClick={()=>setMode('login')}>Login</button>
+            <button type="button" className={mode==='register'?'btn':'btn secondary'} onClick={()=>setMode('register')}>Registrieren</button>
           </div>
         )}
 
@@ -197,9 +197,9 @@ export default function AuthPage() {
 
         {(mode === 'register' || isInvite) && (
           <>
-            <input className="input" placeholder="Offizieller Firmen- oder Kundenname" title="So wird der Kunde später im Portal und in Dokumenten angezeigt." value={companyName} onChange={e=>setCompanyName(e.target.value)} readOnly={isInvite} />
-            <input className="input" placeholder="Name der Kontaktperson" title="Hauptansprechpartner beim Kunden." value={contactPerson} onChange={e=>setContactPerson(e.target.value)} />
-            {!isInvite && <input className="input" placeholder="Telefonnummer optional" title="Telefonnummer für Rückfragen oder Freigabeprozesse." value={phone} onChange={e=>setPhone(e.target.value)} />}
+            <input className="input" autoComplete="organization" placeholder="Offizieller Firmen- oder Kundenname" title="So wird der Kunde später im Portal und in Dokumenten angezeigt." value={companyName} onChange={e=>setCompanyName(e.target.value)} readOnly={isInvite} />
+            <input className="input" autoComplete="name" placeholder="Name der Kontaktperson" title="Hauptansprechpartner beim Kunden." value={contactPerson} onChange={e=>setContactPerson(e.target.value)} />
+            {!isInvite && <input className="input" autoComplete="tel" inputMode="tel" placeholder="Telefonnummer optional" title="Telefonnummer für Rückfragen oder Freigabeprozesse." value={phone} onChange={e=>setPhone(e.target.value)} />}
             {!isInvite && (
               <select className="input" value={requestedPackage} onChange={e=>setRequestedPackage(e.target.value)}>
                 <option>Starter</option>
@@ -210,10 +210,10 @@ export default function AuthPage() {
           </>
         )}
 
-        <input className="input" placeholder="E-Mail-Adresse für Login oder Kontakt" title="Diese Adresse wird für Login, Freigaben und Benachrichtigungen genutzt." value={email} onChange={e=>setEmail(e.target.value)} readOnly={(isInvite && Boolean(inviteInfo?.invite?.email)) || mfaPending} />
+        <input className="input" type="email" autoComplete="email" inputMode="email" placeholder="E-Mail-Adresse für Login oder Kontakt" title="Diese Adresse wird für Login, Freigaben und Benachrichtigungen genutzt." value={email} onChange={e=>setEmail(e.target.value)} readOnly={(isInvite && Boolean(inviteInfo?.invite?.email)) || mfaPending} />
 
         {mode !== 'reset' && (
-          <input className="input" placeholder={isInvite ? 'Passwort für den Kundenlogin setzen' : 'Passwort eingeben'} title="Mindestens 10 Zeichen und idealerweise ein Sonderzeichen verwenden." type="password" value={password} onChange={e=>setPassword(e.target.value)} readOnly={mfaPending} />
+          <input className="input" autoComplete={isInvite || mode === 'register' ? 'new-password' : 'current-password'} placeholder={isInvite ? 'Passwort für den Kundenlogin setzen' : 'Passwort eingeben'} title="Mindestens 10 Zeichen und idealerweise ein Sonderzeichen verwenden." type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter' && mode==='login' && !mfaPending)login()}} readOnly={mfaPending} />
         )}
 
         {mfaPending && (
@@ -221,23 +221,23 @@ export default function AuthPage() {
             <b>2FA erforderlich</b>
             <p>Gib den 6-stelligen Code aus deiner Authenticator-App ein. Alternativ kannst du einen Backup-Code verwenden.</p>
             <input className="input" placeholder="2FA-Code oder Backup-Code" inputMode="numeric" autoFocus value={mfaCode} onChange={e=>setMfaCode(e.target.value.replace(/\s+/g,''))} onKeyDown={e=>{if(e.key==='Enter')verifyMfaLogin()}} />
-            <button className="btn" onClick={verifyMfaLogin}>2FA bestätigen</button>
-            <button className="btn secondary" onClick={cancelMfaLogin}>Abbrechen</button>
+            <button type="button" className="btn" onClick={verifyMfaLogin}>2FA bestätigen</button>
+            <button type="button" className="btn secondary" onClick={cancelMfaLogin}>Abbrechen</button>
           </div>
         )}
 
-        {mode === 'login' && !mfaPending && <button className="btn" onClick={login}>Einloggen</button>}
-        {mode === 'register' && <button className="btn" onClick={register}>Kundenkonto anfragen</button>}
-        {mode === 'invite' && <button className="btn" onClick={acceptInvite}>Zugang aktivieren</button>}
-        {mode === 'reset' && <button className="btn" onClick={reset}>Reset-Link senden</button>}
+        {mode === 'login' && !mfaPending && <button type="button" className="btn" onClick={login}>Einloggen</button>}
+        {mode === 'register' && <button type="button" className="btn" onClick={register}>Kundenkonto anfragen</button>}
+        {mode === 'invite' && <button type="button" className="btn" onClick={acceptInvite}>Zugang aktivieren</button>}
+        {mode === 'reset' && <button type="button" className="btn" onClick={reset}>Reset-Link senden</button>}
 
         {!isInvite && (
-          <button className="btn secondary" onClick={()=>setMode(mode === 'reset' ? 'login' : 'reset')}>
+          <button type="button" className="btn secondary" onClick={()=>setMode(mode === 'reset' ? 'login' : 'reset')}>
             {mode === 'reset' ? 'Zurück zum Login' : 'Passwort vergessen'}
           </button>
         )}
 
-        {isInvite && <button className="btn secondary" onClick={()=>setMode('login')}>Zum normalen Login</button>}
+        {isInvite && <button type="button" className="btn secondary" onClick={()=>setMode('login')}>Zum normalen Login</button>}
 
         {message && <p className="sub">{message}</p>}
       </section>

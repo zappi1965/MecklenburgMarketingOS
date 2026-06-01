@@ -132,7 +132,19 @@ const featureDescriptions:any={
   Rechte:'Toolzugriffe und Paketfreigaben gezielt steuern.',
   'Review Funnel':'Bewertungsprozesse und Kundenfeedback strukturiert auslösen.',
   'Alles aus Starter-Paket':'Enthält CRM, Tickets, Rechnungen und Media Center.',
-  'Alles aus Growth-Paket':'Enthält alle Starter- und Growth-Funktionen.'
+  'Alles aus Growth-Paket':'Enthält alle Starter- und Growth-Funktionen.',
+  'Retention Intelligence':'Erkennt inaktive Kunden, Churn-Risiko, VIPs und konkrete Reaktivierungsaktionen.',
+  'Consent Center & Double-Opt-in':'Verwaltet Werbeeinwilligungen, Abmeldelinks und Reminder-Freigaben.',
+  'Segment-Kampagnen':'Startet Kampagnen-Entwuerfe direkt aus Kundensegmenten.',
+  'Monatsreport PDF-Versand':'Erzeugt Reports als PDF und verschickt sie an Kunden.',
+  'Kundenportal Pro':'Kundenseitiger Bereich fuer Reports, Dokumente, Einwilligungen und Kampagnenstatus.',
+  'Mail-Domain & Consent Guard':'Prueft SPF/DKIM/DMARC, Testmail, Abmeldelink und Consent-Text.',
+  'Go-Live Cockpit':'Zentrale Pilot- und Live-Bereitschaft mit Blockern und naechsten Schritten.',
+  'Completeness Audit':'Prueft Systemvollstaendigkeit, Live-Blocker und Pilot-Readiness zentral.',
+  'Tool-Reife Center':'Bewertet jedes verkaufbare Tool von 1-100 und zeigt fehlende Produktionsreife-Punkte.',
+  'SumUp Umsatzdaten':'Verbindet SumUp fuer Tagesumsatz, Monatsumsatz, Transaktionen und Umsatzentwicklung.',
+  'Service Recovery':'Macht kritisches Feedback zu Servicefaellen und Nachfassaktionen.',
+  'Churn Prevention':'Warnt frueh vor abwandernden Kunden und erzeugt Winback-Vorschlaege.'
 }
 Object.assign(featureDescriptions, {
   'QR Kampagnen':'QR-Kampagnen mit Slug, Landingpage, Scans, Conversions und Loyalty-Verknüpfung.',
@@ -170,12 +182,12 @@ const packageDefs:any={
     price:199,
     base:null,
     displayFeatures:['CRM','Tickets','Rechnungen','Booking','Media Center','Wissenscenter','Onboarding','Reports'],
-    tools:['Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing','Wissenscenter','Onboarding','Reports','Freigaben','Onboarding','Reports','Freigaben']
+    tools:['Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing','Wissenscenter','Onboarding','Reports','Freigaben','Monatsreport PDF','Kundenportal Basis']
   },
   Growth:{
     price:499,
     base:'Starter',
-    displayFeatures:['Alles aus Starter-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich'],
+    displayFeatures:['Alles aus Starter-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich','Retention Intelligence','Consent Center & Double-Opt-in','Segment-Kampagnen','Monatsreport PDF-Versand'],
     tools:[
       'Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing','Wissenscenter','Onboarding','Reports','Freigaben',
       'Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich',
@@ -185,7 +197,7 @@ const packageDefs:any={
   Premium:{
     price:899,
     base:'Growth',
-    displayFeatures:['Alles aus Growth-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich','Smart Loyalty V2','Automation','AI','Revenue'],
+    displayFeatures:['Alles aus Growth-Paket','Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich','Smart Loyalty V2','Automation','AI','Revenue','Churn Prevention','Service Recovery','Mail-Domain & Consent Guard','Go-Live Cockpit','Tool-Reife Center','Completeness Audit','Kundenportal Pro'],
     tools:[
       'Dashboard','Rechnungen','Tickets','Booking','Media Center','Pakete & Billing','Wissenscenter','Onboarding','Reports','Freigaben',
       'Integrationen','SEO Dashboard','SEO Analytics','SEO Heatmap','Workflow Center','KPI Analytics','Wettbewerber Vergleich',
@@ -244,7 +256,7 @@ const defaultMainLandingSettings:any={
  package_form_submit_label:'Anfrage senden',
  optional_tools_headline:'Optional zubuchbare Tools',
  optional_tools_subline:'Ergänze dein Paket nur um die Funktionen, die dein Betrieb wirklich braucht.',
- optional_tools:['Review-Booster','QR-Kampagnen','Loyalty-System','Lead-Suche','Monatsreports','Automationen','Angebotsgenerator','Kundenportal'],
+ optional_tools:['Review-Booster','QR-Kampagnen','Loyalty-System','Lead-Suche','Monatsreports','Monatsreport PDF-Versand','SumUp Umsatzdaten','Retention Intelligence','Consent Center / Double-Opt-in','Segment-Kampagnen','Churn Prevention','Service Recovery','Mail-Domain & Consent Guard','Go-Live Cockpit','Tool-Reife Center','Completeness Audit','Kundenportal Pro'],
  proof_headline:'So sieht ein erster Mini-Audit aus',
  proof_subline:'Ein konkreter Beispielblick darauf, welche Potenziale wir bei lokalen Betrieben sichtbar machen – ohne dass du dich selbst durch Analytics, Google Business und Bewertungen kämpfen musst.',
  demo_audit:{
@@ -270,9 +282,9 @@ const defaultMainLandingSettings:any={
  trust_subline:'Für Betriebe in Mecklenburg-Vorpommern gedacht: klare Betreuung, transparente Reports und erweiterbare Pakete statt anonymer Standard-Agentur.',
  trust_points:['Persönliche Betreuung','Monatliche Transparenz','Start klein, später erweitern'],
  packages:{
-  Starter:{headline:'Starter',audience:'Für Betriebe, die erstmal sichtbar und professionell auftreten wollen.',description:'Mehr Sichtbarkeit, mehr Vertrauen und ein sauberer digitaler Auftritt.',features:['Google Business Optimierung','Bewertungsaufbau','QR-Review-Kampagne','Kundenportal-Basis','Monatsübersicht']},
-  Growth:{headline:'Growth',audience:'Für Betriebe, die aktiv mehr Anfragen und bessere Bewertungen generieren wollen.',description:'Mehr lokale Reichweite, messbare Entwicklung und klare nächste Maßnahmen.',features:['Alles aus Starter','SEO & Sichtbarkeits-Dashboard','Lead- und Kampagnenübersicht','Review-Booster','Monatsreport']},
-  Premium:{headline:'Premium',audience:'Für Betriebe, die ihr Marketing vollständig steuern und automatisieren wollen.',description:'Volle Steuerung, mehr Automatisierung und maximale Transparenz.',features:['Alles aus Growth','Erweiterte Automationen','Kampagnen- und Reporting-System','Loyalty-/QR-System','KI-Unterstützung']}
+  Starter:{headline:'Starter',audience:'Für Betriebe, die erstmal sichtbar und professionell auftreten wollen.',description:'Mehr Sichtbarkeit, mehr Vertrauen und ein sauberer digitaler Auftritt.',features:['Google Business Optimierung','Bewertungsaufbau','QR-Review-Kampagne','Kundenportal-Basis','Monatsreport PDF-Basis']},
+  Growth:{headline:'Growth',audience:'Für Betriebe, die aktiv mehr Anfragen, Wiederkehrer und bessere Bewertungen generieren wollen.',description:'Mehr lokale Reichweite, messbare Entwicklung, Loyalty und Retention Intelligence.',features:['Alles aus Starter','SEO & Sichtbarkeits-Dashboard','QR-/Loyalty-Kampagnen','SumUp Umsatzdaten','Retention Intelligence','Consent Center & Segment-Kampagnen']},
+  Premium:{headline:'Premium',audience:'Für Betriebe, die ihr Marketing und Kundenbindung vollständig steuern und automatisieren wollen.',description:'Volle Steuerung, Automatisierung, Service Recovery, Churn Prevention und Go-Live Sicherheit.',features:['Alles aus Growth','Churn Prevention & Service Recovery','Mail-Domain & Consent Guard','Go-Live Cockpit','Tool-Reife Center','Completeness Audit','Kundenportal Pro']}
  }
 }
 function mainLandingSettings(d:any){
@@ -835,7 +847,9 @@ const sharedFieldMeta:any={
  daily_scan_limit_per_member:{label:'Max. Einlösungen pro Tag',help:'Wie oft ein Endkunde diesen QR-Code pro Tag gültig einlösen darf. 0 bedeutet unbegrenzt.',example:'1 = einmal täglich, 3 = dreimal täglich, 0 = unbegrenzt.'},
  daily_point_limit_per_member:{label:'Punkte-Tageslimit pro Endkunde',help:'Maximale Punkte, die ein Endkunde pro Tag sammeln darf. 0 bedeutet unbegrenzt.',example:'Beispiel: 150'},
  weekly_point_limit_per_member:{label:'Punkte-Wochenlimit pro Endkunde',help:'Optionale maximale Punkte pro Woche. 0 bedeutet unbegrenzt.',example:'0 = kein Wochenlimit, 700 = maximal 700 Punkte pro Woche'},
+ weekly_limit_enabled:{label:'Reward-Wochenlimit aktivieren',help:'Reward-Wochenlimit greift nur, wenn dieses Feld aktiv ist.',example:'Aus = kein verstecktes Wochenlimit'},
  weekly_scan_limit:{label:'Wochenlimit Einlösungen pro Gast',help:'Optionales Wochenlimit für QR-Einlösungen. Greift nur, wenn bewusst aktiviert.',example:'0 = kein Wochenlimit'},
+ require_rescan_for_points:{label:'Erneuter QR-Scan für neue Punkte',help:'Wenn aktiv, kann ein Endkunde nach Punktevergabe nicht erneut Punkte sammeln, ohne den QR-Code neu zu öffnen/scannen.',example:'Aktiv = schützt gegen mehrfaches Punkte sammeln aus derselben geöffneten Seite.'},
  suspicion_score_threshold:{label:'Verdachts-Score Warnschwelle',help:'Ab diesem Score wird ein Endkunde im Security Center als auffällig markiert.',example:'Empfohlen: 70'},
  trigger:{label:'Auslöser',help:'Ereignis, das eine Regel startet.',example:'Beispiel: QR Scan'},
  condition:{label:'Bedingung',help:'Zusätzliche Bedingung, unter der die Regel gilt.',example:'Beispiel: 08:00-11:00 Uhr'},
@@ -2498,9 +2512,9 @@ function V42BackendStatus(){
 function V42CustomerLoyaltySettings({cid}:any){
  const [data,setData]=useState<any>(null)
  const [msg,setMsg]=useState('')
- const [form,setForm]=useState<any>({staff_code:'',staff_label:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:'',weekly_scan_limit_enabled:false,daily_point_limit_per_member:'',weekly_point_limit_per_member:'',suspicion_score_threshold:'70'})
+ const [form,setForm]=useState<any>({staff_code:'',staff_label:'',points_per_scan:'',daily_scan_limit:'',weekly_scan_limit:'',weekly_scan_limit_enabled:false,daily_point_limit_per_member:'',weekly_point_limit_per_member:'',require_rescan_for_points:false,suspicion_score_threshold:'70'})
  const [rule,setRule]=useState<any>({trigger:'qr_scan',condition:'always',action:'add_points',points:''})
- async function load(){try{const r=await v33FunctionalClient.getCustomerLoyaltySettings(cid);setData(r)}catch(e:any){setMsg(e.message)}}
+ async function load(){try{const r=await v33FunctionalClient.getCustomerLoyaltySettings(cid);setData(r);const s=r.settings||{};const program=(r.loyalty_programs||[])[0]||{};const meta={...(s.metadata||{}),...(program.metadata||{})};const staff=(r.staff_codes||[])[0]?.payload||(r.staff_codes||[])[0]||{};setForm((prev:any)=>({...prev,staff_code:staff.code||prev.staff_code,staff_label:staff.label||prev.staff_label,points_per_scan:String(program.points_per_scan||s.points_per_scan||prev.points_per_scan||''),daily_scan_limit:String(s.daily_scan_limit||prev.daily_scan_limit||''),weekly_scan_limit:String(s.weekly_scan_limit||prev.weekly_scan_limit||''),weekly_scan_limit_enabled:Boolean(s.weekly_scan_limit_enabled||meta.weekly_scan_limit_enabled),daily_point_limit_per_member:String(program.daily_point_limit_per_member||s.daily_point_limit_per_member||prev.daily_point_limit_per_member||''),weekly_point_limit_per_member:String(meta.weekly_point_limit_per_member||prev.weekly_point_limit_per_member||''),require_rescan_for_points:Boolean(meta.require_rescan_for_points),suspicion_score_threshold:String(program.suspicion_score_threshold||s.suspicion_score_threshold||prev.suspicion_score_threshold||'70')}))}catch(e:any){setMsg(e.message)}}
  useEffect(()=>{load()},[cid])
  async function save(){
   setMsg('Speichere...')
@@ -2510,7 +2524,7 @@ function V42CustomerLoyaltySettings({cid}:any){
    await load()
   }catch(e:any){setMsg(isBackendAuthError(e)?'Backend-Speicherung fehlgeschlagen: Nicht authentifiziert. Bitte neu einloggen, 2FA bestätigen und erneut speichern.':e.message)}
  }
- return <><Head title="QR & Loyalty Einstellungen" sub="Kundenbereich · Mitarbeitercode · Punkte · Reward-Regeln"/><div className="grid2"><Card title="Mitarbeitercode & Punkte"><input className="input" value={form.staff_label} onChange={e=>setForm({...form,staff_label:e.target.value})} placeholder="Bezeichnung, z. B. Thekencode"/><input className="input" value={form.staff_code} onChange={e=>setForm({...form,staff_code:e.target.value})} placeholder="Mitarbeitercode, z. B. 2468"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan, z. B. 10"/><input className="input" type="number" value={form.daily_scan_limit} onChange={e=>setForm({...form,daily_scan_limit:e.target.value})} placeholder="Tageslimit Einlösungen pro Gast, z. B. 15"/><label className="checkline"><input type="checkbox" checked={!!form.weekly_scan_limit_enabled} onChange={e=>setForm({...form,weekly_scan_limit_enabled:e.target.checked,weekly_scan_limit:e.target.checked?form.weekly_scan_limit:''})}/> Optionales Wochenlimit für Einlösungen aktivieren</label>{form.weekly_scan_limit_enabled&&<input className="input" type="number" value={form.weekly_scan_limit} onChange={e=>setForm({...form,weekly_scan_limit:e.target.value})} placeholder="Wochenlimit Einlösungen pro Gast, 0 = unbegrenzt"/>}<input className="input" type="number" value={form.daily_point_limit_per_member} onChange={e=>setForm({...form,daily_point_limit_per_member:e.target.value})} placeholder="Punkte-Tageslimit pro Endkunde, z. B. 150"/><input className="input" type="number" value={form.weekly_point_limit_per_member} onChange={e=>setForm({...form,weekly_point_limit_per_member:e.target.value})} placeholder="Punkte-Wochenlimit pro Endkunde, 0 = unbegrenzt"/><input className="input" type="number" value={form.suspicion_score_threshold} onChange={e=>setForm({...form,suspicion_score_threshold:e.target.value})} placeholder="Verdachts-Score Warnschwelle, z. B. 70"/><button className="btn" onClick={save}>Speichern</button></Card><Card title="Reward-Regel erstellen"><select className="input" value={rule.trigger} onChange={e=>setRule({...rule,trigger:e.target.value})}><option value="qr_scan">Wenn QR gescannt wird</option><option value="review_positive">Wenn positive Bewertung abgegeben wird</option><option value="birthday">Wenn Geburtstag erreicht</option><option value="referral">Wenn Empfehlung eingeht</option><option value="level_up">Wenn Level erreicht</option></select><select className="input" value={rule.condition} onChange={e=>setRule({...rule,condition:e.target.value})}><option value="always">Immer</option><option value="first_scan">Nur beim ersten Scan</option><option value="weekday">Nur Wochentag</option><option value="weekend">Nur Wochenende</option><option value="points_over_100">Punkte größer 100</option><option value="vip_only">Nur VIP</option></select><select className="input" value={rule.action} onChange={e=>setRule({...rule,action:e.target.value})}><option value="add_points">Punkte vergeben</option><option value="multiply_points">Punkte multiplizieren</option><option value="unlock_reward">Reward freischalten</option><option value="create_followup">Follow-up erzeugen</option></select><input className="input" type="number" value={rule.points} onChange={e=>setRule({...rule,points:e.target.value})} placeholder="Punkte / Multiplikator, z. B. 50"/><button className="btn secondary" onClick={save}>Regel speichern</button></Card></div><Card title="Bestehende Programme & Regeln">{(data?.loyalty_programs||[]).map((p:any)=><div className="item" key={p.id}><b>{p.name||p.title}</b><span>{p.points_per_scan} Punkte pro Scan · {p.active?'aktiv':'inaktiv'}</span></div>)}{(data?.rules||[]).map((r:any)=><div className="item" key={r.id}><b>{r.payload?.trigger} → {r.payload?.action}</b><span>{r.payload?.condition} · {r.payload?.points||0} Punkte</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
+ return <><Head title="QR & Loyalty Einstellungen" sub="Kundenbereich · Mitarbeitercode · Punkte · Reward-Regeln"/><div className="grid2"><Card title="Mitarbeitercode & Punkte"><input className="input" value={form.staff_label} onChange={e=>setForm({...form,staff_label:e.target.value})} placeholder="Bezeichnung, z. B. Thekencode"/><input className="input" value={form.staff_code} onChange={e=>setForm({...form,staff_code:e.target.value})} placeholder="Mitarbeitercode, z. B. 2468"/><input className="input" type="number" value={form.points_per_scan} onChange={e=>setForm({...form,points_per_scan:e.target.value})} placeholder="Punkte pro Scan, z. B. 10"/><input className="input" type="number" value={form.daily_scan_limit} onChange={e=>setForm({...form,daily_scan_limit:e.target.value})} placeholder="Tageslimit Einlösungen pro Gast, z. B. 15"/><label className="checkline"><input type="checkbox" checked={!!form.weekly_scan_limit_enabled} onChange={e=>setForm({...form,weekly_scan_limit_enabled:e.target.checked,weekly_scan_limit:e.target.checked?form.weekly_scan_limit:''})}/> Optionales Wochenlimit für Einlösungen aktivieren</label>{form.weekly_scan_limit_enabled&&<input className="input" type="number" value={form.weekly_scan_limit} onChange={e=>setForm({...form,weekly_scan_limit:e.target.value})} placeholder="Wochenlimit Einlösungen pro Gast, 0 = unbegrenzt"/>}<input className="input" type="number" value={form.daily_point_limit_per_member} onChange={e=>setForm({...form,daily_point_limit_per_member:e.target.value})} placeholder="Punkte-Tageslimit pro Endkunde, z. B. 150"/><input className="input" type="number" value={form.weekly_point_limit_per_member} onChange={e=>setForm({...form,weekly_point_limit_per_member:e.target.value})} placeholder="Punkte-Wochenlimit pro Endkunde, 0 = unbegrenzt"/><label className="checkline"><input type="checkbox" checked={!!form.require_rescan_for_points} onChange={e=>setForm({...form,require_rescan_for_points:e.target.checked})}/> Neues Punkte sammeln erfordert erneutes QR-Scannen</label><input className="input" type="number" value={form.suspicion_score_threshold} onChange={e=>setForm({...form,suspicion_score_threshold:e.target.value})} placeholder="Verdachts-Score Warnschwelle, z. B. 70"/><button className="btn" onClick={save}>Speichern</button></Card><Card title="Reward-Regel erstellen"><select className="input" value={rule.trigger} onChange={e=>setRule({...rule,trigger:e.target.value})}><option value="qr_scan">Wenn QR gescannt wird</option><option value="review_positive">Wenn positive Bewertung abgegeben wird</option><option value="birthday">Wenn Geburtstag erreicht</option><option value="referral">Wenn Empfehlung eingeht</option><option value="level_up">Wenn Level erreicht</option></select><select className="input" value={rule.condition} onChange={e=>setRule({...rule,condition:e.target.value})}><option value="always">Immer</option><option value="first_scan">Nur beim ersten Scan</option><option value="weekday">Nur Wochentag</option><option value="weekend">Nur Wochenende</option><option value="points_over_100">Punkte größer 100</option><option value="vip_only">Nur VIP</option></select><select className="input" value={rule.action} onChange={e=>setRule({...rule,action:e.target.value})}><option value="add_points">Punkte vergeben</option><option value="multiply_points">Punkte multiplizieren</option><option value="unlock_reward">Reward freischalten</option><option value="create_followup">Follow-up erzeugen</option></select><input className="input" type="number" value={rule.points} onChange={e=>setRule({...rule,points:e.target.value})} placeholder="Punkte / Multiplikator, z. B. 50"/><button className="btn secondary" onClick={save}>Regel speichern</button></Card></div><Card title="Bestehende Programme & Regeln">{(data?.loyalty_programs||[]).map((p:any)=><div className="item" key={p.id}><b>{p.name||p.title}</b><span>{p.points_per_scan} Punkte pro Scan · {p.active?'aktiv':'inaktiv'}</span></div>)}{(data?.rules||[]).map((r:any)=><div className="item" key={r.id}><b>{r.payload?.trigger} → {r.payload?.action}</b><span>{r.payload?.condition} · {r.payload?.points||0} Punkte</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card></>
 }
 
 function V42AdminLoyaltyEditor({cid}:any){
@@ -2745,7 +2759,7 @@ function V38RewardHistory({cid}:any){
  const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
  async function load(){try{const r=await v33FunctionalClient.rewardHistory(cid);setData(r);setMsg('Reward-Historie geladen')}catch(e:any){setMsg(e.message)}}
  useEffect(()=>{load()},[cid])
- return <Card title="Reward-Historie & Limit-Auslastung" action={<button className="btn secondary" onClick={load}>Laden</button>}>{(data?.rewards||[]).map((r:any)=><div className="item" key={r.id}><b>{r.title}</b><span>{r.total_used}/{r.max_redemptions||'∞'} Einlösungen · täglich {r.daily_limit||'∞'} · wöchentlich {r.weekly_limit||'∞'} · gültig bis {r.expires_at||'offen'}</span><Badge type={r.status==='expired'?'red':'green'}>{r.status}</Badge></div>)}{(data?.history||[]).slice(0,6).map((h:any)=><div className="item" key={h.id}><b>{h.action||h.resource}</b><span>{h.description||h.created_at}</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card>
+ return <Card title="Reward-Historie & Limit-Auslastung" action={<button className="btn secondary" onClick={load}>Laden</button>}>{(data?.rewards||[]).map((r:any)=><div className="item" key={r.id}><b>{r.title}</b><span>{r.total_used}/{r.max_redemptions||'∞'} Einlösungen · täglich {r.daily_limit||'∞'} · wöchentlich {r.weekly_limit_enabled&&r.weekly_limit?r.weekly_limit:'∞'} · gültig bis {r.expires_at||'offen'}</span><Badge type={r.status==='expired'?'red':'green'}>{r.status}</Badge></div>)}{(data?.history||[]).slice(0,6).map((h:any)=><div className="item" key={h.id}><b>{h.action||h.resource}</b><span>{h.description||h.created_at}</span></div>)}{msg&&<div className="sub">{msg}</div>}</Card>
 }
 function V38BillingRevenueHub({cid}:any){
  const [data,setData]=useState<any>(null),[msg,setMsg]=useState('')
@@ -2774,7 +2788,7 @@ function V38PublicPreview({cid,store}:any){
 function V37LoyaltyBuilder({cid}:any){
  const [settings,setSettings]=useState<any>(null)
  const [msg,setMsg]=useState('')
- const [reward,setReward]=useState<any>({title:'Gratis Kaffee',type:'Gratisprodukt',points:100,expires_at:'',max_redemptions:100,max_per_customer:1,daily_limit:20,weekly_limit:50})
+ const [reward,setReward]=useState<any>({title:'Gratis Kaffee',type:'Gratisprodukt',points:100,expires_at:'',max_redemptions:0,max_per_customer:0,daily_limit:0,weekly_limit:0,weekly_limit_enabled:false})
  const [ref,setRef]=useState<any>({friend_name:'Neuer Empfehlungskunde',friend_email:'lead@example.de',referrer_token:''})
  const [birthday,setBirthday]=useState<any>({email:'',member_token:'',birthday:''})
  useEffect(()=>{v33FunctionalClient.getLoyaltySettings(cid).then((r:any)=>setSettings(r.settings)).catch((e:any)=>setMsg(e.message))},[cid])

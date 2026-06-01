@@ -1,5 +1,6 @@
 
-const FormData = require('form-data')
+let FormDataPackage = null
+try { FormDataPackage = require('form-data') } catch (_) { FormDataPackage = null }
 
 function cleanEnv(value) {
   const raw = String(value || '').trim().replace(/^['\"]|['\"]$/g, '').replace(/\/+$/, '')
@@ -70,7 +71,8 @@ class GotenbergService {
     const base = gotenbergBaseUrl(this.url)
     if (!base) return { dryRun: true, note: 'GOTENBERG_URL ist ungültig. DOCX→PDF vorbereitet, aber nicht aktiv.' }
 
-    const form = new FormData()
+    if (!FormDataPackage) throw new Error('form-data Package fehlt fuer Office-PDF-Erzeugung.')
+    const form = new FormDataPackage()
     form.append('files', buffer, filename)
 
     const res = await fetch(`${base}/forms/libreoffice/convert`, {
@@ -91,7 +93,8 @@ class GotenbergService {
 
     const NativeFormData = globalThis.FormData
     const NativeBlob = globalThis.Blob
-    const form = NativeFormData && NativeBlob ? new NativeFormData() : new FormData()
+    if ((!NativeFormData || !NativeBlob) && !FormDataPackage) throw new Error('form-data Package fehlt fuer PDF-Erzeugung.')
+    const form = NativeFormData && NativeBlob ? new NativeFormData() : new FormDataPackage()
     if (NativeFormData && NativeBlob) {
       form.append('files', new NativeBlob([String(html)], { type: 'text/html; charset=utf-8' }), 'index.html')
     } else {

@@ -2,6 +2,9 @@
 const express = require('express')
 const crypto = require('crypto')
 const { V35BusinessEngine, sentimentFromRating } = require('../services/v35BusinessEngine')
+const { inspectPublicAction, recordPublicShieldEvent } = require('../services/publicEndpointShieldService')
+const { writeCriticalAudit } = require('../services/criticalAuditService')
+const { requestMarketingDoubleOptIn, confirmMarketingConsentToken, withdrawMarketingConsentByTokenOrLogin, consentFromBody } = require('../services/marketingConsentMailService')
 
 const safeToken = (prefix = 'tok') => `${prefix}_${crypto.randomBytes(12).toString('hex')}`
 const clean = (v) => v === undefined || v === null ? null : String(v).trim() || null
@@ -44,6 +47,67 @@ function withPublicPassword(member, password, now = new Date().toISOString()) {
   metadata.public_auth = { ...(metadata.public_auth || {}), password_hash: publicPasswordHash(password), password_set_at: now, auth_method: 'email_password' }
   return metadata
 }
+
+
+const MARKETING_CONSENT_VERSION = 'marketing-reminders-v1-2026-06-01'
+function marketingConsentFromBody(body = {}) {
+  return consentFromBody(body)
+}
+
+function marketingConsentIpHash(req) {
+  try {
+    const raw = `${req.ip || ''}|${req.get?.('x-forwarded-for') || ''}|${req.get?.('user-agent') || ''}`
+    return crypto.createHash('sha256').update(raw).digest('hex')
+  } catch (_) {
+    return null
+  }
+}
+
+async function persistMarketingConsent(supabase, { customerId, program, qrCampaign, member, slug, email, displayName, body, req }) {
+  return requestMarketingDoubleOptIn(supabase, { customerId, program, qrCampaign, member, slug, email, displayName, body, req, requireDelivery: false })
+}
+
+
+async function withdrawMarketingConsent(supabase, { customerId, member, slug, email, req, reason = '' }) {
+  if (!member?.id || !customerId) return { ok: false, error: 'Mitglied nicht gefunden.' }
+  const now = new Date().toISOString()
+  const evidence = {
+    customer_id: customerId,
+    loyalty_customer_id: member.id,
+    slug,
+    email,
+    reason: clean(reason) || 'withdrawn_by_user',
+    withdrawn_at: now,
+    ip_hash: marketingConsentIpHash(req),
+    user_agent: req.get?.('user-agent') || null
+  }
+  const nextMetadata = {
+    ...(member.metadata || {}),
+    consent_marketing: false,
+    marketing_consent_status: 'withdrawn',
+    marketing_consent_withdrawn_at: now,
+    marketing_consent_withdrawal: evidence
+  }
+  let updatedMember = member
+  try {
+    const updated = await supabase.from('loyalty_customers').update({ metadata: nextMetadata }).eq('id', member.id).select('*').maybeSingle()
+    if (!updated.error && updated.data) updatedMember = updated.data
+  } catch (_) {}
+  try {
+    await supabase.from('v33_functional_records').insert({
+      resource: 'marketing_consent_withdrawals',
+      local_id: `marketing_consent_withdrawal_${member.id}_${Date.now()}`,
+      customer_id: customerId,
+      title: `Widerruf Werbeeinwilligung ${email || member.id}`,
+      status: 'withdrawn',
+      payload: evidence,
+      created_at: now,
+      updated_at: now
+    })
+  } catch (_) {}
+  return { ok: true, withdrawn: true, member: updatedMember }
+}
+
 
 function slugify(input, fallback = 'kunde') {
   const s = String(input || fallback)
@@ -227,6 +291,7 @@ function v33FunctionalRoutes(supabase) {
         'points_weekly_limit',
         'metadata.weekly_point_limit_per_member'
       ], 0).configured),
+      require_rescan_for_points: sources.some((s) => s && (s.require_rescan_for_points === true || s.metadata?.require_rescan_for_points === true)),
       suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(suspicionThreshold.value || 70)))
     }
   }
@@ -356,6 +421,25 @@ function v33FunctionalRoutes(supabase) {
     return { ok: true, limit, points_week: pointsWeek }
   }
 
+  async function checkScanSessionReuse({ member, slug, scanSessionId }) {
+    if (!member?.id || !scanSessionId) return { ok: true }
+    try {
+      const q = await supabase.from('loyalty_transactions')
+        .select('id,created_at,metadata')
+        .eq('loyalty_customer_id', member.id)
+        .eq('action', 'qr_scan')
+        .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString())
+        .limit(300)
+      if (q.error) return { ok: true, warning: q.error.message }
+      const reused = (q.data || []).find((row) => String(row.metadata?.scan_session_id || '') === String(scanSessionId) && (!slug || row.metadata?.slug === slug))
+      if (reused) return { ok: false, status: 409, code: 'QR_RESCAN_REQUIRED', error: 'Für neue Punkte muss der QR-Code erneut gescannt werden.', reused_transaction_id: reused.id }
+      return { ok: true }
+    } catch (e) {
+      return { ok: true, warning: e.message }
+    }
+  }
+
+
   async function updateMemberSuspicionScore({ customerId, member, program, qrCampaign }) {
     if (!member?.id) return null
     try {
@@ -449,7 +533,8 @@ function v33FunctionalRoutes(supabase) {
     if (Number(p.daily_limit || 0) > 0 && today.length >= Number(p.daily_limit)) {
       return { ok: false, code: 'REWARD_DAILY_LIMIT_REACHED', error: 'Tageslimit für diesen Reward erreicht.', reward }
     }
-    if (Number(p.weekly_limit || 0) > 0 && week.length >= Number(p.weekly_limit)) {
+    const weeklyLimitEnabled = p.weekly_limit_enabled === true || p.limit_weekly_enabled === true || p.metadata?.weekly_limit_enabled === true
+    if (weeklyLimitEnabled && Number(p.weekly_limit || 0) > 0 && week.length >= Number(p.weekly_limit)) {
       return { ok: false, code: 'REWARD_WEEKLY_LIMIT_REACHED', error: 'Wochenlimit für diesen Reward erreicht.', reward }
     }
     if (memberName && Number(p.max_per_customer || 0) > 0 && perCustomer.length >= Number(p.max_per_customer)) {
@@ -704,6 +789,80 @@ function v33FunctionalRoutes(supabase) {
     return data
   }
 
+  function isDeletedOrArchivedPayload(row) {
+    const p = row?.payload || {}
+    const merged = { ...(row || {}), ...p }
+    const status = String(merged.status || '').toLowerCase()
+    return merged.active === false || merged.is_deleted === true || merged.deleted === true || merged.archived === true || Boolean(merged.deleted_at || merged.archived_at || merged.removed_at) || ['deleted','gelöscht','geloescht','archived','archiviert','removed','inactive','inaktiv','disabled','deaktiviert'].includes(status)
+  }
+
+  function isActiveFunctionalRecord(row) {
+    return !isDeletedOrArchivedPayload(row)
+  }
+
+  function activeFunctionalRecords(rows = []) {
+    return (rows || []).filter(isActiveFunctionalRecord)
+  }
+
+  function qrScanTokenTtlMs() {
+    return Math.max(5 * 60 * 1000, Number(process.env.QR_SCAN_TOKEN_TTL_MS || 20 * 60 * 1000))
+  }
+
+  async function createQrScanToken({ customerId, slug, program, qrCampaign, req }) {
+    const token = safeToken('scan')
+    const now = new Date().toISOString()
+    const expiresAt = new Date(Date.now() + qrScanTokenTtlMs()).toISOString()
+    const payload = {
+      token,
+      slug,
+      customer_id: customerId,
+      loyalty_program_id: program?.id || null,
+      qr_campaign_id: qrCampaign?.id || program?.qr_campaign_id || null,
+      used: false,
+      used_at: null,
+      active: true,
+      expires_at: expiresAt,
+      ip_hint: String(req?.headers?.['x-forwarded-for'] || req?.ip || '').split(',')[0].trim() || null,
+      user_agent: req?.headers?.['user-agent'] || null,
+      created_at: now
+    }
+    const record = await upsertRecord('qr_scan_tokens', { id: token, customer_id: customerId, title: `Scan Token ${slug}`, status: 'active', ...payload })
+    return { token, expires_at: expiresAt, record }
+  }
+
+  async function findQrScanToken({ customerId, slug, token }) {
+    if (!token) return { ok: false, status: 428, code: 'QR_SCAN_TOKEN_REQUIRED', error: 'Für neue Punkte muss der QR-Code erneut gescannt werden.' }
+    const found = await supabase.from('v33_functional_records')
+      .select('*')
+      .eq('resource', 'qr_scan_tokens')
+      .eq('local_id', token)
+      .eq('customer_id', customerId)
+      .limit(1)
+      .maybeSingle()
+    if (found.error || !found.data) return { ok: false, status: 428, code: 'QR_SCAN_TOKEN_INVALID', error: 'Scan-Token ist ungültig. Bitte QR-Code erneut scannen.' }
+    const p = found.data.payload || {}
+    if (p.slug && String(p.slug) !== String(slug)) return { ok: false, status: 428, code: 'QR_SCAN_TOKEN_WRONG_SLUG', error: 'Scan-Token passt nicht zu dieser Kampagne. Bitte QR-Code erneut scannen.' }
+    if (p.used === true || found.data.status === 'used') return { ok: false, status: 409, code: 'QR_SCAN_TOKEN_USED', error: 'Dieser QR-Scan wurde bereits verwendet. Bitte QR-Code erneut scannen.' }
+    if (p.active === false || found.data.status === 'deleted') return { ok: false, status: 428, code: 'QR_SCAN_TOKEN_INACTIVE', error: 'Scan-Token ist nicht mehr aktiv. Bitte QR-Code erneut scannen.' }
+    if (p.expires_at && new Date(p.expires_at).getTime() < Date.now()) return { ok: false, status: 410, code: 'QR_SCAN_TOKEN_EXPIRED', error: 'Scan-Token ist abgelaufen. Bitte QR-Code erneut scannen.' }
+    return { ok: true, record: found.data, payload: p }
+  }
+
+  async function consumeQrScanToken({ customerId, slug, token, memberId }) {
+    const check = await findQrScanToken({ customerId, slug, token })
+    if (!check.ok) return check
+    const now = new Date().toISOString()
+    const payload = { ...(check.payload || {}), used: true, used_at: now, used_by_member_id: memberId || null }
+    const saved = await supabase.from('v33_functional_records')
+      .update({ status: 'used', payload, updated_at: now })
+      .eq('id', check.record.id)
+      .eq('status', 'active')
+      .select('*')
+      .maybeSingle()
+    if (saved.error || !saved.data) return { ok: false, status: 409, code: 'QR_SCAN_TOKEN_USED', error: 'Dieser QR-Scan wurde bereits verwendet. Bitte QR-Code erneut scannen.' }
+    return { ok: true, record: saved.data, payload }
+  }
+
   async function provisionCustomer(customerId, options = {}) {
     const customer = await getCustomer(customerId)
     if (!customer) throw new Error('Kunde nicht gefunden')
@@ -734,7 +893,7 @@ function v33FunctionalRoutes(supabase) {
         title: campaignTitle,
         name: campaignTitle,
         slug: defaultSlug,
-        target_url: `/l/${defaultSlug}`,
+        target_url: `/q/${defaultSlug}`,
         scans: 0,
         conversions: 0,
         active: true,
@@ -773,7 +932,7 @@ function v33FunctionalRoutes(supabase) {
           title: campaignTitle,
           name: campaignTitle,
           slug,
-          target_url: `/l/${slug}`,
+          target_url: `/q/${slug}`,
           scans: 0,
           conversions: 0,
           active: true,
@@ -822,7 +981,7 @@ function v33FunctionalRoutes(supabase) {
       slug: qrCampaign.slug
     })
 
-    return { customer, qr_campaign: qrCampaign, loyalty_program: loyaltyProgram, public_url_path: `/l/${qrCampaign.slug}` }
+    return { customer, qr_campaign: qrCampaign, loyalty_program: loyaltyProgram, public_url_path: `/q/${qrCampaign.slug}`, landing_url_path: `/l/${qrCampaign.slug}` }
   }
 
   async function createQrCampaignForCustomer(customerId, payload = {}) {
@@ -834,7 +993,7 @@ function v33FunctionalRoutes(supabase) {
     const purpose = payload.purpose || payload.mode || 'loyalty'
     const slugBase = payload.slug || `${slugify(customerName)}-${slugify(title)}`
     const slug = await uniqueSlug(slugBase)
-    const targetUrl = `/l/${slug}`
+    const targetUrl = `/q/${slug}`
     const pointsPerScan = num(payload.points_per_scan, 10)
     const maxScansPerMember = Math.max(0, Math.floor(num(payload.max_scans_per_member ?? payload.maxScansPerMember ?? payload.scan_limit_per_member, 0)))
     const scanCooldownMinutes = Math.max(0, Math.floor(num(payload.scan_cooldown_minutes ?? payload.scanCooldownMinutes ?? payload.cooldown_minutes, 0)))
@@ -988,7 +1147,8 @@ function v33FunctionalRoutes(supabase) {
 
       const { data, error } = await q
       if (error) throw error
-      res.json({ ok: true, records: data || [] })
+      const records = req.query.include_deleted === 'true' ? (data || []) : activeFunctionalRecords(data || [])
+      res.json({ ok: true, records })
     } catch (e) { next(e) }
   })
 
@@ -1010,17 +1170,22 @@ function v33FunctionalRoutes(supabase) {
 
   router.delete('/records/:resource/local/:local_id', async (req, res, next) => {
     try {
-      let q = supabase.from('v33_functional_records')
-        .delete()
+      let lookup = supabase.from('v33_functional_records')
+        .select('*')
         .eq('resource', req.params.resource)
         .eq('local_id', req.params.local_id)
 
-      if (req.query.customer_id) q = q.eq('customer_id', req.query.customer_id)
+      if (req.query.customer_id) lookup = lookup.eq('customer_id', req.query.customer_id)
 
-      const { error } = await q
-      if (error) throw error
-      await audit('v34_record_deleted', { resource: req.params.resource, local_id: req.params.local_id })
-      res.json({ ok: true })
+      const found = await lookup.limit(20)
+      if (found.error) throw found.error
+      const now = new Date().toISOString()
+      for (const row of (found.data || [])) {
+        const payload = { ...(row.payload || {}), active: false, deleted: true, deleted_at: now }
+        await supabase.from('v33_functional_records').update({ status: 'deleted', payload, updated_at: now }).eq('id', row.id)
+      }
+      await audit('v34_record_deleted', { resource: req.params.resource, local_id: req.params.local_id, soft_delete: true })
+      res.json({ ok: true, deleted: (found.data || []).length })
     } catch (e) { next(e) }
   })
 
@@ -1037,7 +1202,7 @@ function v33FunctionalRoutes(supabase) {
 
       if (error) throw error
 
-      const match = (data || []).find(r => {
+      const match = activeFunctionalRecords(data || []).find(r => {
         const p = r.payload || {}
         return p.active !== false && String(p.code || '') === String(code)
       })
@@ -1063,7 +1228,7 @@ function v33FunctionalRoutes(supabase) {
           .limit(200)
 
         if (codes.error) throw codes.error
-        const valid = (codes.data || []).some(r => (r.payload || {}).active !== false && String((r.payload || {}).code || '') === String(body.staff_code))
+        const valid = activeFunctionalRecords(codes.data || []).some(r => (r.payload || {}).active !== false && String((r.payload || {}).code || '') === String(body.staff_code))
         if (!valid) return res.status(400).json({ ok: false, error: 'Mitarbeitercode ungültig' })
       }
 
@@ -1183,10 +1348,33 @@ function v33FunctionalRoutes(supabase) {
         scan_limits: qrScanLimitSettings(qrData, program),
         mode: qrData?.metadata?.purpose || qrData?.mode || program?.metadata?.purpose || 'loyalty',
         google_review_url: qrData?.google_review_url || qrData?.metadata?.google_review_url || null,
+        scan_start_url: `/q/${slug}`,
         active: program.active !== false && qrData?.active !== false
       })
     } catch (e) { next(e) }
   })
+
+  router.get('/public/loyalty/:slug/scan-start', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const shield = inspectPublicAction({ req, action: 'public_scan_start', slug, email: null, body: req.query || {}, max: 80 })
+      await recordPublicShieldEvent(supabase, shield, { action: 'public_scan_start', slug, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
+
+      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = found.error ? null : (found.data || null)
+      if (!program || program.active === false) return res.status(404).json({ ok:false, code:'SLUG_INACTIVE', error:'Dieser QR-Link ist nicht aktiv.' })
+
+      const qrCampaign = await getQrCampaignForPublicProgram(program, slug)
+      if (qrCampaign && qrCampaign.active === false) return res.status(410).json({ ok:false, code:'QR_CAMPAIGN_INACTIVE', error:'Diese Kampagne ist beendet.' })
+
+      const token = await createQrScanToken({ customerId: program.customer_id, slug, program, qrCampaign, req })
+      const redirectPath = `/l/${encodeURIComponent(slug)}?scan_token=${encodeURIComponent(token.token)}`
+      if (req.query.redirect === '1' || req.query.redirect === 'true') return res.redirect(302, redirectPath)
+      res.json({ ok:true, slug, scan_token: token.token, expires_at: token.expires_at, redirect_path: redirectPath, direct_path: `/l/${slug}` })
+    } catch (e) { next(e) }
+  })
+
 
   router.post('/public/loyalty/:slug/join-or-scan', async (req, res, next) => {
     try {
@@ -1197,8 +1385,14 @@ function v33FunctionalRoutes(supabase) {
       const authOnly = body.auth_only === true || body.authOnly === true
       const displayName = clean(body.display_name || body.displayName || body.name) || (email ? email.split('@')[0] : 'QR Lead')
       const deviceId = clean(body.device_id)
+      const scanToken = clean(body.scan_token || body.scanToken)
       const now = new Date().toISOString()
       const warnings = []
+      const marketingConsentRequest = marketingConsentFromBody(body)
+
+      const shield = inspectPublicAction({ req, action: authOnly ? 'public_auth_only' : 'public_join_or_scan', slug, email, body, max: authOnly ? 45 : 30 })
+      await recordPublicShieldEvent(supabase, shield, { action: authOnly ? 'public_auth_only' : 'public_join_or_scan', slug, email, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok: false, error: shield.error, code: shield.code, retry_after_ms: shield.retry_after_ms })
 
       if (!email || !password || String(password).length < PUBLIC_PASSWORD_MIN_LENGTH) {
         return res.status(400).json({ ok: false, error: 'E-Mail und Passwort mit mindestens 8 Zeichen sind erforderlich.' })
@@ -1236,6 +1430,10 @@ function v33FunctionalRoutes(supabase) {
           await supabase.from('loyalty_customers').update({ metadata: member.metadata }).eq('id', member.id)
         }
         if (!authOnly) {
+          if (qrLimitsForProgram.require_rescan_for_points) {
+            const tokenCheck = await findQrScanToken({ customerId, slug, token: scanToken })
+            if (!tokenCheck.ok) return res.status(tokenCheck.status || 428).json({ ok:false, code:tokenCheck.code, error:tokenCheck.error })
+          }
           const sinceDay = new Date(Date.now() - 24*60*60*1000).toISOString()
           const dayTx = await supabase.from('loyalty_transactions').select('id').eq('loyalty_customer_id', member.id).eq('action', 'qr_scan').gte('created_at', sinceDay)
           const dailyScanLimit = qrLimitsForProgram.daily_scan_limit_per_member_configured ? Number(qrLimitsForProgram.daily_scan_limit_per_member || 0) : Number(settings.daily_scan_limit || 0)
@@ -1269,6 +1467,7 @@ function v33FunctionalRoutes(supabase) {
       }
 
       if (!member) {
+        if (!authOnly && qrLimitsForProgram.require_rescan_for_points) { const tokenCheck = await findQrScanToken({ customerId, slug, token: scanToken }); if (!tokenCheck.ok) return res.status(tokenCheck.status || 428).json({ ok:false, code:tokenCheck.code, error:tokenCheck.error }) }
         const pointLimitNew = await checkDailyPointLimit({ customerId, member: { id: '__new__' }, pointsToAdd: points, program, qrCampaign })
         if (!authOnly && pointLimitNew.limit > 0 && points > pointLimitNew.limit) return res.status(429).json({ ok:false, error: pointLimitNew.error || `Punkte-Tageslimit erreicht. Heute sind maximal ${pointLimitNew.limit} Punkte pro Bonuskonto möglich.`, code:'DAILY_POINT_LIMIT_REACHED', limit: pointLimitNew.limit, points_today: 0 })
         const weeklyPointLimitNew = await checkWeeklyPointLimit({ customerId, member: { id: '__new__' }, pointsToAdd: points, program, qrCampaign })
@@ -1286,21 +1485,31 @@ function v33FunctionalRoutes(supabase) {
           total_scans: authOnly ? 0 : 1,
           last_seen_at: now,
           last_activity_at: now,
-          metadata: { source: 'public_qr', slug, public_auth: { password_hash: publicPasswordHash(password), password_set_at: now, auth_method: 'email_password' } }
+          metadata: { source: 'public_qr', slug, consent_marketing: false, marketing_consent_pending: marketingConsentRequest || null, marketing_consent_status: marketingConsentRequest?.requested ? 'pending_double_opt_in' : 'none', public_auth: { password_hash: publicPasswordHash(password), password_set_at: now, auth_method: 'email_password' } }
         }).select('*').single()
 
         if (created.error) throw created.error
         member = created.data
       } else {
+        const nextMemberMetadata = marketingConsentRequest?.requested ? {
+          ...(member.metadata || {}),
+          consent_marketing: false,
+          marketing_consent_status: 'pending_double_opt_in',
+          marketing_consent_pending_at: marketingConsentRequest.requested_at,
+          marketing_consent_version: marketingConsentRequest.version,
+          marketing_consent_pending: marketingConsentRequest
+        } : member.metadata
         const patch = authOnly ? {
           last_seen_at: now,
-          last_activity_at: now
+          last_activity_at: now,
+          ...(marketingConsentRequest?.requested ? { metadata: nextMemberMetadata } : {})
         } : {
           points_balance: num(member.points_balance, 0) + points,
           total_points: num(member.total_points, 0) + points,
           total_scans: num(member.total_scans, 0) + 1,
           last_seen_at: now,
-          last_activity_at: now
+          last_activity_at: now,
+          ...(marketingConsentRequest?.requested ? { metadata: nextMemberMetadata } : {})
         }
         const updated = await supabase.from('loyalty_customers').update(patch).eq('id', member.id).select('*').single()
 
@@ -1308,6 +1517,8 @@ function v33FunctionalRoutes(supabase) {
       }
 
       resetPublicAuthRateLimit(slug, email, req.ip || req.get('x-forwarded-for'))
+      const marketingConsentResult = await persistMarketingConsent(supabase, { customerId, program, qrCampaign, member, slug, email, displayName, body, req })
+      if (marketingConsentResult?.member) member = marketingConsentResult.member
       if (authOnly) {
         const redemptions = await getPublicRewardRedemptions(customerId, member.id).catch(() => [])
         return res.json({
@@ -1319,8 +1530,14 @@ function v33FunctionalRoutes(supabase) {
           points_balance: num(member.points_balance, 0),
           redemptions,
           warnings,
-          scan_limits: qrScanLimitSettings(qrCampaign, program)
+          scan_limits: qrScanLimitSettings(qrCampaign, program),
+          marketing_consent: marketingConsentResult ? { granted: false, status: marketingConsentResult.status || 'pending_double_opt_in', double_opt_in_required: true, email_sent: Boolean(marketingConsentResult.email_sent), dryRun: Boolean(marketingConsentResult.dryRun), expires_at: marketingConsentResult.expires_at } : { granted: false }
         })
+      }
+
+      if (qrLimitsForProgram.require_rescan_for_points) {
+        const consumed = await consumeQrScanToken({ customerId, slug, token: scanToken, memberId: member.id })
+        if (!consumed.ok) return res.status(consumed.status || 409).json({ ok:false, code: consumed.code, error: consumed.error })
       }
 
       try {
@@ -1332,7 +1549,7 @@ function v33FunctionalRoutes(supabase) {
           action: 'qr_scan',
           points,
           description: `QR Scan über /l/${slug}`,
-          metadata: { public: true, slug, email, display_name: displayName, auth_method: 'email_password', scan_limits: qrScanLimitSettings(qrCampaign, program) }
+          metadata: { public: true, slug, email, display_name: displayName, auth_method: 'email_password', scan_token_id: scanToken || null, require_rescan_for_points: Boolean(qrLimitsForProgram.require_rescan_for_points), scan_limits: qrScanLimitSettings(qrCampaign, program) }
         })
       } catch (_) {}
 
@@ -1420,8 +1637,130 @@ function v33FunctionalRoutes(supabase) {
         scan_limits: qrScanLimitSettings(qrCampaign, program),
         engine_snapshot: v35Snapshot,
         loyalty_level: levelResult,
-        redemptions: await getPublicRewardRedemptions(customerId, member.id).catch(() => [])
+        redemptions: await getPublicRewardRedemptions(customerId, member.id).catch(() => []),
+        scan_token_consumed: Boolean(scanToken && qrLimitsForProgram.require_rescan_for_points),
+        marketing_consent: marketingConsentResult ? { granted: false, status: marketingConsentResult.status || 'pending_double_opt_in', double_opt_in_required: true, email_sent: Boolean(marketingConsentResult.email_sent), dryRun: Boolean(marketingConsentResult.dryRun), expires_at: marketingConsentResult.expires_at } : { granted: false }
       })
+    } catch (e) { next(e) }
+  })
+
+
+
+
+  router.get('/public/loyalty/:slug/marketing-consent/confirm', async (req, res, next) => {
+    try {
+      const token = clean(req.query.token)
+      if (!token) return res.status(400).json({ ok:false, error:'Bestätigungstoken fehlt.' })
+      const result = await confirmMarketingConsentToken(supabase, { token, slug: req.params.slug, req })
+      res.status(result.ok ? 200 : 400).json(result)
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/loyalty/:slug/marketing-consent/confirm', async (req, res, next) => {
+    try {
+      const token = clean(req.body?.token)
+      if (!token) return res.status(400).json({ ok:false, error:'Bestätigungstoken fehlt.' })
+      const result = await confirmMarketingConsentToken(supabase, { token, slug: req.params.slug, req })
+      res.status(result.ok ? 200 : 400).json(result)
+    } catch (e) { next(e) }
+  })
+
+
+  router.post('/public/loyalty/:slug/marketing-consent/status', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const body = req.body || {}
+      const email = clean(body.email)?.toLowerCase() || null
+      const password = clean(body.password)
+      if (!email || !password) return res.status(400).json({ ok:false, error:'E-Mail und Passwort sind erforderlich.' })
+
+      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = found.error ? null : (found.data || null)
+      if (!program) return res.status(404).json({ ok:false, error:'Bonusprogramm nicht gefunden.' })
+
+      const existing = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
+      const member = existing.error ? null : (existing.data || null)
+      if (!member) return res.status(404).json({ ok:false, error:'Bonusmitglied nicht gefunden.' })
+      const storedPasswordHash = getPublicPasswordHash(member)
+      if (storedPasswordHash && !publicPasswordVerify(password, storedPasswordHash)) return res.status(401).json({ ok:false, error:'E-Mail oder Passwort ist falsch.' })
+
+      const metadata = member.metadata || {}
+      res.json({
+        ok: true,
+        slug,
+        email,
+        loyalty_customer_id: member.id,
+        consent_marketing: Boolean(metadata.consent_marketing),
+        status: metadata.marketing_consent_status || 'none',
+        consent_at: metadata.marketing_consent_at || null,
+        pending_at: metadata.marketing_consent_pending_at || null,
+        withdrawn_at: metadata.marketing_consent_withdrawn_at || null,
+        version: metadata.marketing_consent_version || null,
+        purposes: metadata.marketing_consent?.purposes || metadata.marketing_consent_pending?.purposes || [],
+        can_receive_reminders: Boolean(metadata.consent_marketing && metadata.marketing_consent_status === 'granted')
+      })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/loyalty/:slug/marketing-consent/resend-double-opt-in', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const body = req.body || {}
+      const email = clean(body.email)?.toLowerCase() || null
+      const password = clean(body.password)
+      if (!email || !password) return res.status(400).json({ ok:false, error:'E-Mail und Passwort sind erforderlich.' })
+
+      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = found.error ? null : (found.data || null)
+      if (!program) return res.status(404).json({ ok:false, error:'Bonusprogramm nicht gefunden.' })
+
+      const existing = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
+      const member = existing.error ? null : (existing.data || null)
+      if (!member) return res.status(404).json({ ok:false, error:'Bonusmitglied nicht gefunden.' })
+      const storedPasswordHash = getPublicPasswordHash(member)
+      if (storedPasswordHash && !publicPasswordVerify(password, storedPasswordHash)) return res.status(401).json({ ok:false, error:'E-Mail oder Passwort ist falsch.' })
+
+      const result = await requestMarketingDoubleOptIn(supabase, {
+        customerId: program.customer_id,
+        program,
+        qrCampaign: null,
+        member,
+        slug,
+        email,
+        displayName: member.display_name || member.name || email,
+        body: { ...body, marketing_consent: true, marketing_consent_source: 'public_consent_center' },
+        req,
+        requireDelivery: false
+      })
+      res.json(result || { ok:false, error:'Double-Opt-in konnte nicht vorbereitet werden.' })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/loyalty/:slug/marketing-consent/withdraw', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const body = req.body || {}
+      const token = clean(body.token || req.query.token)
+      const email = clean(body.email)?.toLowerCase() || null
+      const password = clean(body.password)
+      if (token) {
+        const result = await withdrawMarketingConsentByTokenOrLogin(supabase, { token, slug, email, req, reason: body.reason || 'unsubscribe_link' })
+        return res.status(result.ok ? 200 : 400).json(result)
+      }
+      if (!email || !password) return res.status(400).json({ ok:false, error:'E-Mail und Passwort sind erforderlich.' })
+
+      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
+      const program = found.error ? null : (found.data || null)
+      if (!program) return res.status(404).json({ ok:false, error:'Bonusprogramm nicht gefunden.' })
+
+      const existing = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
+      const member = existing.error ? null : (existing.data || null)
+      if (!member) return res.status(404).json({ ok:false, error:'Bonusmitglied nicht gefunden.' })
+      const storedPasswordHash = getPublicPasswordHash(member)
+      if (storedPasswordHash && !publicPasswordVerify(password, storedPasswordHash)) return res.status(401).json({ ok:false, error:'E-Mail oder Passwort ist falsch.' })
+
+      const result = await withdrawMarketingConsent(supabase, { customerId: program.customer_id, member, slug, email, req, reason: body.reason || 'withdrawn_by_user' })
+      res.json(result)
     } catch (e) { next(e) }
   })
 
@@ -1435,6 +1774,10 @@ function v33FunctionalRoutes(supabase) {
       const password = clean(body.password)
       const staffCode = clean(body.staff_code || body.staffCode || body.pin || body.staff_pin)
       const now = new Date().toISOString()
+
+      const shield = inspectPublicAction({ req, action: 'public_reward_redeem', slug, email, body, max: 20 })
+      await recordPublicShieldEvent(supabase, shield, { action: 'public_reward_redeem', slug, email, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
 
       if (!email || !password) return res.status(400).json({ ok: false, error: 'E-Mail und Passwort sind erforderlich.' })
       const rate = checkPublicAuthRateLimit(`${slug}:redeem`, email, req.ip || req.get('x-forwarded-for'))
@@ -1566,6 +1909,9 @@ function v33FunctionalRoutes(supabase) {
       const slug = String(req.params.slug || '').trim()
       const body = req.body || {}
       const rating = num(body.rating, 0)
+      const shield = inspectPublicAction({ req, action: 'public_review', slug, email: body.reviewer_email || body.email, body, max: 25 })
+      await recordPublicShieldEvent(supabase, shield, { action: 'public_review', slug, email: body.reviewer_email || body.email, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
 
       const foundProgram = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
       const program = foundProgram.error ? null : (foundProgram.data || null)
@@ -1828,6 +2174,7 @@ function v33FunctionalRoutes(supabase) {
       daily_scan_limit: 1,
       weekly_scan_limit: 0,
       weekly_scan_limit_enabled: false,
+      require_rescan_for_points: false,
       birthday_bonus_points: 100,
       referral_bonus_referrer: 100,
       referral_bonus_friend: 50,
@@ -1909,7 +2256,7 @@ function v33FunctionalRoutes(supabase) {
         daily_scan_limit: body.daily_scan_limit,
         weekly_scan_limit: body.weekly_scan_limit_enabled === true ? body.weekly_scan_limit : 0,
         weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true,
-        metadata: { ...(body.metadata || {}), weekly_point_limit_per_member: Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, body.metadata?.weekly_point_limit_per_member || 0))), weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true },
+        metadata: { ...(body.metadata || {}), weekly_point_limit_per_member: Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, body.metadata?.weekly_point_limit_per_member || 0))), weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true, require_rescan_for_points: body.require_rescan_for_points === true },
         birthday_bonus_points: body.birthday_bonus_points,
         referral_bonus_referrer: body.referral_bonus_referrer,
         referral_bonus_friend: body.referral_bonus_friend,
@@ -1945,7 +2292,7 @@ function v33FunctionalRoutes(supabase) {
         points: Number(body.points || 100),
         expires_at: body.expires_at || null,
         max_redemptions: Number(body.max_redemptions || 0),
-        max_per_customer: Number(body.max_per_customer || 1),
+        max_per_customer: Number(body.max_per_customer ?? body.max_redemptions_per_member ?? 0),
         daily_limit: Number(body.daily_limit || 0),
         weekly_limit: Number(body.weekly_limit || 0),
         active: body.active !== false,
@@ -2285,7 +2632,7 @@ function v33FunctionalRoutes(supabase) {
           customer: await getCustomer(customerId),
           loyalty_program: existingPrograms.data[0],
           qr_campaign: existingQr.data[0],
-          public_url_path: `/l/${existingQr.data[0].slug || existingPrograms.data[0].slug}`
+          public_url_path: `/q/${existingQr.data[0].slug || existingPrograms.data[0].slug}`, landing_url_path: `/l/${existingQr.data[0].slug || existingPrograms.data[0].slug}`
         })
       }
 
@@ -2425,8 +2772,9 @@ function v33FunctionalRoutes(supabase) {
         ok: true,
         ready: warnings.length === 0,
         slug: q.data.slug,
-        public_url_path: `/l/${q.data.slug}`,
-        target_url: q.data.target_url || `/l/${q.data.slug}`,
+        public_url_path: `/q/${q.data.slug}`,
+        landing_url_path: `/l/${q.data.slug}`,
+        target_url: q.data.target_url || `/q/${q.data.slug}`,
         qr_campaign: q.data,
         loyalty_program: program.data || null,
         warnings
@@ -2487,8 +2835,8 @@ function v33FunctionalRoutes(supabase) {
         daily_point_limit_per_member: metadata.daily_point_limit_per_member,
         suspicion_score_threshold: metadata.suspicion_score_threshold,
         metadata,
-        public_url: slugValue ? `/l/${slugValue}` : current.public_url,
-        target_url: slugValue ? `/l/${slugValue}` : current.target_url,
+        public_url: slugValue ? `/q/${slugValue}` : current.public_url,
+        target_url: slugValue ? `/q/${slugValue}` : current.target_url,
         active: body.active === undefined ? current.active !== false : body.active !== false,
         updated_at: new Date().toISOString()
       }
@@ -2935,11 +3283,12 @@ function v33FunctionalRoutes(supabase) {
         })
       }
 
-      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit || body.daily_point_limit_per_member || body.weekly_point_limit_per_member || body.suspicion_score_threshold) {
+      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit || body.daily_point_limit_per_member || body.weekly_point_limit_per_member || body.suspicion_score_threshold || body.require_rescan_for_points !== undefined) {
         const provisioned = await provisionCustomer(customerId, {})
         const programMeta = { ...(provisioned.loyalty_program?.metadata || {}) }
         programMeta.weekly_point_limit_per_member = Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, programMeta.weekly_point_limit_per_member || 0)))
         programMeta.weekly_scan_limit_enabled = body.weekly_scan_limit_enabled === true
+        programMeta.require_rescan_for_points = body.require_rescan_for_points === true
         await supabase.from('loyalty_programs').update({
           points_per_scan: Number(body.points_per_scan || provisioned.loyalty_program?.points_per_scan || 10),
           daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, provisioned.loyalty_program?.daily_point_limit_per_member || 0))),
@@ -2952,6 +3301,7 @@ function v33FunctionalRoutes(supabase) {
         const settingsMeta = { ...(settings.metadata || {}) }
         settingsMeta.weekly_point_limit_per_member = Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, settingsMeta.weekly_point_limit_per_member || 0)))
         settingsMeta.weekly_scan_limit_enabled = body.weekly_scan_limit_enabled === true
+        settingsMeta.require_rescan_for_points = body.require_rescan_for_points === true
         await supabase.from('v37_loyalty_settings').update({
           daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
           weekly_scan_limit: body.weekly_scan_limit_enabled === true ? Math.max(0, Math.floor(num(body.weekly_scan_limit, settings.weekly_scan_limit || 0))) : 0,
@@ -3005,7 +3355,7 @@ function v33FunctionalRoutes(supabase) {
         .order('created_at', { ascending: true })
         .limit(50)
 
-      let packages = records.error ? [] : (records.data || []).map(r => r.payload || {})
+      let packages = records.error ? [] : activeFunctionalRecords(records.data || []).map(r => r.payload || {})
       if (!packages.length) {
         packages = [
           { id: 'starter', name: 'Starter', price: 199, billing_interval: 'month', features: ['QR Kampagnen', 'Basic Loyalty', 'Landingpage'], visible_on_landing: true, visible_to_customer: true, active: true },
@@ -3049,7 +3399,7 @@ function v33FunctionalRoutes(supabase) {
         .eq('resource', 'package_matrix')
         .order('created_at', { ascending: true })
 
-      res.json({ ok: true, packages: (refreshed.data || []).map(r => r.payload || {}) })
+      res.json({ ok: true, packages: activeFunctionalRecords(refreshed.data || []).map(r => r.payload || {}) })
     } catch (e) { next(e) }
   })
 

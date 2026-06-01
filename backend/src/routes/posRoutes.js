@@ -1,14 +1,13 @@
 const express = require('express')
 const requireCustomerAccess = require('../middleware/requireCustomerAccess')
 const pos = require('../services/posService')
+const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
 // Webhook ist oeffentlich erreichbar — Signaturpruefung im Service.
-// Liest raw body fuer HMAC-Verifikation.
+// V1-Fokus: Umsatz-/Transaktionsdaten anzeigen, keine Kassensystem-Ersetzung.
 function posRoutes() {
   const router = express.Router()
 
-  // Raw-Body-Capture nur fuer Webhook-Endpoint (alle anderen Routen nutzen
-  // den globalen express.json).
   router.post('/webhook/:provider',
     express.text({ type: '*/*', limit: '1mb' }),
     async (req, res, next) => {
@@ -30,19 +29,76 @@ function posRoutes() {
     }
   )
 
-  // Admin-Liste der letzten POS-Transaktionen pro Customer.
+  router.get('/providers/sumup/status/:customer_id', requireCustomerAccess(), async (req, res, next) => {
+    try {
+      const supabase = getSupabaseAdmin()
+      const config = await pos.readSumUpConfig(supabase, { customer_id: req.params.customer_id })
+      res.json({ ok: true, provider: 'sumup', config: { ...config, access_token: undefined } })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/providers/sumup/connect/:customer_id', requireCustomerAccess(), async (req, res, next) => {
+    try {
+      const supabase = getSupabaseAdmin()
+      const result = await pos.upsertSumUpConfig(supabase, {
+        customer_id: req.params.customer_id,
+        access_token: req.body?.access_token,
+        merchant_code: req.body?.merchant_code || '',
+        api_base: req.body?.api_base || '',
+        actor: req.user?.email || req.body?.actor || 'Admin'
+      })
+      res.json(result)
+    } catch (e) { next(e) }
+  })
+
+  router.post('/providers/sumup/sync/:customer_id', requireCustomerAccess(), async (req, res, next) => {
+    try {
+      const supabase = getSupabaseAdmin()
+      const result = await pos.syncSumUpTransactions(supabase, {
+        customer_id: req.params.customer_id,
+        from: req.body?.from || null,
+        to: req.body?.to || null,
+        limit: req.body?.limit || 100
+      })
+      res.json(result)
+    } catch (e) { next(e) }
+  })
+
+  router.get('/summary/:customer_id', requireCustomerAccess(), async (req, res, next) => {
+    try {
+      const supabase = getSupabaseAdmin()
+      const result = await pos.getRevenueSummary(supabase, { customer_id: req.params.customer_id, days: req.query.days || 90 })
+      res.json(result)
+    } catch (e) { next(e) }
+  })
+
   router.get('/transactions/:customer_id', requireCustomerAccess(), async (req, res, next) => {
     try {
-      const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
       const supabase = getSupabaseAdmin()
-      const { data, error } = await supabase
-        .from('pos_transactions')
-        .select('*')
-        .eq('customer_id', req.params.customer_id)
-        .order('transaction_time', { ascending: false })
-        .limit(100)
-      if (error) throw error
-      res.json({ ok: true, transactions: data || [] })
+      const transactions = await pos.listTransactions(supabase, {
+        customer_id: req.params.customer_id,
+        from: req.query.from || null,
+        to: req.query.to || null,
+        limit: req.query.limit || 100
+      })
+      res.json({ ok: true, transactions })
+    } catch (e) { next(e) }
+  })
+
+  router.patch('/transactions/:transaction_id/link', requireCustomerAccess(), async (req, res, next) => {
+    try {
+      const supabase = getSupabaseAdmin()
+      const result = await pos.linkTransaction(supabase, {
+        transaction_id: req.params.transaction_id,
+        customer_id: req.body?.customer_id || null,
+        qr_campaign_id: req.body?.qr_campaign_id || null,
+        appointment_id: req.body?.appointment_id || null,
+        loyalty_customer_id: req.body?.loyalty_customer_id || null,
+        lead_id: req.body?.lead_id || null,
+        note: req.body?.note || '',
+        actor: req.user?.email || 'Admin'
+      })
+      res.json(result)
     } catch (e) { next(e) }
   })
 

@@ -26,6 +26,17 @@ const businessToolsRoutes = require('./routes/businessToolsRoutes')
 const documentMediaRoutes = require('./routes/documentMediaRoutes')
 const productionReadinessRoutes = require('./routes/productionReadinessRoutes')
 const productionRoutes = require('./routes/productionRoutes')
+const customerReadinessRoutes = require('./routes/customerReadinessRoutes')
+const finalProductionHardeningRoutes = require('./routes/finalProductionHardeningRoutes')
+const operationsRoutes = require('./routes/operationsRoutes')
+const qrCampaignGrowthRoutes = require('./routes/qrCampaignGrowthRoutes')
+const loyaltyGrowthSuiteRoutes = require('./routes/loyaltyGrowthSuiteRoutes')
+const retentionIntelligenceRoutes = require('./routes/retentionIntelligenceRoutes')
+const mailDomainComplianceRoutes = require('./routes/mailDomainComplianceRoutes')
+const goLiveCockpitRoutes = require('./routes/goLiveCockpitRoutes')
+const completenessAuditRoutes = require('./routes/completenessAuditRoutes')
+const toolReadinessRoutes = require('./routes/toolReadinessRoutes')
+const globalGuardRoutes = require('./routes/globalGuardRoutes')
 const finalHardeningRoutes = require('./routes/finalHardeningRoutes')
 const documentEngineV2Routes = require('./routes/documentEngineV2Routes')
 const securityCoreRoutes = require('./routes/securityCoreRoutes')
@@ -100,9 +111,14 @@ const PUBLIC_PATHS = [
   /^\/api\/v33-functional\/v42\/health$/,
   /^\/api\/auth\//,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/status$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/scan-start$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/join-or-scan$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/rewards\/[^/]+\/redeem$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/password-reset-request$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/marketing-consent\/confirm$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/marketing-consent\/withdraw$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/marketing-consent\/status$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/marketing-consent\/resend-double-opt-in$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/review$/,
   /^\/api\/qr(\?.*)?$/,
   /^\/api\/pos\/webhook\/[^/]+$/,
@@ -155,6 +171,17 @@ for (const [routePath, routeFactory] of adminScopedRoutes) {
 app.use('/api/production', requireAdmin, productionRoutes(supabaseAdmin))
 app.use('/api/production', requireAdmin, finalHardeningRoutes(supabaseAdmin))
 app.use('/api/production', requireAdmin, productionReadinessRoutes(supabaseAdmin))
+app.use('/api/production/global-guards', requireAdmin, globalGuardRoutes(supabaseAdmin))
+app.use('/api/production/customer-readiness', requireAdmin, customerReadinessRoutes(supabaseAdmin))
+app.use('/api/production/final-hardening', requireAdmin, finalProductionHardeningRoutes(supabaseAdmin))
+app.use('/api/production/operations', requireAdmin, operationsRoutes(supabaseAdmin))
+app.use('/api/production/qr-growth', requireAdmin, qrCampaignGrowthRoutes(supabaseAdmin))
+app.use('/api/production/loyalty-growth', requireAdmin, loyaltyGrowthSuiteRoutes(supabaseAdmin))
+app.use('/api/production/retention-intelligence', requireAdmin, retentionIntelligenceRoutes(supabaseAdmin))
+app.use('/api/production/mail-domain', requireAdmin, mailDomainComplianceRoutes(supabaseAdmin))
+app.use('/api/production/go-live-cockpit', requireAdmin, goLiveCockpitRoutes(supabaseAdmin))
+app.use('/api/production/completeness-audit', requireAdmin, completenessAuditRoutes(supabaseAdmin))
+app.use('/api/production/tool-readiness', requireAdmin, toolReadinessRoutes())
 app.use('/api/document-media', documentMediaRoutes(supabaseAdmin))
 
 app.use('/api/customer-intelligence', requireCustomerAccess(), customerIntelligenceRoutes(supabaseAdmin))

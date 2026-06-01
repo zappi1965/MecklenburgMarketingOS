@@ -47,7 +47,7 @@ async function grantPackageTools(supabase, { customer_id, package_name = 'Starte
   for (const tool_key of tools) {
     const existing = await safeQuery(
       supabase.from('customer_tool_access')
-        .select('id, customer_id, tool_key, enabled')
+        .select('id, customer_id, tool_key, enabled, source, metadata')
         .eq('customer_id', customer_id)
         .eq('tool_key', tool_key)
         .maybeSingle()
@@ -65,8 +65,13 @@ async function grantPackageTools(supabase, { customer_id, package_name = 'Starte
     }
 
     if (existing?.data?.id) {
-      await safeQuery(supabase.from('customer_tool_access').update(payload).eq('id', existing.data.id))
-      granted.push({ tool_key, mode: 'updated' })
+      const manualOverride = existing.data.source === 'manual' || existing.data.metadata?.manual_override === true || existing.data.metadata?.locked === true
+      if (manualOverride && existing.data.enabled === false) {
+        granted.push({ tool_key, mode: 'skipped_manual_disabled' })
+      } else {
+        await safeQuery(supabase.from('customer_tool_access').update({ ...payload, metadata: { ...(existing.data.metadata || {}), ...payload.metadata } }).eq('id', existing.data.id))
+        granted.push({ tool_key, mode: 'updated' })
+      }
     } else {
       await safeQuery(supabase.from('customer_tool_access').insert({ id: crypto.randomUUID(), ...payload, created_at: now }))
       granted.push({ tool_key, mode: 'inserted' })

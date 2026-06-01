@@ -11,6 +11,7 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 export const customerPortalClient = {
+  overview: (customerId?: string) => request(`/overview${customerId ? `?customer_id=${encodeURIComponent(customerId)}` : ''}`),
   register: (body: any) => request('/register', { method: 'POST', body: JSON.stringify(body) }),
   registrations: () => request('/registrations'),
   approve: (id: string, body: any = {}) => request(`/approve/${id}`, { method: 'POST', body: JSON.stringify(body) }),
@@ -21,4 +22,5 @@ export const customerPortalClient = {
   resendInvite: (id: string, body: any = {}) => request(`/invite/${encodeURIComponent(id)}/resend`, { method: 'POST', body: JSON.stringify(body) }),
   packageRequest: (body: any) => request('/package-request', { method: 'POST', body: JSON.stringify(body) }),
   syncPackageAccess: (body: any) => request('/sync-package-access', { method: 'POST', body: JSON.stringify(body) }),
+  marketingConsents: (customerId?: string) => request(`/marketing-consents${customerId ? `?customer_id=${encodeURIComponent(customerId)}` : ''}`),
 }

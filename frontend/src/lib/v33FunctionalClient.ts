@@ -181,6 +181,8 @@ export const v33FunctionalClient = {
 
   publicStatus: (slug: string) => request(`/public/loyalty/${slug}/status`),
 
+  publicScanStart: (slug: string) => request(`/public/loyalty/${slug}/scan-start`),
+
   publicJoinOrScan: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/join-or-scan`, { method: 'POST', body: JSON.stringify(payload) }),
 
@@ -189,6 +191,18 @@ export const v33FunctionalClient = {
 
   publicPasswordReset: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/password-reset-request`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  publicMarketingConsentStatus: (slug: string, payload: any) =>
+    request(`/public/loyalty/${slug}/marketing-consent/status`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  publicResendMarketingDoubleOptIn: (slug: string, payload: any) =>
+    request(`/public/loyalty/${slug}/marketing-consent/resend-double-opt-in`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  publicWithdrawMarketingConsent: (slug: string, payload: any) =>
+    request(`/public/loyalty/${slug}/marketing-consent/withdraw`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  publicConfirmMarketingConsent: (slug: string, token: string) =>
+    request(`/public/loyalty/${slug}/marketing-consent/confirm?token=${encodeURIComponent(token)}`),
 
   publicRedeemReward: (slug: string, rewardId: string, payload: any) =>
     request(`/public/loyalty/${slug}/rewards/${rewardId}/redeem`, { method: 'POST', body: JSON.stringify(payload) }),
