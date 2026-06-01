@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { operationsClient } from '@/lib/operationsClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -42,7 +41,7 @@ export default function IncidentCenterPage() {
   useEffect(() => { void load() }, [])
 
   return (
-    <AdminShell activeHref="/admin/production/incident-center">
+    <>
       <div className="pageHeader">
         <div><p className="eyebrow">Betrieb</p><h1>Incident Center</h1><p className="muted">Störungen, Ursachen, Lösungen und interne Notizen je Kunde dokumentieren.</p></div>
         <button className="btn secondary" onClick={load}>Aktualisieren</button>
@@ -60,6 +59,6 @@ export default function IncidentCenterPage() {
           {(data?.incidents || []).map((i:any) => <div className="item" key={i.id}><div><b>{i.title}</b><div className="sub">{i.module} · {i.severity} · {i.status}</div></div><Badge ok={i.status==='resolved'||i.status==='closed'}>{i.status}</Badge></div>)}
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

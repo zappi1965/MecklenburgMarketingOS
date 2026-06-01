@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { completenessAuditClient } from '@/lib/completenessAuditClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -45,7 +44,7 @@ export default function CompletenessAuditPage() {
   }, [data, filter])
 
   return (
-    <AdminShell activeHref="/admin/production/completeness-audit">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Production</p>
@@ -113,6 +112,6 @@ export default function CompletenessAuditPage() {
       <Card title="ENV-/Proof Flags">
         <pre className="codeBox">{JSON.stringify(data?.env_flags || {}, null, 2)}</pre>
       </Card>
-    </AdminShell>
+    </>
   )
 }

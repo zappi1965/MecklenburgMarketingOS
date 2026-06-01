@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { operationsClient } from '@/lib/operationsClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -37,7 +36,7 @@ export default function BackupRestorePage() {
   useEffect(() => { void load() }, [])
 
   return (
-    <AdminShell activeHref="/admin/production/backup-restore">
+    <>
       <div className="pageHeader">
         <div><p className="eyebrow">Backup & Restore</p><h1>Backup-/Restore Readiness</h1><p className="muted">Backup-Konfiguration, RTO/RPO und Restore-Test Nachweise verwalten.</p></div>
         <button className="btn secondary" onClick={load}>Neu prüfen</button>
@@ -51,6 +50,6 @@ export default function BackupRestorePage() {
           <pre className="codeBox">{JSON.stringify(data?.last_restore_test || {}, null, 2)}</pre>
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

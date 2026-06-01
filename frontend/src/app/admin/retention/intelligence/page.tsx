@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { retentionIntelligenceClient } from '@/lib/retentionIntelligenceClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -124,7 +123,7 @@ export default function RetentionIntelligencePage() {
   const criticalMembers = (data?.members || []).filter((m:any) => (m.segments || []).includes('critical_feedback_customers'))
 
   return (
-    <AdminShell activeHref="/admin/retention/intelligence">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Retention</p>
@@ -192,6 +191,6 @@ export default function RetentionIntelligencePage() {
           <List rows={(data?.members || []).slice(0, 10)}/>
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

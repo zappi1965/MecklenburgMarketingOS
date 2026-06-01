@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { finalProductionHardeningClient } from '@/lib/finalProductionHardeningClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -52,7 +51,7 @@ export default function FinalProductionHardeningPage() {
   const jobs = data?.jobs || []
 
   return (
-    <AdminShell activeHref="/admin/production/final-hardening">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">99/100 Production Hardening</p>
@@ -108,6 +107,6 @@ export default function FinalProductionHardeningPage() {
           {jobs.map((job:any) => <div className="item" key={job.key}><div><b>{job.label}</b><div className="sub">alle {job.interval_minutes} Minuten</div></div><button className="btn secondary" onClick={() => runJob(job.key)}>Starten</button></div>)}
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

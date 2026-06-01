@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { loyaltyGrowthSuiteClient } from '@/lib/loyaltyGrowthSuiteClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -77,7 +76,7 @@ export default function LoyaltyGrowthSuitePage() {
   const campaignIdeas = ideas?.ideas || []
 
   return (
-    <AdminShell activeHref="/admin/loyalty/growth-suite">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Loyalty Growth</p>
@@ -128,6 +127,6 @@ export default function LoyaltyGrowthSuitePage() {
           <pre className="codeBox">{JSON.stringify(ideas?.vip_levels || [], null, 2)}</pre>
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

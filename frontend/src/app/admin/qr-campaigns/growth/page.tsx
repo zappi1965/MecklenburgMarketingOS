@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { qrCampaignGrowthClient } from '@/lib/qrCampaignGrowthClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -74,7 +73,7 @@ export default function QrCampaignGrowthPage() {
   const rows = overview?.placements || []
 
   return (
-    <AdminShell activeHref="/admin/qr-campaigns/growth">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">QR Growth</p>
@@ -120,6 +119,6 @@ export default function QrCampaignGrowthPage() {
           <IssueList rows={overview?.issues || []}/>
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

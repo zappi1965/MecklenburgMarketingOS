@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { toolReadinessClient } from '@/lib/toolReadinessClient'
 
 function Badge({ status, children }: any) {
@@ -44,7 +43,7 @@ export default function ToolReadinessPage() {
   }, [data, query, status])
 
   return (
-    <AdminShell activeHref="/admin/production/tool-readiness">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Production</p>
@@ -52,7 +51,7 @@ export default function ToolReadinessPage() {
           <p className="muted">Bewertet jedes verkaufbare Tool, zeigt fehlende Punkte und externe Live-Nachweise.</p>
         </div>
         <div className="actionRow">
-          <a className="btn secondary" href={toolReadinessClient.markdownUrl()}>Markdown Export</a>
+          <button className="btn secondary" onClick={() => toolReadinessClient.downloadMarkdown().catch((e:any)=>setMsg(e?.message || "Export fehlgeschlagen."))}>Markdown Export</button>
           <button className="btn" onClick={load}>Neu prüfen</button>
         </div>
       </div>
@@ -121,6 +120,6 @@ export default function ToolReadinessPage() {
           </Card>
         ))}
       </section>
-    </AdminShell>
+    </>
   )
 }

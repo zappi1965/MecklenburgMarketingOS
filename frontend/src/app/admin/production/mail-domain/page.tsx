@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { mailDomainComplianceClient } from '@/lib/mailDomainComplianceClient'
 
 function Card({ title, children, action }: any) {
@@ -56,7 +55,7 @@ export default function MailDomainCompliancePage() {
   useEffect(() => { void load() }, [])
 
   return (
-    <AdminShell activeHref="/admin/production/mail-domain">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Mail & Consent</p>
@@ -95,6 +94,6 @@ export default function MailDomainCompliancePage() {
           {(privacy?.sections || []).map((s:any) => <div className="item" key={s.title}><div><b>{s.title}</b><div className="sub">{s.text}</div></div></div>)}
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

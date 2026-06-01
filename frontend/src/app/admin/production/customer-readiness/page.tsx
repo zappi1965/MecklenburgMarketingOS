@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { customerReadinessClient } from '@/lib/customerReadinessClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -64,7 +63,7 @@ export default function CustomerReadinessPage() {
   const trash = overview?.trash?.items || []
 
   return (
-    <AdminShell activeHref="/admin/production/customer-readiness">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Go-Live & Integrity</p>
@@ -132,6 +131,6 @@ export default function CustomerReadinessPage() {
           ))}
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

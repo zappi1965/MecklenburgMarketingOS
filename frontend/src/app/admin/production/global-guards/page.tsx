@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { globalGuardClient } from '@/lib/globalGuardClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -42,7 +41,7 @@ export default function GlobalGuardsPage() {
   useEffect(() => { void load() }, [])
 
   return (
-    <AdminShell activeHref="/admin/production/global-guards">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Production Hardening</p>
@@ -82,6 +81,6 @@ export default function GlobalGuardsPage() {
           <p className="sub">{msg}</p>
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

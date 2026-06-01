@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { operationsClient } from '@/lib/operationsClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -60,7 +59,7 @@ export default function MonthlyReportsPage() {
   useEffect(() => { setCustomerId(getAdminSelectedCustomerId()) }, [])
 
   return (
-    <AdminShell activeHref="/admin/reports/monthly">
+    <>
       <div className="pageHeader">
         <div><p className="eyebrow">Reporting</p><h1>Automatischer Monatsreport</h1><p className="muted">QR-Scans, Bewertungen, Leads, Punkte, Rewards, Rechnungen und Handlungsempfehlungen als Report-Entwurf erzeugen.</p></div>
         <button className="btn" onClick={generate}>Report erzeugen</button>
@@ -76,6 +75,6 @@ export default function MonthlyReportsPage() {
         <Card title="Empfehlungen"><IssueList rows={(report?.recommendations || []).map((x:string) => ({ title:x, severity:'info' }))}/></Card>
         <Card title="PDF / Versand"><pre className="codeBox">{JSON.stringify({ pdf: pdfResult?.ok ? pdfResult.document : pdfResult?.error, send: sendResult?.ok ? sendResult.mail : sendResult?.error }, null, 2)}</pre></Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

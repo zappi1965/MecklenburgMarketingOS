@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { operationsClient } from '@/lib/operationsClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -40,7 +39,7 @@ export default function SupportDiagnosticsPage() {
   useEffect(() => { void load() }, [])
 
   return (
-    <AdminShell activeHref="/admin/production/support-diagnostics">
+    <>
       <div className="pageHeader">
         <div><p className="eyebrow">Support</p><h1>Support-Diagnose-Cockpit</h1><p className="muted">QR, Slug, Loyalty, Tokens, Rewards, Billing und letzte Fehler je Kunde prüfen.</p></div>
         <button className="btn" onClick={load}>Neu prüfen</button>
@@ -52,6 +51,6 @@ export default function SupportDiagnosticsPage() {
         <Card title="Zähler"><pre className="codeBox">{JSON.stringify(data?.counts || {}, null, 2)}</pre></Card>
         <Card title="Letzte Fehler"><IssueList rows={data?.latest?.errors || []}/></Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

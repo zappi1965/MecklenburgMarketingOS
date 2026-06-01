@@ -22,6 +22,8 @@ export type MmosTool = {
   section: SectionKey
   packageMin: PackageTier
   route?: string
+  adminRoute?: string
+  customerRoute?: string
   description: string
   visibleToCustomer: boolean
   icon?: string
@@ -78,16 +80,16 @@ export const mmosToolRegistry: MmosTool[] = [
 
   { key: 'portal_home', label: 'Kundenportal Startseite', area: 'customer', section: 'dashboard', packageMin: 'starter', route: '/portal', description: 'Kundenseitige Startseite mit Reports, Dokumenten, Einwilligungen, Kampagnenstatus und Schnellzugriffen.', visibleToCustomer: true, icon: 'layout-dashboard', mobilePriority: 1 },
   { key: 'portal_reports', label: 'Portal Reports & PDFs', area: 'customer', section: 'operations', packageMin: 'starter', route: '/portal/reports', description: 'Freigegebene Monatsreports, PDFs, Angebote und Dokumente fuer den Kunden.', visibleToCustomer: true, icon: 'file-text', mobilePriority: 2 },
-  { key: 'monthly_report_pdf_delivery', label: 'Monatsreport PDF & Versand', area: 'shared', section: 'operations', packageMin: 'starter', route: '/admin/reports/monthly', description: 'Monatsreports als PDF erzeugen, im Kundenportal freigeben und per Mail versenden.', visibleToCustomer: true, icon: 'file-text' },
+  { key: 'monthly_report_pdf_delivery', label: 'Monatsreport PDF & Versand', area: 'shared', section: 'operations', packageMin: 'starter', route: '/admin/reports/monthly', adminRoute: '/admin/reports/monthly', customerRoute: '/portal/reports', description: 'Monatsreports als PDF erzeugen, im Kundenportal freigeben und per Mail versenden.', visibleToCustomer: true, icon: 'file-text' },
   { key: 'portal_consents', label: 'Portal Einwilligungen', area: 'customer', section: 'settings', packageMin: 'growth', route: '/portal/consents', description: 'Kundenseitige Uebersicht ueber Double-Opt-in, Widerrufe und Reminder-Entwuerfe.', visibleToCustomer: true, icon: 'shield-check', mobilePriority: 5 },
   { key: 'public_consent_center', label: 'Endkunden Consent Center', area: 'shared', section: 'settings', packageMin: 'growth', route: '/marketing/consent-center', description: 'Endkunden koennen Werbeeinwilligung pruefen, Double-Opt-in erneut anfordern oder widerrufen.', visibleToCustomer: true, icon: 'mail-check' },
-  { key: 'retention_intelligence_suite', label: 'Retention Intelligence Suite', area: 'shared', section: 'growth', packageMin: 'growth', route: '/admin/retention/intelligence', description: 'Segmente, Inaktivitaet, Churn Score, Value Score, VIP-Kandidaten und Reaktivierungsplaene.', visibleToCustomer: true, icon: 'brain-circuit' },
-  { key: 'customer_value_score', label: 'Customer Value Score', area: 'shared', section: 'growth', packageMin: 'growth', route: '/admin/retention/intelligence', description: 'Bewertet Kunden nach Bindungswert, Aktivitaet, Punktepotenzial und VIP-Faehigkeit.', visibleToCustomer: true, icon: 'gauge' },
-  { key: 'segment_campaigns', label: 'Segmentbasierte Kampagnen', area: 'shared', section: 'marketing', packageMin: 'growth', route: '/admin/retention/intelligence', description: 'Kampagnen- und Coupon-Entwuerfe direkt aus Segmenten starten.', visibleToCustomer: true, icon: 'megaphone' },
+  { key: 'retention_intelligence_suite', label: 'Retention Intelligence Suite', area: 'shared', section: 'growth', packageMin: 'growth', route: '/admin/retention/intelligence', adminRoute: '/admin/retention/intelligence', customerRoute: '/portal/campaigns', description: 'Segmente, Inaktivitaet, Churn Score, Value Score, VIP-Kandidaten und Reaktivierungsplaene.', visibleToCustomer: true, icon: 'brain-circuit' },
+  { key: 'customer_value_score', label: 'Customer Value Score', area: 'shared', section: 'growth', packageMin: 'growth', route: '/admin/retention/intelligence', adminRoute: '/admin/retention/intelligence', customerRoute: '/portal/dashboard', description: 'Bewertet Kunden nach Bindungswert, Aktivitaet, Punktepotenzial und VIP-Faehigkeit.', visibleToCustomer: true, icon: 'gauge' },
+  { key: 'segment_campaigns', label: 'Segmentbasierte Kampagnen', area: 'shared', section: 'marketing', packageMin: 'growth', route: '/admin/retention/intelligence', adminRoute: '/admin/retention/intelligence', customerRoute: '/portal/campaigns', description: 'Kampagnen- und Coupon-Entwuerfe direkt aus Segmenten starten.', visibleToCustomer: true, icon: 'megaphone' },
   { key: 'consent_center_double_optin', label: 'Consent Center & Double-Opt-in Reminder', area: 'shared', section: 'marketing', packageMin: 'growth', route: '/portal/consents', description: 'Werbeeinwilligung, Double-Opt-in, Abmeldelink und Reminder-Freigaben.', visibleToCustomer: true, icon: 'mail-check' },
-  { key: 'churn_prevention_center', label: 'Churn Prevention Center', area: 'shared', section: 'growth', packageMin: 'premium', route: '/admin/retention/intelligence', description: 'Warnt vor abwandernden Kunden und erzeugt Winback-Vorschlaege.', visibleToCustomer: true, icon: 'activity' },
-  { key: 'feedback_action_board', label: 'Feedback-to-Action Board', area: 'shared', section: 'reviews', packageMin: 'premium', route: '/admin/retention/intelligence', description: 'Kritisches Feedback wird zu Aufgaben, Servicefaellen und Nachfassaktionen.', visibleToCustomer: true, icon: 'list-checks' },
-  { key: 'service_recovery_tool', label: 'Service Recovery Tool', area: 'shared', section: 'reviews', packageMin: 'premium', route: '/admin/retention/intelligence', description: 'Service-Recovery-Faelle aus kritischem Feedback inklusive Status und Folgeaktion.', visibleToCustomer: true, icon: 'life-buoy' },
+  { key: 'churn_prevention_center', label: 'Churn Prevention Center', area: 'shared', section: 'growth', packageMin: 'premium', route: '/admin/retention/intelligence', adminRoute: '/admin/retention/intelligence', customerRoute: '/portal/campaigns', description: 'Warnt vor abwandernden Kunden und erzeugt Winback-Vorschlaege.', visibleToCustomer: true, icon: 'activity' },
+  { key: 'feedback_action_board', label: 'Feedback-to-Action Board', area: 'shared', section: 'reviews', packageMin: 'premium', route: '/admin/retention/intelligence', adminRoute: '/admin/retention/intelligence', customerRoute: '/portal/reviews', description: 'Kritisches Feedback wird zu Aufgaben, Servicefaellen und Nachfassaktionen.', visibleToCustomer: true, icon: 'list-checks' },
+  { key: 'service_recovery_tool', label: 'Service Recovery Tool', area: 'shared', section: 'reviews', packageMin: 'premium', route: '/admin/retention/intelligence', adminRoute: '/admin/retention/intelligence', customerRoute: '/portal/reviews', description: 'Service-Recovery-Faelle aus kritischem Feedback inklusive Status und Folgeaktion.', visibleToCustomer: true, icon: 'life-buoy' },
   { key: 'mail_domain_consent_guard', label: 'Mail-Domain & Consent Guard', area: 'admin', section: 'operations', packageMin: 'premium', route: '/admin/production/mail-domain', description: 'Resend, SPF/DKIM/DMARC, Testmail, Abmeldelink und Consent-Formulierung pruefen.', visibleToCustomer: false, icon: 'shield-check' },
   { key: 'tool_readiness_center', label: 'Tool-Reife 1-100', area: 'admin', section: 'operations', packageMin: 'premium', route: '/admin/production/tool-readiness', description: 'Bewertet jedes verkaufbare Tool von 1-100 und zeigt fehlende Produktionsreife-Punkte.', visibleToCustomer: false, icon: 'gauge' },
   { key: 'completeness_audit', label: 'Completeness Audit', area: 'admin', section: 'operations', packageMin: 'premium', route: '/admin/production/completeness-audit', description: 'Prueft UI, API, ENV, Migrationen, Paketmatrix, Rollen, Mobile-Risiken und Pilot-Blocker zentral.', visibleToCustomer: false, icon: 'gauge' },
@@ -102,7 +104,7 @@ export const mmosToolRegistry: MmosTool[] = [
   { key: 'tickets', label: 'Tickets', area: 'shared', section: 'crm', packageMin: 'starter', route: '/tickets', description: 'Support, Review-Eskalation und Kundenanfragen.', visibleToCustomer: true, icon: 'life-buoy' },
   { key: 'timeline', label: 'Timeline Events', area: 'shared', section: 'crm', packageMin: 'growth', route: '/timeline', description: 'Chronologische Verknuepfung aus QR, Loyalty, Reviews, Billing und Tickets.', visibleToCustomer: true, icon: 'history' },
   { key: 'customer_health', label: 'Customer Health', area: 'shared', section: 'crm', packageMin: 'premium', route: '/customer-health', description: 'Health Score, Risiken, Chancen und Warnungen.', visibleToCustomer: true, icon: 'activity' },
-  { key: 'customer_intelligence', label: 'Customer Intelligence', area: 'shared', section: 'crm', packageMin: 'premium', route: '/admin/customer-intelligence', description: 'Risk Score, Upsell Score, Paketnutzung und Empfehlungen.', visibleToCustomer: true, icon: 'brain-circuit' },
+  { key: 'customer_intelligence', label: 'Customer Intelligence', area: 'shared', section: 'crm', packageMin: 'premium', route: '/admin/customer-intelligence', adminRoute: '/admin/customer-intelligence', customerRoute: '/portal/dashboard', description: 'Risk Score, Upsell Score, Paketnutzung und Empfehlungen.', visibleToCustomer: true, icon: 'brain-circuit' },
   { key: 'pipeline', label: 'Pipeline', area: 'admin', section: 'crm', packageMin: 'growth', route: '/admin/pipeline', description: 'Leads, Chancen, Forecast und Upsell-Potenzial.', visibleToCustomer: false, icon: 'kanban' },
 
   { key: 'qr_campaigns', label: 'QR Kampagnen', area: 'shared', section: 'qr_loyalty', packageMin: 'growth', route: '/qr-campaigns', description: 'QR-Kampagnen mit Slug, Zielseite, Scans, Conversions und Tool-Verknuepfung.', visibleToCustomer: true, icon: 'qr-code', mobilePriority: 3 },
@@ -111,20 +113,20 @@ export const mmosToolRegistry: MmosTool[] = [
   { key: 'loyalty_rewards', label: 'Rewards', area: 'shared', section: 'qr_loyalty', packageMin: 'growth', route: '/loyalty/rewards', description: 'Einloesbare Praemien, Rabatte, Produkte und VIP-Rewards.', visibleToCustomer: true, icon: 'badge-check' },
   { key: 'loyalty_reward_rules', label: 'Reward Regeln', area: 'shared', section: 'qr_loyalty', packageMin: 'premium', route: '/loyalty/rules', description: 'Konfiguration von Reward-Typen, Punktebedarf und Bedingungen.', visibleToCustomer: true, icon: 'sliders-horizontal' },
   { key: 'referral_program', label: 'Empfehlungsprogramm', area: 'shared', section: 'qr_loyalty', packageMin: 'premium', route: '/referrals', description: 'Empfehlungslinks, QR-Empfehlungen, Praemienlogik und Loyalty-Anbindung.', visibleToCustomer: true, icon: 'share-2' },
-  { key: 'ai_social_posts', label: 'AI Social-Post-Generator', area: 'shared', section: 'marketing', packageMin: 'premium', route: '/admin/social', description: 'KI-generierte Social-Media-Posts im Markenton fuer Instagram, Facebook, Google und LinkedIn.', visibleToCustomer: true, icon: 'megaphone' },
+  { key: 'ai_social_posts', label: 'AI Social-Post-Generator', area: 'shared', section: 'marketing', packageMin: 'premium', route: '/admin/social', adminRoute: '/admin/social', customerRoute: '/portal/campaigns', description: 'KI-generierte Social-Media-Posts im Markenton fuer Instagram, Facebook, Google und LinkedIn.', visibleToCustomer: true, icon: 'megaphone' },
 
   { key: 'reviews', label: 'Reviews', area: 'shared', section: 'reviews', packageMin: 'growth', route: '/reviews', description: 'Feedback, Bewertungsliste und Review-Funnel.', visibleToCustomer: true, icon: 'star', mobilePriority: 4 },
-  { key: 'review_intelligence', label: 'Review Intelligence', area: 'shared', section: 'reviews', packageMin: 'premium', route: '/admin/review-intelligence', description: 'Sentiment, Themen, Antwortvorschlaege und Eskalation.', visibleToCustomer: true, icon: 'gauge' },
+  { key: 'review_intelligence', label: 'Review Intelligence', area: 'shared', section: 'reviews', packageMin: 'premium', route: '/admin/review-intelligence', adminRoute: '/admin/review-intelligence', customerRoute: '/portal/reviews', description: 'Sentiment, Themen, Antwortvorschlaege und Eskalation.', visibleToCustomer: true, icon: 'gauge' },
   { key: 'review_response_templates', label: 'Antwortvorlagen', area: 'shared', section: 'reviews', packageMin: 'premium', route: '/reviews/templates', description: 'Vorlagen fuer positive, neutrale und negative Bewertungen.', visibleToCustomer: true, icon: 'message-square-quote' },
 
   { key: 'marketing_automation', label: 'Marketing Automation', area: 'shared', section: 'marketing', packageMin: 'premium', route: '/marketing/automation', description: 'Reaktivierung, Review Booster, Loyalty-Boost und Kampagnen.', visibleToCustomer: true, icon: 'megaphone', mobilePriority: 5 },
   { key: 'reactivation', label: 'Reaktivierungs-Center', area: 'shared', section: 'marketing', packageMin: 'premium', route: '/marketing/reactivation', description: 'Kampagnen fuer inaktive Endkunden.', visibleToCustomer: true, icon: 'rotate-cw' },
   { key: 'workflow_center', label: 'Workflow Center', area: 'shared', section: 'marketing', packageMin: 'premium', route: '/marketing/workflows', description: 'Visuelle Workflow-Konfiguration.', visibleToCustomer: true, icon: 'workflow' },
   { key: 'smart_automation', label: 'Smart Automation', area: 'shared', section: 'automation', packageMin: 'premium', route: '/automation/smart', description: 'Regelbasierte Automationen aus QR, Loyalty, Reviews und Health.', visibleToCustomer: true, icon: 'bot' },
-  { key: 'online_booking', label: 'Online-Terminbuchung', area: 'shared', section: 'operations', packageMin: 'starter', route: '/admin/booking', description: 'Self-Service-Buchungs-Widget mit Slot-/Verfuegbarkeitslogik und iframe-Embed.', visibleToCustomer: true, icon: 'calendar-clock' },
-  { key: 'e_invoice', label: 'E-Rechnung', area: 'shared', section: 'operations', packageMin: 'growth', route: '/admin/e-invoice', description: 'XRechnung (UBL 2.1) und ZUGFeRD-Export — Pflicht im deutschen B2B.', visibleToCustomer: true, icon: 'file-code-2' },
-  { key: 'accounting_export', label: 'Buchhaltungs-Export', area: 'shared', section: 'operations', packageMin: 'growth', route: '/admin/accounting', description: 'Rechnungsexport als DATEV (EXTF), lexoffice- oder sevDesk-CSV fuer den Steuerberater.', visibleToCustomer: true, icon: 'file-spreadsheet' },
-  { key: 'pos_integration', label: 'Umsatz & Zahlungen (SumUp)', area: 'shared', section: 'operations', packageMin: 'growth', route: '/admin/pos', description: 'SumUp-Umsatzdaten, Transaktionen, Tages-/Monatsumsatz und Umsatzentwicklung anzeigen, ohne MMOS zur Kasse zu machen.', visibleToCustomer: true, icon: 'credit-card' },
+  { key: 'online_booking', label: 'Online-Terminbuchung', area: 'shared', section: 'operations', packageMin: 'starter', route: '/admin/booking', adminRoute: '/admin/booking', customerRoute: '/portal/settings', description: 'Self-Service-Buchungs-Widget mit Slot-/Verfuegbarkeitslogik und iframe-Embed.', visibleToCustomer: true, icon: 'calendar-clock' },
+  { key: 'e_invoice', label: 'E-Rechnung', area: 'shared', section: 'operations', packageMin: 'growth', route: '/admin/e-invoice', adminRoute: '/admin/e-invoice', customerRoute: '/portal/billing', description: 'XRechnung (UBL 2.1) und ZUGFeRD-Export — Pflicht im deutschen B2B.', visibleToCustomer: true, icon: 'file-code-2' },
+  { key: 'accounting_export', label: 'Buchhaltungs-Export', area: 'shared', section: 'operations', packageMin: 'growth', route: '/admin/accounting', adminRoute: '/admin/accounting', customerRoute: '/portal/billing', description: 'Rechnungsexport als DATEV (EXTF), lexoffice- oder sevDesk-CSV fuer den Steuerberater.', visibleToCustomer: true, icon: 'file-spreadsheet' },
+  { key: 'pos_integration', label: 'Umsatz & Zahlungen (SumUp)', area: 'shared', section: 'operations', packageMin: 'growth', route: '/admin/pos', adminRoute: '/admin/pos', customerRoute: '/portal/billing', description: 'SumUp-Umsatzdaten, Transaktionen, Tages-/Monatsumsatz und Umsatzentwicklung anzeigen, ohne MMOS zur Kasse zu machen.', visibleToCustomer: true, icon: 'credit-card' },
 
   { key: 'booking', label: 'Booking / Termine', area: 'shared', section: 'operations', packageMin: 'starter', route: '/booking', description: 'Termine, Services, Kategorien und Umsaetze.', visibleToCustomer: true, icon: 'calendar-clock' },
   { key: 'booking_utilization', label: 'Termin- & Auslastung', area: 'shared', section: 'operations', packageMin: 'premium', route: '/booking/utilization', description: 'Online-Buchung, Erinnerungen, Warteliste, Last-Minute-Slots und Rebooking.', visibleToCustomer: true, icon: 'calendar-clock' },
@@ -186,10 +188,17 @@ export function customerVisibleToolsForPackage(packageKey: string): MmosTool[] {
 
 export type ToolSection = SectionMeta & { tools: MmosTool[] }
 
-function buildSections(orderedSections: SectionKey[], filter: (t: MmosTool) => boolean): ToolSection[] {
+function toolForContext(t: MmosTool, context: 'admin' | 'customer'): MmosTool {
+  if (context === 'admin') return { ...t, route: t.adminRoute || t.route }
+  return { ...t, route: t.customerRoute || t.route }
+}
+
+function buildSections(orderedSections: SectionKey[], filter: (t: MmosTool) => boolean, context: 'admin' | 'customer'): ToolSection[] {
   const sections: ToolSection[] = []
   for (const sectionKey of orderedSections) {
-    const tools = mmosToolRegistry.filter((t) => t.section === sectionKey && filter(t))
+    const tools = mmosToolRegistry
+      .filter((t) => t.section === sectionKey && filter(t))
+      .map((t) => toolForContext(t, context))
     if (tools.length === 0) continue
     sections.push({ ...sectionMeta[sectionKey], tools })
   }
@@ -200,14 +209,14 @@ export function getAdminNavigation(packageKey: string = 'premium'): ToolSection[
   return buildSections(ADMIN_SECTION_ORDER, (t) => {
     if (t.area === 'customer') return false
     return PACKAGE_LEVEL[(packageKey || 'premium').toLowerCase() as PackageTier] >= PACKAGE_LEVEL[t.packageMin]
-  })
+  }, 'admin')
 }
 
 export function getCustomerNavigation(packageKey: string = 'starter'): ToolSection[] {
   return buildSections(CUSTOMER_SECTION_ORDER, (t) => {
     if (!t.visibleToCustomer) return false
     return PACKAGE_LEVEL[(packageKey || 'starter').toLowerCase() as PackageTier] >= PACKAGE_LEVEL[t.packageMin]
-  })
+  }, 'customer')
 }
 
 export function getMobileBottomNav(packageKey: string = 'starter', area: 'admin' | 'customer' = 'customer'): ToolSection[] {

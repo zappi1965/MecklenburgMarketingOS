@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { goLiveCockpitClient } from '@/lib/goLiveCockpitClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -29,7 +28,7 @@ export default function GoLiveCockpitPage() {
   useEffect(() => { void load() }, [])
 
   return (
-    <AdminShell activeHref="/admin/go-live">
+    <>
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Go-Live</p>
@@ -67,6 +66,6 @@ export default function GoLiveCockpitPage() {
           <pre className="codeBox">{JSON.stringify({ status: data?.status, generated_at: data?.generated_at }, null, 2)}</pre>
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

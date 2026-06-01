@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import AdminShell from '@/components/AdminShell'
 import { operationsClient } from '@/lib/operationsClient'
 import { getAdminSelectedCustomerId } from '@/lib/adminCustomerSelection'
 
@@ -54,7 +53,7 @@ export default function CustomerWizardPage() {
   useEffect(() => { void load() }, [])
 
   return (
-    <AdminShell activeHref="/admin/onboarding/customer-wizard">
+    <>
       <div className="pageHeader">
         <div><p className="eyebrow">Onboarding</p><h1>Kunden-Onboarding-Wizard</h1><p className="muted">Kunden von Lead bis Live sauber durch Paket, Vertrag, Branding, QR, Billing und Zugang führen.</p></div>
         <button className="btn" onClick={load}>Aktualisieren</button>
@@ -69,6 +68,6 @@ export default function CustomerWizardPage() {
           <div className="actionRow">{(lifecycle?.states || []).map((s:string) => <button key={s} className="btn secondary" onClick={() => setStatus(s)}>{s}</button>)}</div>
         </Card>
       </div>
-    </AdminShell>
+    </>
   )
 }

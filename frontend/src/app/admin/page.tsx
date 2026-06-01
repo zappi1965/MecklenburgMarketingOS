@@ -78,11 +78,11 @@ const NEW_TOOLS = [
     text: 'Live-Adminzugänge anlegen, aktivieren, sperren und Startpasswörter setzen.'
   },
   {
-    href: '/portal/reports',
-    title: 'Kundenportal Reports',
-    eyebrow: 'Portal',
+    href: '/admin/reports/monthly',
+    title: 'Monatsreports & PDF-Versand',
+    eyebrow: 'Reporting',
     icon: FileText,
-    text: 'Ansicht der freigegebenen Reports und PDFs aus Kundensicht.'
+    text: 'Reports erzeugen, als PDF speichern und fuer Kunden bereitstellen.'
   },
   {
     href: '/media/report-center',
