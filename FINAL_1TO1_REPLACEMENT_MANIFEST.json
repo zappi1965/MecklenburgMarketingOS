@@ -1125,5 +1125,22 @@
       "Move SumUp module into customerToolModules array",
       "Remove stray object after exported functions"
     ]
+  },
+  "vercel_use_search_params_suspense_fix": {
+    "fixed_at": "2026-06-01 18:22:14",
+    "base": "MMOS_VERCEL_CUSTOMER_TOOL_MODULES_PARSE_FIX_FULLBUILD.zip",
+    "files": [
+      "frontend/src/app/marketing/confirm/page.tsx",
+      "frontend/src/app/marketing/unsubscribe/page.tsx",
+      "frontend/src/app/l/[slug]/page.tsx",
+      "FINAL_1TO1_REPLACEMENT_MANIFEST.json",
+      "MMOS_VERCEL_USE_SEARCH_PARAMS_SUSPENSE_FIX_NOTES.md"
+    ],
+    "capabilities": [
+      "Wrap marketing confirm useSearchParams in Suspense",
+      "Wrap marketing unsubscribe useSearchParams in Suspense",
+      "Wrap public loyalty slug page useSearchParams in Suspense",
+      "Prevent Next.js prerender CSR bailout build failure"
+    ]
   }
 }

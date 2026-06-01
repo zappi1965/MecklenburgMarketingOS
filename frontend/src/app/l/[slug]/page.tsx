@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { v33FunctionalClient } from '@/lib/v33FunctionalClient'
 import { requireConsent } from '@/lib/consent'
@@ -44,6 +44,23 @@ function consumeQrScanSession(slug: string) {
 }
 
 export default function PublicLoyaltyPage() {
+  return (
+    <Suspense fallback={
+      <main className="publicLoyaltyPage">
+        <section className="publicHero">
+          <div className="publicCard">
+            <h1>Bonusseite wird geladen...</h1>
+            <p className="v37-subline">Bitte einen Moment warten.</p>
+          </div>
+        </section>
+      </main>
+    }>
+      <PublicLoyaltyPageContent />
+    </Suspense>
+  )
+}
+
+function PublicLoyaltyPageContent() {
   const params = useParams<{ slug: string }>()
   const searchParams = useSearchParams()
   const slug = String(params?.slug || '')

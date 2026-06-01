@@ -1,10 +1,27 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { v33FunctionalClient } from '@/lib/v33FunctionalClient'
 
 export default function MarketingUnsubscribePage() {
+  return (
+    <Suspense fallback={
+      <main className="publicLoyaltyPage">
+        <section className="publicHero">
+          <div className="publicCard">
+            <h1>Bitte warten...</h1>
+            <p className="v37-subline">Abmeldelink wird geladen...</p>
+          </div>
+        </section>
+      </main>
+    }>
+      <MarketingUnsubscribePageContent />
+    </Suspense>
+  )
+}
+
+function MarketingUnsubscribePageContent() {
   const search = useSearchParams()
   const token = String(search.get('token') || '')
   const slug = String(search.get('slug') || '')
