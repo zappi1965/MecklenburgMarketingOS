@@ -378,9 +378,24 @@ export const customerToolModules: CustomerToolModule[] = [
     packageMin: 'premium',
     recommendedFor: ['Pilotkunden', 'Premium Onboarding', 'Go-Live Vorbereitung'],
     sourceInspiration: ['Launch Checklist', 'Operational Readiness']
+  },
+  {
+    key: 'sumup_revenue_connection',
+    title: 'SumUp Umsatz- & Zahlungsanbindung',
+    shortTitle: 'SumUp Umsatzdaten',
+    category: 'operations',
+    route: '/admin/pos',
+    adminRoute: '/admin/pos',
+    description: 'Verbindet SumUp fuer Umsatzdaten, Transaktionsliste, Tages-/Monatsumsatz und Umsatzentwicklung. MMOS ersetzt dabei kein Kassensystem.',
+    customerValue: 'Der Betrieb behaelt seine SumUp-Kasse und sieht in MMOS, welche Umsaetze, Kampagnen und Kundenaktivitaeten zusammenhaengen.',
+    includedTools: ['SumUp Verbindung', 'Transaktionsimport', 'Tagesumsatz', 'Monatsumsatz', 'Umsatzentwicklung', 'manuelle Zuordnung zu QR/Termin/Loyalty'],
+    singlePrice: 39,
+    setupFee: 149,
+    packageMin: 'growth',
+    recommendedFor: ['Gastro', 'Beauty', 'Einzelhandel', 'Dienstleister mit Kartenzahlung', 'Loyalty Kunden'],
+    sourceInspiration: ['SumUp Dashboard', 'POS Umsatzexport', 'Marketing Attribution']
   }
 ]
-
 export const customerPackageComposition: CustomerPackageComposition[] = [
   {
     key: 'starter',
@@ -420,21 +435,3 @@ export function modulesForPackage(packageKey: PackageTier | string) {
 export function singleModuleValue(packageKey: PackageTier | string) {
   return modulesForPackage(packageKey).reduce((sum, m) => sum + m.singlePrice, 0)
 }
-  {
-    key: 'sumup_revenue_connection',
-    title: 'SumUp Umsatz- & Zahlungsanbindung',
-    shortTitle: 'SumUp Umsatzdaten',
-    category: 'operations',
-    route: '/admin/pos',
-    adminRoute: '/admin/pos',
-    description: 'Verbindet SumUp fuer Umsatzdaten, Transaktionsliste, Tages-/Monatsumsatz und Umsatzentwicklung. MMOS ersetzt dabei kein Kassensystem.',
-    customerValue: 'Der Betrieb behaelt seine SumUp-Kasse und sieht in MMOS, welche Umsaetze, Kampagnen und Kundenaktivitaeten zusammenhaengen.',
-    includedTools: ['SumUp Verbindung', 'Transaktionsimport', 'Tagesumsatz', 'Monatsumsatz', 'Umsatzentwicklung', 'manuelle Zuordnung zu QR/Termin/Loyalty'],
-    singlePrice: 39,
-    setupFee: 149,
-    packageMin: 'growth',
-    recommendedFor: ['Gastro', 'Beauty', 'Einzelhandel', 'Dienstleister mit Kartenzahlung', 'Loyalty Kunden'],
-    sourceInspiration: ['SumUp Dashboard', 'POS Umsatzexport', 'Marketing Attribution']
-  }
-,
-
