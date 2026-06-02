@@ -69,7 +69,7 @@ export const storeClient = {
       const qs = new URLSearchParams()
 
       for (const [k, v] of Object.entries(query)) {
-        if (v != null) qs.set(k, String(v))
+        if (v != null && String(v).trim() !== '') qs.set(k, String(v))
       }
 
       const url = `${BROWSER_BACKEND_BASE}/api/store/${encodeURIComponent(table)}${qs.toString() ? `?${qs.toString()}` : ''}`

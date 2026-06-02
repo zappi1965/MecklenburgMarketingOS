@@ -291,7 +291,7 @@ function v33FunctionalRoutes(supabase) {
         'points_weekly_limit',
         'metadata.weekly_point_limit_per_member'
       ], 0).configured),
-      require_rescan_for_points: sources.some((s) => s && (s.require_rescan_for_points === true || s.metadata?.require_rescan_for_points === true)),
+      require_rescan_for_points: (() => { const explicitOn = sources.some((s) => s && (s.require_rescan_for_points === true || s.metadata?.require_rescan_for_points === true)); const explicitOff = sources.some((s) => s && (s.require_rescan_for_points === false || s.metadata?.require_rescan_for_points === false)); const mode = String(qrCampaign?.purpose || qrCampaign?.mode || qrCampaign?.metadata?.purpose || program?.purpose || program?.mode || program?.metadata?.purpose || '').toLowerCase(); const points = num(qrCampaign?.points_per_scan ?? qrCampaign?.metadata?.points_per_scan ?? program?.points_per_scan ?? program?.metadata?.points_per_scan, 0); return explicitOn || (!explicitOff && points > 0 && (mode === 'loyalty' || mode === 'both' || !mode)); })(),
       suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(suspicionThreshold.value || 70)))
     }
   }
@@ -863,6 +863,82 @@ function v33FunctionalRoutes(supabase) {
     return { ok: true, record: saved.data, payload }
   }
 
+  function qrRotationEnabled(qrCampaign, program) {
+    const sources = [qrCampaign, qrCampaign?.metadata, program, program?.metadata]
+    return sources.some((s) => s && (s.rotate_qr_after_scan === true || s.metadata?.rotate_qr_after_scan === true))
+  }
+
+  async function rotateQrCampaignAfterSuccessfulScan({ customerId, slug, program, qrCampaign }) {
+    if (!customerId || !slug || !program || !qrRotationEnabled(qrCampaign, program)) return null
+    const oldMeta = { ...(qrCampaign?.metadata || {}) }
+    if (oldMeta.next_qr_slug) {
+      return { rotated: true, already_rotated: true, previous_slug: slug, next_slug: oldMeta.next_qr_slug, next_qr_scan_url: `/q/${oldMeta.next_qr_slug}`, next_landing_url: `/l/${oldMeta.next_qr_slug}` }
+    }
+    const now = new Date().toISOString()
+    const nextSlug = await uniqueSlug(`${slug}-next-${Date.now().toString(36).slice(-5)}`)
+    const purpose = clean(qrCampaign?.purpose || qrCampaign?.mode || oldMeta.purpose || program?.metadata?.purpose || 'loyalty')
+    const pointsPerScan = num(qrCampaign?.points_per_scan ?? oldMeta.points_per_scan ?? program?.points_per_scan ?? program?.metadata?.points_per_scan, 10)
+    const clonePayload = {
+      customer_id: customerId,
+      title: qrCampaign?.title || qrCampaign?.name || program?.title || program?.name || 'QR Kampagne',
+      name: qrCampaign?.name || qrCampaign?.title || program?.name || program?.title || 'QR Kampagne',
+      slug: nextSlug,
+      target_url: `/q/${nextSlug}`,
+      scans: 0,
+      conversions: 0,
+      active: true,
+      status: 'Aktiv',
+      max_scans_per_member: Math.max(0, Math.floor(num(qrCampaign?.max_scans_per_member ?? oldMeta.max_scans_per_member, 0))),
+      scan_cooldown_minutes: Math.max(0, Math.floor(num(qrCampaign?.scan_cooldown_minutes ?? oldMeta.scan_cooldown_minutes, 0))),
+      daily_point_limit_per_member: Math.max(0, Math.floor(num(qrCampaign?.daily_point_limit_per_member ?? oldMeta.daily_point_limit_per_member, 0))),
+      suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(qrCampaign?.suspicion_score_threshold ?? oldMeta.suspicion_score_threshold, 70)))),
+      metadata: {
+        ...oldMeta,
+        purpose,
+        points_per_scan: pointsPerScan,
+        require_rescan_for_points: true,
+        rotate_qr_after_scan: true,
+        previous_qr_campaign_id: qrCampaign?.id || null,
+        previous_slug: slug,
+        qr_rotation_generation: Number(oldMeta.qr_rotation_generation || 0) + 1,
+        qr_rotation_created_at: now,
+        qr_scan_url: `/q/${nextSlug}`,
+        landing_url: `/l/${nextSlug}`
+      }
+    }
+    const created = await supabase.from('qr_campaigns').insert(clonePayload).select('*').single()
+    if (created.error) throw created.error
+    const nextQr = created.data
+
+    const nextProgramMeta = { ...(program.metadata || {}), purpose, points_per_scan: pointsPerScan, require_rescan_for_points: true, rotate_qr_after_scan: true, previous_slug: slug, qr_rotation_updated_at: now, qr_campaign_id: nextQr.id }
+    await supabase.from('loyalty_programs').update({ slug: nextSlug, qr_campaign_id: nextQr.id, metadata: nextProgramMeta, updated_at: now }).eq('id', program.id)
+
+    if (qrCampaign?.id) {
+      await supabase.from('qr_campaigns').update({
+        active: false,
+        status: 'Rotiert',
+        metadata: { ...oldMeta, rotate_qr_after_scan: true, next_qr_campaign_id: nextQr.id, next_qr_slug: nextSlug, next_qr_scan_url: `/q/${nextSlug}`, rotated_at: now },
+        updated_at: now
+      }).eq('id', qrCampaign.id)
+    }
+
+    try {
+      await upsertRecord('qr_rotations', {
+        id: `qrrot_${slug}_${nextSlug}`,
+        customer_id: customerId,
+        title: 'QR-Code automatisch erneuert',
+        status: 'created',
+        previous_slug: slug,
+        next_slug: nextSlug,
+        previous_qr_campaign_id: qrCampaign?.id || null,
+        next_qr_campaign_id: nextQr.id,
+        metadata: { previous_slug: slug, next_slug: nextSlug, reason: 'rotate_qr_after_scan' }
+      })
+    } catch (_) {}
+
+    return { rotated: true, previous_slug: slug, next_slug: nextSlug, next_qr_campaign_id: nextQr.id, next_qr_scan_url: `/q/${nextSlug}`, next_landing_url: `/l/${nextSlug}` }
+  }
+
   async function provisionCustomer(customerId, options = {}) {
     const customer = await getCustomer(customerId)
     if (!customer) throw new Error('Kunde nicht gefunden')
@@ -1000,6 +1076,8 @@ function v33FunctionalRoutes(supabase) {
     const dailyScanLimitPerMember = Math.max(0, Math.floor(num(payload.daily_scan_limit_per_member ?? payload.dailyScanLimitPerMember ?? payload.daily_scan_limit ?? payload.max_daily_redemptions_per_member, 0)))
     const dailyPointLimitPerMember = Math.max(0, Math.floor(num(payload.daily_point_limit_per_member ?? payload.dailyPointLimitPerMember ?? payload.points_daily_limit, 0)))
     const suspicionScoreThreshold = Math.max(0, Math.min(100, Math.floor(num(payload.suspicion_score_threshold ?? payload.suspicionScoreThreshold ?? payload.abuse_score_threshold, 70))))
+    const requireRescanForPoints = payload.require_rescan_for_points === false ? false : (pointsPerScan > 0 && (purpose === 'loyalty' || purpose === 'both'))
+    const rotateQrAfterScan = payload.rotate_qr_after_scan === true
 
     const { data: qrCampaign, error: qrError } = await supabase.from('qr_campaigns').insert({
       customer_id: customerId,
@@ -1015,7 +1093,7 @@ function v33FunctionalRoutes(supabase) {
       scan_cooldown_minutes: scanCooldownMinutes,
       daily_point_limit_per_member: dailyPointLimitPerMember,
       suspicion_score_threshold: suspicionScoreThreshold,
-      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_scan_limit_per_member: dailyScanLimitPerMember, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
+      metadata: { v34_auto_created: true, purpose, customer_name: customerName, google_review_url: payload.google_review_url || null, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_scan_limit_per_member: dailyScanLimitPerMember, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold, require_rescan_for_points: requireRescanForPoints, rotate_qr_after_scan: rotateQrAfterScan, qr_scan_url: targetUrl, landing_url: `/l/${slug}` }
     }).select('*').single()
 
     if (qrError) throw qrError
@@ -1033,7 +1111,7 @@ function v33FunctionalRoutes(supabase) {
         active: true,
         status: 'active',
         require_staff_code: true,
-        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_scan_limit_per_member: dailyScanLimitPerMember, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold }
+        metadata: { v34_auto_created: true, qr_campaign_id: qrCampaign.id, purpose, points_per_scan: pointsPerScan, max_scans_per_member: maxScansPerMember, scan_cooldown_minutes: scanCooldownMinutes, daily_scan_limit_per_member: dailyScanLimitPerMember, daily_point_limit_per_member: dailyPointLimitPerMember, suspicion_score_threshold: suspicionScoreThreshold, require_rescan_for_points: requireRescanForPoints, rotate_qr_after_scan: rotateQrAfterScan, qr_scan_url: targetUrl, landing_url: `/l/${slug}` }
       }).select('*').single()
 
       if (programError) throw programError
@@ -1067,7 +1145,7 @@ function v33FunctionalRoutes(supabase) {
         customer_id: customerId,
         event_type: 'qr_campaign_provisioned',
         title: 'QR/Loyalty Kampagne erstellt',
-        description: `${title} wurde mit /l/${slug} erstellt.`,
+        description: `${title} wurde mit /q/${slug} erstellt.`,
         source_module: 'qr_loyalty',
         severity: 'success',
         metadata: { qr_campaign_id: qrCampaign.id, loyalty_program_id: loyaltyProgram?.id || null, slug }
@@ -1624,6 +1702,8 @@ function v33FunctionalRoutes(supabase) {
 
       await audit('v34_qr_loyalty_lead_created', { customer_id: customerId, slug, email, auth_method: 'email_password' })
       const v35Snapshot = await engine.recalculateCustomer(customerId) // v35_after_qr_lead_recalculate
+      let rotatedQr = null
+      try { rotatedQr = await rotateQrCampaignAfterSuccessfulScan({ customerId, slug, program, qrCampaign }) } catch (e) { warnings.push({ code:'QR_ROTATION_FAILED', message: String(e?.message || e) }) }
 
       res.json({
         ok: true,
@@ -1639,6 +1719,7 @@ function v33FunctionalRoutes(supabase) {
         loyalty_level: levelResult,
         redemptions: await getPublicRewardRedemptions(customerId, member.id).catch(() => []),
         scan_token_consumed: Boolean(scanToken && qrLimitsForProgram.require_rescan_for_points),
+        qr_rotation: rotatedQr,
         marketing_consent: marketingConsentResult ? { granted: false, status: marketingConsentResult.status || 'pending_double_opt_in', double_opt_in_required: true, email_sent: Boolean(marketingConsentResult.email_sent), dryRun: Boolean(marketingConsentResult.dryRun), expires_at: marketingConsentResult.expires_at } : { granted: false }
       })
     } catch (e) { next(e) }
@@ -1983,7 +2064,9 @@ function v33FunctionalRoutes(supabase) {
         })
       } catch (_) {}
 
-      res.json({ ok: true, feedback: data, qr_campaign_id: qrCampaignId, loyalty_program_id: loyaltyProgramId, campaign_review_saved: Boolean(qrCampaignId) })
+      let rotatedQr = null
+      try { if (program && qrCampaign) rotatedQr = await rotateQrCampaignAfterSuccessfulScan({ customerId, slug, program, qrCampaign }) } catch (_) {}
+      res.json({ ok: true, feedback: data, qr_campaign_id: qrCampaignId, loyalty_program_id: loyaltyProgramId, campaign_review_saved: Boolean(qrCampaignId), qr_rotation: rotatedQr })
     } catch (e) { next(e) }
   })
 
@@ -2174,7 +2257,7 @@ function v33FunctionalRoutes(supabase) {
       daily_scan_limit: 1,
       weekly_scan_limit: 0,
       weekly_scan_limit_enabled: false,
-      require_rescan_for_points: false,
+      require_rescan_for_points: true,
       birthday_bonus_points: 100,
       referral_bonus_referrer: 100,
       referral_bonus_friend: 50,
@@ -2185,7 +2268,7 @@ function v33FunctionalRoutes(supabase) {
         { tier: 'VIP', min_points: 1000, multiplier: 1.5 }
       ],
       active: true,
-      metadata: { v37_defaults: true }
+      metadata: { v37_defaults: true, require_rescan_for_points: true, rotate_qr_after_scan: false }
     }
 
     const created = await supabase.from('v37_loyalty_settings').insert(defaults).select('*').single()
@@ -2256,7 +2339,7 @@ function v33FunctionalRoutes(supabase) {
         daily_scan_limit: body.daily_scan_limit,
         weekly_scan_limit: body.weekly_scan_limit_enabled === true ? body.weekly_scan_limit : 0,
         weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true,
-        metadata: { ...(body.metadata || {}), weekly_point_limit_per_member: Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, body.metadata?.weekly_point_limit_per_member || 0))), weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true, require_rescan_for_points: body.require_rescan_for_points === true },
+        metadata: { ...(body.metadata || {}), weekly_point_limit_per_member: Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, body.metadata?.weekly_point_limit_per_member || 0))), weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true, require_rescan_for_points: body.require_rescan_for_points !== false, rotate_qr_after_scan: body.rotate_qr_after_scan === true },
         birthday_bonus_points: body.birthday_bonus_points,
         referral_bonus_referrer: body.referral_bonus_referrer,
         referral_bonus_friend: body.referral_bonus_friend,
@@ -2705,7 +2788,7 @@ function v33FunctionalRoutes(supabase) {
         const q = await supabase.from('qr_campaigns').select('id,slug,target_url,active').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(1).maybeSingle()
         if (q.error) throw q.error
         if (!q.data?.slug) throw new Error('Kein öffentlicher QR/Landingpage Slug vorhanden.')
-        return { slug: q.data.slug, target_url: q.data.target_url || `/l/${q.data.slug}`, active: q.data.active !== false }
+        return { slug: q.data.slug, target_url: q.data.target_url || `/q/${q.data.slug}`, active: q.data.active !== false }
       }, 'Klicke Safe Provisioning oder QR/Loyalty vorbereiten.')
 
       const passed = tests.filter(t => t.ok).length
@@ -2818,6 +2901,10 @@ function v33FunctionalRoutes(supabase) {
         scan_cooldown_minutes: toInt(body.scan_cooldown_minutes ?? current.scan_cooldown_minutes ?? current.metadata?.scan_cooldown_minutes ?? 0),
         daily_point_limit_per_member: toInt(body.daily_point_limit_per_member ?? current.daily_point_limit_per_member ?? current.metadata?.daily_point_limit_per_member ?? 0),
         suspicion_score_threshold: toInt(body.suspicion_score_threshold ?? current.suspicion_score_threshold ?? current.metadata?.suspicion_score_threshold ?? 70, 70, 100),
+        require_rescan_for_points: body.require_rescan_for_points === undefined ? (current.metadata?.require_rescan_for_points !== false && toInt(body.points_per_scan ?? current.points_per_scan ?? current.metadata?.points_per_scan ?? 10) > 0 && mode !== 'review') : body.require_rescan_for_points !== false,
+        rotate_qr_after_scan: body.rotate_qr_after_scan === undefined ? current.metadata?.rotate_qr_after_scan === true : body.rotate_qr_after_scan === true,
+        qr_scan_url: slugValue ? `/q/${slugValue}` : current.metadata?.qr_scan_url,
+        landing_url: slugValue ? `/l/${slugValue}` : current.metadata?.landing_url,
         final_slug_rules_source: 'qr_campaigns',
         final_slug_rules_updated_at: new Date().toISOString()
       }
@@ -3283,12 +3370,13 @@ function v33FunctionalRoutes(supabase) {
         })
       }
 
-      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit || body.daily_point_limit_per_member || body.weekly_point_limit_per_member || body.suspicion_score_threshold || body.require_rescan_for_points !== undefined) {
+      if (body.points_per_scan || body.daily_scan_limit || body.weekly_scan_limit || body.daily_point_limit_per_member || body.weekly_point_limit_per_member || body.suspicion_score_threshold || body.require_rescan_for_points !== undefined || body.rotate_qr_after_scan !== undefined) {
         const provisioned = await provisionCustomer(customerId, {})
         const programMeta = { ...(provisioned.loyalty_program?.metadata || {}) }
         programMeta.weekly_point_limit_per_member = Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, programMeta.weekly_point_limit_per_member || 0)))
         programMeta.weekly_scan_limit_enabled = body.weekly_scan_limit_enabled === true
-        programMeta.require_rescan_for_points = body.require_rescan_for_points === true
+        programMeta.require_rescan_for_points = body.require_rescan_for_points !== false
+        programMeta.rotate_qr_after_scan = body.rotate_qr_after_scan === true
         await supabase.from('loyalty_programs').update({
           points_per_scan: Number(body.points_per_scan || provisioned.loyalty_program?.points_per_scan || 10),
           daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, provisioned.loyalty_program?.daily_point_limit_per_member || 0))),
@@ -3301,7 +3389,8 @@ function v33FunctionalRoutes(supabase) {
         const settingsMeta = { ...(settings.metadata || {}) }
         settingsMeta.weekly_point_limit_per_member = Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, settingsMeta.weekly_point_limit_per_member || 0)))
         settingsMeta.weekly_scan_limit_enabled = body.weekly_scan_limit_enabled === true
-        settingsMeta.require_rescan_for_points = body.require_rescan_for_points === true
+        settingsMeta.require_rescan_for_points = body.require_rescan_for_points !== false
+        settingsMeta.rotate_qr_after_scan = body.rotate_qr_after_scan === true
         await supabase.from('v37_loyalty_settings').update({
           daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
           weekly_scan_limit: body.weekly_scan_limit_enabled === true ? Math.max(0, Math.floor(num(body.weekly_scan_limit, settings.weekly_scan_limit || 0))) : 0,
