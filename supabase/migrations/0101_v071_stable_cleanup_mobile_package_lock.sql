@@ -80,6 +80,9 @@ create table if not exists public.customer_tool_access (
 
 create index if not exists idx_customer_tool_access_customer_tool on public.customer_tool_access(customer_id, tool_key);
 
+-- V074: bestehende Installationen haben customer_tool_access teilweise ohne note-Spalte.
+alter table public.customer_tool_access add column if not exists note text;
+
 -- Optionale Kompatibilität: keine SumUp-Autofreischaltung durch Paketlogik.
 update public.customer_tool_access
 set enabled=false, updated_at=now(), note=coalesce(note,'') || ' · V071: SumUp nicht mehr Bestandteil von Growth'

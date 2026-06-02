@@ -269,6 +269,8 @@ export const v33FunctionalClient = {
   qaChecklist: (customerId: string) => request(`/v38/${customerId}/qa-checklist`),
 
   schemaHealth: () => request('/v39/schema-health'),
+  // V074: older Stability & Schema Guard code calls schemaStatus. Keep alias for type/build compatibility.
+  schemaStatus: () => request('/v39/schema-health'),
   provisionSafe: (customerId: string, payload: any = {}) =>
     request(`/v39/${customerId}/provision-safe`, { method: 'POST', body: JSON.stringify(payload) }),
 

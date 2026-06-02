@@ -1,11 +1,31 @@
--- MMOS V073 Hotfix
--- Repariert V071/V072 landing_page_settings Migration ohne settings-Spalte.
+-- MMOS V074 Hotfix
+-- Repariert customer_tool_access.note Kompatibilität und erzwingt die vereinfachte Paketmatrix ohne settings-Abhängigkeit.
+
+create table if not exists public.landing_page_settings (
+  id text primary key,
+  scope text not null default 'public_home',
+  packages jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
 alter table public.landing_page_settings add column if not exists scope text default 'public_home';
 alter table public.landing_page_settings add column if not exists packages jsonb not null default '{}'::jsonb;
 alter table public.landing_page_settings add column if not exists created_at timestamptz not null default now();
 alter table public.landing_page_settings add column if not exists updated_at timestamptz not null default now();
 alter table public.landing_page_settings add column if not exists show_public_demo_button boolean default true;
+
+create table if not exists public.customer_tool_access (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid,
+  tool_key text not null,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.customer_tool_access add column if not exists note text;
+create index if not exists idx_customer_tool_access_customer_tool on public.customer_tool_access(customer_id, tool_key);
 
 insert into public.landing_page_settings (id, scope, packages, updated_at)
 values (
@@ -44,19 +64,9 @@ on conflict (id) do update set
   packages=excluded.packages,
   updated_at=now();
 
-create table if not exists public.customer_tool_access (
-  id uuid primary key default gen_random_uuid(),
-  customer_id uuid,
-  tool_key text not null,
-  enabled boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
--- V074: bestehende Installationen haben customer_tool_access teilweise ohne note-Spalte.
-alter table public.customer_tool_access add column if not exists note text;
-
 update public.customer_tool_access
-set enabled=false, updated_at=now(), note=coalesce(note,'') || ' · V073: SumUp nicht mehr Bestandteil von Growth'
+set enabled=false,
+    updated_at=now(),
+    note=coalesce(note,'') || ' · V074: SumUp nicht mehr Bestandteil von Growth'
 where tool_key in ('sumup_revenue_connection','SumUp Integration','SumUp Umsatzdaten')
   and enabled=true;
