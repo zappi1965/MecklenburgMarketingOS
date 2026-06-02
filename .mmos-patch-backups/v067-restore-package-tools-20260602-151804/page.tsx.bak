@@ -143,7 +143,6 @@ const featureDescriptions:any={
   'Completeness Audit':'Prueft Systemvollstaendigkeit, Live-Blocker und Pilot-Readiness zentral.',
   'Tool-Reife Center':'Bewertet jedes verkaufbare Tool von 1-100 und zeigt fehlende Produktionsreife-Punkte.',
   'SumUp Umsatzdaten':'Verbindet SumUp fuer Tagesumsatz, Monatsumsatz, Transaktionen und Umsatzentwicklung.',
-  'SumUp Integration':'Verbindet SumUp fuer Tagesumsatz, Monatsumsatz, Transaktionen und Umsatzentwicklung.',
   'Service Recovery':'Macht kritisches Feedback zu Servicefaellen und Nachfassaktionen.',
   'Churn Prevention':'Warnt frueh vor abwandernden Kunden und erzeugt Winback-Vorschlaege.'
 }
@@ -328,11 +327,6 @@ function packageLandingSetupFee(d:any,pkg:any){
  const setupFee=Number(cfg.setupFee ?? cfg.setup_fee ?? 0)
  return Number.isFinite(setupFee)?setupFee:0
 }
-const restoredPackageToolFeatures:any={
- Starter:['SumUp Umsatzdaten','Retention Intelligence','Consent Center & Double-Opt-in','Segment-Kampagnen','Churn Prevention'],
- Growth:['SumUp Umsatzdaten','Retention Intelligence','Consent Center & Double-Opt-in','Segment-Kampagnen'],
- Premium:['SumUp Umsatzdaten','Retention Intelligence','Consent Center & Double-Opt-in','Segment-Kampagnen','Churn Prevention']
-}
 function packageDisplayMatrix(d:any){
  const settings=mainLandingSettings(d)
  return ['Starter','Growth','Premium'].map((name:string)=>{
@@ -347,7 +341,7 @@ function packageDisplayMatrix(d:any){
    price:packageLandingPrice(d,name),
    setupFee:packageLandingSetupFee(d,name),
    cta:settings.package_cta_label||imported.cta||'Paket anfragen',
-   features:Array.from(new Set([...(Array.isArray(cfg.features)&&cfg.features.length?cfg.features:(imported.features||[])),...(restoredPackageToolFeatures[name]||[])])),
+   features:Array.isArray(cfg.features)&&cfg.features.length?cfg.features:(imported.features||[]),
    tools:Array.isArray(imported.tools)?imported.tools:[]
   }
  })
@@ -422,12 +416,7 @@ const seed:any={
  customer_seo_metrics:[],
  review_funnel_stats:[],
  client_success_events:[],
- retention_intelligence:[],
-  consent_center:[],
-  segment_campaigns:[],
-  churn_prevention:[],
-  sumup_revenue_connection:[],
-  landing_page_settings:[defaultMainLandingSettings]
+ landing_page_settings:[defaultMainLandingSettings]
 }
 
 const demoScopedTables=new Set([
@@ -764,7 +753,7 @@ function filterLiveDataForLive(d:any){
  return out
 }
 function liveOnlyMode(role?:string,view?:string){return !isDemoMode()}
-function customerScopedView(view:string){return ['crm','finance','booking','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','package_recommendations','package_matrix','business_audit','mini_audit','offer_generator','contract_generator','output_engine','onboarding','reports','monthly_reports','approvals','packages','retention_intelligence','consent_center','segment_campaigns','churn_prevention','sumup_revenue_connection'].includes(view)}
+function customerScopedView(view:string){return ['crm','finance','booking','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','package_recommendations','package_matrix','business_audit','mini_audit','offer_generator','contract_generator','output_engine','onboarding','reports','monthly_reports','approvals','packages'].includes(view)}
 function cpkg(d:any,id:string){return d.customer_subscriptions.find((s:any)=>s.customer_id===id)?.package_name||cobj(d,id)?.package_name||'Starter'}
 function pprice(p:string,d?:any){return d?packageLandingPrice(d,p):(packageDefs[p]?.price||199)}
 function invName(d:any,cid:string){const n=cname(d,cid).replace(/\s+/g,'_').replace(/[^\w_äöüÄÖÜß-]/g,'');return `Re_${n}_${d.invoices.filter((i:any)=>i.customer_id===cid).length+1}`}
@@ -1962,15 +1951,7 @@ export default function App(){
    'Onboarding':'onboarding',
    'Reports':'reports',
    'Freigaben':'approvals',
-   'Output Engine':'output_engine',
-    'Retention Intelligence':'retention_intelligence',
-    'Consent Center & Double-Opt-in':'consent_center',
-    'Consent Center':'consent_center',
-    'Segment-Kampagnen':'segment_campaigns',
-    'Segment Kampagnen':'segment_campaigns',
-    'Churn Prevention':'churn_prevention',
-    'SumUp Umsatzdaten':'sumup_revenue_connection',
-    'SumUp Integration':'sumup_revenue_connection'
+   'Output Engine':'output_engine'
  }
  const customerBase=['dashboard','knowledge','onboarding','reports','approvals','finance','tickets','booking','packages']
  const packageRoutes=(packageDefs[cpkg(store.data,cid)]?.tools||[]).map((t:string)=>packageToolRoutes[t]).filter(Boolean)
@@ -1979,7 +1960,7 @@ export default function App(){
  const disabledRoutes=new Set(accessRows.filter((x:any)=>x.enabled===false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean))
  const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route)&&route!=='heatmap')
  const labels:any={
-   dashboard:'Dashboard',sales_workflow:'Verkaufsworkflow',production_validation:'Production Validation',smoke_test:'Smoke-Test',demo_live_guard:'Demo-/Live-Trennung',action_log:'Admin-Aktionslog',document_center:'Dokumenten-Zentrale',production_health:'Production Health',production_core:'Production Core',admin_tool_center:'Tool-Zentrale',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',public_landing:'Öffentliche /l/[slug] Seite',loyalty:'Loyalty Programm',loyalty_rewards:'Rewards',loyalty_rules:'Reward Regeln',staff_codes:'Mitarbeitercode',loyalty_segments:'Loyalty Segmente',smart_loyalty:'Smart Loyalty V2',reviews:'Reviews',review_intelligence:'Review Intelligence',review_templates:'Antwortvorlagen',smart_automation:'Smart Automation',marketing_automation:'Marketing Automation',ai_assistant:'AI Business Assistant',customer_health:'Customer Health',customer_intelligence:'Customer Intelligence',dynamic_billing:'Dynamic Billing',revenue_forecasting:'Revenue Forecasting',revenue_share:'Revenue Share',package_recommendations:'Package Recommendations',package_matrix:'Paket-Matrix',retention_intelligence:'Retention Intelligence',consent_center:'Consent Center',segment_campaigns:'Segment Kampagnen',churn_prevention:'Churn Prevention',sumup_revenue_connection:'SumUp Integration',timeline_events:'Timeline Events',seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Security & Health Center',security_center:'Security & Health Center'
+   dashboard:'Dashboard',sales_workflow:'Verkaufsworkflow',production_validation:'Production Validation',smoke_test:'Smoke-Test',demo_live_guard:'Demo-/Live-Trennung',action_log:'Admin-Aktionslog',document_center:'Dokumenten-Zentrale',production_health:'Production Health',production_core:'Production Core',admin_tool_center:'Tool-Zentrale',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',public_landing:'Öffentliche /l/[slug] Seite',loyalty:'Loyalty Programm',loyalty_rewards:'Rewards',loyalty_rules:'Reward Regeln',staff_codes:'Mitarbeitercode',loyalty_segments:'Loyalty Segmente',smart_loyalty:'Smart Loyalty V2',reviews:'Reviews',review_intelligence:'Review Intelligence',review_templates:'Antwortvorlagen',smart_automation:'Smart Automation',marketing_automation:'Marketing Automation',ai_assistant:'AI Business Assistant',customer_health:'Customer Health',customer_intelligence:'Customer Intelligence',dynamic_billing:'Dynamic Billing',revenue_forecasting:'Revenue Forecasting',revenue_share:'Revenue Share',package_recommendations:'Package Recommendations',package_matrix:'Paket-Matrix',timeline_events:'Timeline Events',seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Security & Health Center',security_center:'Security & Health Center'
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
@@ -2001,12 +1982,12 @@ export default function App(){
     {
       label:'QR, Loyalty & Automation',
       hint:'QR, Slug-Seiten, Punkte, Rewards, Workflows, Kampagnen und AI',
-      tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','retention_intelligence','consent_center','segment_campaigns','churn_prevention','automations','workflows','smart_automation','marketing_automation','ai_assistant','customer_workflows','output_engine','timeline_events']
+      tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','automations','workflows','smart_automation','marketing_automation','ai_assistant','customer_workflows','output_engine','timeline_events']
     },
     {
       label:'Finanzen & Pakete',
       hint:'Rechnungen, Mahnwesen, Forecast, Billing, Paketlogik und Empfehlungen',
-      tools:['finance','sumup_revenue_connection','dunning','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','packages']
+      tools:['finance','dunning','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','packages']
     },
     {
       label:'System, Sicherheit & Verwaltung',
@@ -3431,12 +3412,6 @@ const v33ToolConfigs:any={
  revenue_share:{title:'Revenue Share',category:'Analytics & Billing',resource:'revenue_shares',fields:['name','gross','percent'],defaults:[]},
  package_recommendations:{title:'Package Recommendations',category:'Analytics & Billing',resource:'package_recommendations',fields:['title','uplift','confidence'],defaults:[]},
  package_matrix:{title:'Paket-Matrix',category:'Analytics & Billing',resource:'package_matrix',fields:['name','tools','price'],defaults:[]},
-
-  retention_intelligence:{title:'Retention Intelligence',category:'QR, Loyalty & Automation',resource:'retention_intelligence',fields:['name','score','recommendation','status'],defaults:[]},
-  consent_center:{title:'Consent Center',category:'QR, Loyalty & Automation',resource:'consent_center',fields:['name','channel','status','note'],defaults:[]},
-  segment_campaigns:{title:'Segment Kampagnen',category:'QR, Loyalty & Automation',resource:'segment_campaigns',fields:['name','audience','reward','status'],defaults:[]},
-  churn_prevention:{title:'Churn Prevention',category:'QR, Loyalty & Automation',resource:'churn_prevention',fields:['name','risk','action','status'],defaults:[]},
-  sumup_revenue_connection:{title:'SumUp Integration',category:'Finanzen & Pakete',resource:'sumup_revenue_connection',fields:['name','provider','status','note'],defaults:[]},
  timeline_events:{title:'Timeline Events',category:'CRM & Betrieb',resource:'timeline_events',fields:['type','title','severity'],defaults:[]}
 }
 

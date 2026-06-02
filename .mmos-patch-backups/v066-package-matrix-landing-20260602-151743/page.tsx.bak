@@ -143,7 +143,6 @@ const featureDescriptions:any={
   'Completeness Audit':'Prueft Systemvollstaendigkeit, Live-Blocker und Pilot-Readiness zentral.',
   'Tool-Reife Center':'Bewertet jedes verkaufbare Tool von 1-100 und zeigt fehlende Produktionsreife-Punkte.',
   'SumUp Umsatzdaten':'Verbindet SumUp fuer Tagesumsatz, Monatsumsatz, Transaktionen und Umsatzentwicklung.',
-  'SumUp Integration':'Verbindet SumUp fuer Tagesumsatz, Monatsumsatz, Transaktionen und Umsatzentwicklung.',
   'Service Recovery':'Macht kritisches Feedback zu Servicefaellen und Nachfassaktionen.',
   'Churn Prevention':'Warnt frueh vor abwandernden Kunden und erzeugt Winback-Vorschlaege.'
 }
@@ -283,9 +282,9 @@ const defaultMainLandingSettings:any={
  trust_subline:'Für Betriebe in Mecklenburg-Vorpommern gedacht: klare Betreuung, transparente Reports und erweiterbare Pakete statt anonymer Standard-Agentur.',
  trust_points:['Persönliche Betreuung','Monatliche Transparenz','Start klein, später erweitern'],
  packages:{
-  Starter:{headline:'Starter',price:199,setupFee:399,audience:'Für Betriebe, die erstmal sichtbar und professionell auftreten wollen.',description:'Mehr Sichtbarkeit, mehr Vertrauen und ein sauberer digitaler Auftritt.',features:['Google Business Optimierung','Bewertungsaufbau','QR-Review-Kampagne','Kundenportal-Basis','Monatsreport PDF-Basis']},
-  Growth:{headline:'Growth',price:499,setupFee:749,audience:'Für Betriebe, die aktiv mehr Anfragen, Wiederkehrer und bessere Bewertungen generieren wollen.',description:'Mehr lokale Reichweite, messbare Entwicklung, Loyalty und Retention Intelligence.',features:['Alles aus Starter','SEO & Sichtbarkeits-Dashboard','QR-/Loyalty-Kampagnen','SumUp Umsatzdaten','Retention Intelligence','Consent Center & Segment-Kampagnen']},
-  Premium:{headline:'Premium',price:899,setupFee:1199,audience:'Für Betriebe, die ihr Marketing und Kundenbindung vollständig steuern und automatisieren wollen.',description:'Volle Steuerung, Automatisierung, Service Recovery, Churn Prevention und Go-Live Sicherheit.',features:['Alles aus Growth','Churn Prevention & Service Recovery','Mail-Domain & Consent Guard','Go-Live Cockpit','Tool-Reife Center','Completeness Audit','Kundenportal Pro']}
+  Starter:{headline:'Starter',audience:'Für Betriebe, die erstmal sichtbar und professionell auftreten wollen.',description:'Mehr Sichtbarkeit, mehr Vertrauen und ein sauberer digitaler Auftritt.',features:['Google Business Optimierung','Bewertungsaufbau','QR-Review-Kampagne','Kundenportal-Basis','Monatsreport PDF-Basis']},
+  Growth:{headline:'Growth',audience:'Für Betriebe, die aktiv mehr Anfragen, Wiederkehrer und bessere Bewertungen generieren wollen.',description:'Mehr lokale Reichweite, messbare Entwicklung, Loyalty und Retention Intelligence.',features:['Alles aus Starter','SEO & Sichtbarkeits-Dashboard','QR-/Loyalty-Kampagnen','SumUp Umsatzdaten','Retention Intelligence','Consent Center & Segment-Kampagnen']},
+  Premium:{headline:'Premium',audience:'Für Betriebe, die ihr Marketing und Kundenbindung vollständig steuern und automatisieren wollen.',description:'Volle Steuerung, Automatisierung, Service Recovery, Churn Prevention und Go-Live Sicherheit.',features:['Alles aus Growth','Churn Prevention & Service Recovery','Mail-Domain & Consent Guard','Go-Live Cockpit','Tool-Reife Center','Completeness Audit','Kundenportal Pro']}
  }
 }
 function mainLandingSettings(d:any){
@@ -303,54 +302,6 @@ function mainLandingSettings(d:any){
  merged.portal_preview_items=Array.isArray(saved.portal_preview_items)&&saved.portal_preview_items.length?saved.portal_preview_items:defaultMainLandingSettings.portal_preview_items
  merged.trust_points=Array.isArray(saved.trust_points)&&saved.trust_points.length?saved.trust_points:defaultMainLandingSettings.trust_points
  return merged
-}
-
-function packageLandingKey(pkg:any){
- const raw=String(pkg?.key||pkg?.name||pkg||'Starter').toLowerCase()
- if(raw.includes('growth'))return 'Growth'
- if(raw.includes('premium'))return 'Premium'
- return 'Starter'
-}
-function packageLandingConfig(d:any,pkg:any){
- const key=packageLandingKey(pkg)
- const settings=mainLandingSettings(d)
- return {key,...(settings.packages?.[key]||{})}
-}
-function packageLandingPrice(d:any,pkg:any){
- const key=packageLandingKey(pkg)
- const cfg=packageLandingConfig(d,key)
- const price=Number(cfg.price ?? cfg.monthlyPrice ?? packageDefs[key]?.price ?? 0)
- return Number.isFinite(price)?price:0
-}
-function packageLandingSetupFee(d:any,pkg:any){
- const key=packageLandingKey(pkg)
- const cfg=packageLandingConfig(d,key)
- const setupFee=Number(cfg.setupFee ?? cfg.setup_fee ?? 0)
- return Number.isFinite(setupFee)?setupFee:0
-}
-const restoredPackageToolFeatures:any={
- Starter:['SumUp Umsatzdaten','Retention Intelligence','Consent Center & Double-Opt-in','Segment-Kampagnen','Churn Prevention'],
- Growth:['SumUp Umsatzdaten','Retention Intelligence','Consent Center & Double-Opt-in','Segment-Kampagnen'],
- Premium:['SumUp Umsatzdaten','Retention Intelligence','Consent Center & Double-Opt-in','Segment-Kampagnen','Churn Prevention']
-}
-function packageDisplayMatrix(d:any){
- const settings=mainLandingSettings(d)
- return ['Starter','Growth','Premium'].map((name:string)=>{
-  const imported=(packageMatrix||[]).find((p:any)=>String(p.name||p.key).toLowerCase()===name.toLowerCase())||{}
-  const cfg=settings.packages?.[name]||{}
-  return {
-   ...imported,
-   key:String(imported.key||name).toLowerCase(),
-   name:cfg.headline||imported.name||name,
-   headline:cfg.headline||imported.name||name,
-   subtitle:cfg.audience||cfg.description||imported.subtitle||'',
-   price:packageLandingPrice(d,name),
-   setupFee:packageLandingSetupFee(d,name),
-   cta:settings.package_cta_label||imported.cta||'Paket anfragen',
-   features:Array.from(new Set([...(Array.isArray(cfg.features)&&cfg.features.length?cfg.features:(imported.features||[])),...(restoredPackageToolFeatures[name]||[])])),
-   tools:Array.isArray(imported.tools)?imported.tools:[]
-  }
- })
 }
 
 const automationLabels=['Rechnung überfällig','Neues Ticket erstellt','SEO Rückgang erkannt','Paket angefragt','Monatsreport fällig','Review Funnel auslösen']
@@ -422,12 +373,7 @@ const seed:any={
  customer_seo_metrics:[],
  review_funnel_stats:[],
  client_success_events:[],
- retention_intelligence:[],
-  consent_center:[],
-  segment_campaigns:[],
-  churn_prevention:[],
-  sumup_revenue_connection:[],
-  landing_page_settings:[defaultMainLandingSettings]
+ landing_page_settings:[defaultMainLandingSettings]
 }
 
 const demoScopedTables=new Set([
@@ -764,9 +710,9 @@ function filterLiveDataForLive(d:any){
  return out
 }
 function liveOnlyMode(role?:string,view?:string){return !isDemoMode()}
-function customerScopedView(view:string){return ['crm','finance','booking','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','package_recommendations','package_matrix','business_audit','mini_audit','offer_generator','contract_generator','output_engine','onboarding','reports','monthly_reports','approvals','packages','retention_intelligence','consent_center','segment_campaigns','churn_prevention','sumup_revenue_connection'].includes(view)}
+function customerScopedView(view:string){return ['crm','finance','booking','media','qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','reviews','integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','package_recommendations','package_matrix','business_audit','mini_audit','offer_generator','contract_generator','output_engine','onboarding','reports','monthly_reports','approvals','packages'].includes(view)}
 function cpkg(d:any,id:string){return d.customer_subscriptions.find((s:any)=>s.customer_id===id)?.package_name||cobj(d,id)?.package_name||'Starter'}
-function pprice(p:string,d?:any){return d?packageLandingPrice(d,p):(packageDefs[p]?.price||199)}
+function pprice(p:string){return packageDefs[p]?.price||199}
 function invName(d:any,cid:string){const n=cname(d,cid).replace(/\s+/g,'_').replace(/[^\w_äöüÄÖÜß-]/g,'');return `Re_${n}_${d.invoices.filter((i:any)=>i.customer_id===cid).length+1}`}
 function InfoI({text}:any){return <span className="infoi" data-tooltip={text||'Weitere Informationen'} tabIndex={0}>i</span>}
 function FeatureList({pkg}:any){const def=packageDefs[pkg]||packageDefs.Starter;return <div className="featureList">{def.displayFeatures.map((t:string)=><div className="featureItem" key={t}><span>{t} <InfoI text={featureDescriptions[t]}/></span></div>)}</div>}
@@ -1962,15 +1908,7 @@ export default function App(){
    'Onboarding':'onboarding',
    'Reports':'reports',
    'Freigaben':'approvals',
-   'Output Engine':'output_engine',
-    'Retention Intelligence':'retention_intelligence',
-    'Consent Center & Double-Opt-in':'consent_center',
-    'Consent Center':'consent_center',
-    'Segment-Kampagnen':'segment_campaigns',
-    'Segment Kampagnen':'segment_campaigns',
-    'Churn Prevention':'churn_prevention',
-    'SumUp Umsatzdaten':'sumup_revenue_connection',
-    'SumUp Integration':'sumup_revenue_connection'
+   'Output Engine':'output_engine'
  }
  const customerBase=['dashboard','knowledge','onboarding','reports','approvals','finance','tickets','booking','packages']
  const packageRoutes=(packageDefs[cpkg(store.data,cid)]?.tools||[]).map((t:string)=>packageToolRoutes[t]).filter(Boolean)
@@ -1979,7 +1917,7 @@ export default function App(){
  const disabledRoutes=new Set(accessRows.filter((x:any)=>x.enabled===false).map((x:any)=>packageToolRoutes[x.tool_key]||x.tool_key).filter(Boolean))
  const customer=Array.from(new Set([...customerBase,...packageRoutes,...enabledRoutes])).filter((route:string)=>!disabledRoutes.has(route)&&route!=='heatmap')
  const labels:any={
-   dashboard:'Dashboard',sales_workflow:'Verkaufsworkflow',production_validation:'Production Validation',smoke_test:'Smoke-Test',demo_live_guard:'Demo-/Live-Trennung',action_log:'Admin-Aktionslog',document_center:'Dokumenten-Zentrale',production_health:'Production Health',production_core:'Production Core',admin_tool_center:'Tool-Zentrale',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',public_landing:'Öffentliche /l/[slug] Seite',loyalty:'Loyalty Programm',loyalty_rewards:'Rewards',loyalty_rules:'Reward Regeln',staff_codes:'Mitarbeitercode',loyalty_segments:'Loyalty Segmente',smart_loyalty:'Smart Loyalty V2',reviews:'Reviews',review_intelligence:'Review Intelligence',review_templates:'Antwortvorlagen',smart_automation:'Smart Automation',marketing_automation:'Marketing Automation',ai_assistant:'AI Business Assistant',customer_health:'Customer Health',customer_intelligence:'Customer Intelligence',dynamic_billing:'Dynamic Billing',revenue_forecasting:'Revenue Forecasting',revenue_share:'Revenue Share',package_recommendations:'Package Recommendations',package_matrix:'Paket-Matrix',retention_intelligence:'Retention Intelligence',consent_center:'Consent Center',segment_campaigns:'Segment Kampagnen',churn_prevention:'Churn Prevention',sumup_revenue_connection:'SumUp Integration',timeline_events:'Timeline Events',seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Security & Health Center',security_center:'Security & Health Center'
+   dashboard:'Dashboard',sales_workflow:'Verkaufsworkflow',production_validation:'Production Validation',smoke_test:'Smoke-Test',demo_live_guard:'Demo-/Live-Trennung',action_log:'Admin-Aktionslog',document_center:'Dokumenten-Zentrale',production_health:'Production Health',production_core:'Production Core',admin_tool_center:'Tool-Zentrale',admin_training:'Wissenstest',production_readiness:'Production Readiness',security_core_live:'Security Core',admin_profiles:'Admin Profile',main_landing:'Haupt-Landingpage',crm:'CRM',finance:'Rechnungen',tickets:'Tickets',booking:'Booking',pipeline:'Pipeline',automations:'Automationen',workflows:'Workflows',activity:'Aktivitäten',media:'Media Center',qr:'QR Kampagnen',demo_customers:'Test Kunden',demo_environment:'Interne Testumgebung',integrations:'Integrationen',packages:'Pakete & Billing',public_landing:'Öffentliche /l/[slug] Seite',loyalty:'Loyalty Programm',loyalty_rewards:'Rewards',loyalty_rules:'Reward Regeln',staff_codes:'Mitarbeitercode',loyalty_segments:'Loyalty Segmente',smart_loyalty:'Smart Loyalty V2',reviews:'Reviews',review_intelligence:'Review Intelligence',review_templates:'Antwortvorlagen',smart_automation:'Smart Automation',marketing_automation:'Marketing Automation',ai_assistant:'AI Business Assistant',customer_health:'Customer Health',customer_intelligence:'Customer Intelligence',dynamic_billing:'Dynamic Billing',revenue_forecasting:'Revenue Forecasting',revenue_share:'Revenue Share',package_recommendations:'Package Recommendations',package_matrix:'Paket-Matrix',timeline_events:'Timeline Events',seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Security & Health Center',security_center:'Security & Health Center'
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
@@ -2001,12 +1939,12 @@ export default function App(){
     {
       label:'QR, Loyalty & Automation',
       hint:'QR, Slug-Seiten, Punkte, Rewards, Workflows, Kampagnen und AI',
-      tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','retention_intelligence','consent_center','segment_campaigns','churn_prevention','automations','workflows','smart_automation','marketing_automation','ai_assistant','customer_workflows','output_engine','timeline_events']
+      tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty','automations','workflows','smart_automation','marketing_automation','ai_assistant','customer_workflows','output_engine','timeline_events']
     },
     {
       label:'Finanzen & Pakete',
       hint:'Rechnungen, Mahnwesen, Forecast, Billing, Paketlogik und Empfehlungen',
-      tools:['finance','sumup_revenue_connection','dunning','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','packages']
+      tools:['finance','dunning','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix','packages']
     },
     {
       label:'System, Sicherheit & Verwaltung',
@@ -2570,7 +2508,6 @@ function HealthCenterV42({store}:any){
   {version:'V42.21.3',file:'SQL_V42_21_3_CUSTOMER_LOGIN_APPROVAL.sql',tables:['customer_registrations','customer_invites','customer_users','user_profiles']},
   {version:'V42.21.4',file:'SQL_V42_21_4_LIVE_ADMIN_PROFILES.sql',tables:['user_profiles']},
   {version:'V42.21.5',file:'SQL_V42_21_5_INTERNAL_DEMO_ACCESS.sql',tables:['landing_page_settings']},
-   {version:'V066',file:'0096_v066_package_matrix_landing_settings.sql',tables:['landing_page_settings']},
   {version:'V42.23',file:'SQL_V42_23_STABILITY_PRODUCTION_READINESS.sql',tables:['activity_logs','api_usage_cache','data_integrity_checks','customer_invites','user_profiles']}
  ]
  const missing=Array.isArray(schema?.missing)?schema.missing:[]
@@ -3431,97 +3368,10 @@ const v33ToolConfigs:any={
  revenue_share:{title:'Revenue Share',category:'Analytics & Billing',resource:'revenue_shares',fields:['name','gross','percent'],defaults:[]},
  package_recommendations:{title:'Package Recommendations',category:'Analytics & Billing',resource:'package_recommendations',fields:['title','uplift','confidence'],defaults:[]},
  package_matrix:{title:'Paket-Matrix',category:'Analytics & Billing',resource:'package_matrix',fields:['name','tools','price'],defaults:[]},
-
-  retention_intelligence:{title:'Retention Intelligence',category:'QR, Loyalty & Automation',resource:'retention_intelligence',fields:['name','score','recommendation','status'],defaults:[]},
-  consent_center:{title:'Consent Center',category:'QR, Loyalty & Automation',resource:'consent_center',fields:['name','channel','status','note'],defaults:[]},
-  segment_campaigns:{title:'Segment Kampagnen',category:'QR, Loyalty & Automation',resource:'segment_campaigns',fields:['name','audience','reward','status'],defaults:[]},
-  churn_prevention:{title:'Churn Prevention',category:'QR, Loyalty & Automation',resource:'churn_prevention',fields:['name','risk','action','status'],defaults:[]},
-  sumup_revenue_connection:{title:'SumUp Integration',category:'Finanzen & Pakete',resource:'sumup_revenue_connection',fields:['name','provider','status','note'],defaults:[]},
  timeline_events:{title:'Timeline Events',category:'CRM & Betrieb',resource:'timeline_events',fields:['type','title','severity'],defaults:[]}
 }
 
 function v33LocalKey(view:string,cid:string){return `v33_${view}_${cid}`}
-
-function V66PackageMatrixEditor({store}:any){
- const [rows,setRows]=useState<any[]>([])
- const [msg,setMsg]=useState('')
- const [busy,setBusy]=useState(false)
-
- function toRows(data:any){
-  const settings=mainLandingSettings(data)
-  return ['Starter','Growth','Premium'].map((name:string)=>{
-   const cfg=settings.packages?.[name]||{}
-   const def=packageDefs[name]||{}
-   return {
-    key:name,
-    headline:cfg.headline||name,
-    price:Number(cfg.price ?? def.price ?? 0),
-    setupFee:Number(cfg.setupFee ?? 0),
-    audience:cfg.audience||'',
-    description:cfg.description||'',
-    features:Array.isArray(cfg.features)?cfg.features.join('\\n'):''
-   }
-  })
- }
-
- useEffect(()=>{setRows(toRows(store.data))},[store.data?.landing_page_settings?.length])
-
- function patchRow(key:string,patch:any){
-  setRows((prev:any[])=>prev.map((r:any)=>r.key===key?{...r,...patch}:r))
- }
-
- async function save(){
-  setBusy(true); setMsg('Speichere Paketmatrix...')
-  try{
-   const existing=safeList(store.data.landing_page_settings).find((x:any)=>x.id==='main'||x.scope==='public_home')
-   const current=mainLandingSettings(store.data)
-   const packages={...(current.packages||{})}
-   for(const r of rows){
-    packages[r.key]={
-     ...(packages[r.key]||{}),
-     headline:String(r.headline||r.key),
-     price:Number(r.price||0),
-     setupFee:Number(r.setupFee||0),
-     audience:String(r.audience||''),
-     description:String(r.description||''),
-     features:String(r.features||'').split('\\n').map((x:string)=>x.trim()).filter(Boolean)
-    }
-   }
-   const payload={...current,id:'main',scope:'public_home',packages,updated_at:new Date().toISOString()}
-   if(existing?.id) await store.update('landing_page_settings',existing.id,payload)
-   else await store.create('landing_page_settings',payload)
-   store.setData?.((d:any)=>{
-    const next=[payload,...safeList(d.landing_page_settings).filter((x:any)=>x.id!=='main'&&x.scope!=='public_home')]
-    return {...d,landing_page_settings:next}
-   })
-   try{localStorage.setItem('mmos_landing_package_matrix',JSON.stringify(packages))}catch{}
-   setMsg('Paketmatrix live gespeichert. Die Haupt-Landingpage nutzt jetzt diese Preise nach Reload/Deploy.')
-   appToast('Paketmatrix gespeichert')
-  }catch(e:any){
-   setMsg('Speicherfehler: '+compactLiveError(e))
-  }finally{setBusy(false)}
- }
-
- return <><Head title="Paket-Matrix" sub="Preise, Setup-Gebühren und Pakettexte der öffentlichen Haupt-Landingpage live speichern." action={<button className="btn" onClick={save} disabled={busy}>{busy?'Speichert...':'Paketmatrix speichern'}</button>}/>
-  <Card title="Live-Hinweis"><p className="sub">Diese Werte werden in <code>landing_page_settings.packages</code> gespeichert. Dadurch ändern sich die Preise auf der Haupt-Landingpage, statt nur lokal in der App.</p>{msg&&<div className="sub">{msg}</div>}</Card>
-  <div className="grid3">{rows.map((r:any)=><Card key={r.key} title={r.key}>
-   <label className="fieldLabel"><span>Name/Headline</span></label>
-   <input className="input" value={r.headline} onChange={e=>patchRow(r.key,{headline:e.target.value})}/>
-   <label className="fieldLabel"><span>Monatlicher Preis</span></label>
-   <input className="input" type="number" value={r.price} onChange={e=>patchRow(r.key,{price:Number(e.target.value)})}/>
-   <label className="fieldLabel"><span>Einrichtung / Setup</span></label>
-   <input className="input" type="number" value={r.setupFee} onChange={e=>patchRow(r.key,{setupFee:Number(e.target.value)})}/>
-   <label className="fieldLabel"><span>Zielgruppe</span></label>
-   <textarea className="input textarea" value={r.audience} onChange={e=>patchRow(r.key,{audience:e.target.value})}/>
-   <label className="fieldLabel"><span>Beschreibung</span></label>
-   <textarea className="input textarea" value={r.description} onChange={e=>patchRow(r.key,{description:e.target.value})}/>
-   <label className="fieldLabel"><span>Features, je Zeile ein Punkt</span></label>
-   <textarea className="input textarea" value={r.features} onChange={e=>patchRow(r.key,{features:e.target.value})}/>
-  </Card>)}</div>
-  <Card title="Vorschau der Landingpage-Preise">{rows.map((r:any)=><div className="item" key={r.key}><div><b>{r.headline}</b><div className="sub">{eur(r.price)} / Monat · Einrichtung {eur(r.setupFee)}</div></div><Badge type="green">Live-Konfig</Badge></div>)}</Card>
- </>
-}
-
 function V30ToolModule({view,store,cid,role,setCid}:any){
  const cfg=v33ToolConfigs[view]||{title:view,category:'Tool',resource:view,fields:['title'],defaults:[]}
  // v40_ui_polish_router
@@ -3529,7 +3379,7 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
  if(view==='public_landing')return <V42PublicLandingManager store={store} cid={cid}/>
  if(view==='reviews'||view==='review_intelligence'||view==='review_templates')return <V42ReviewsHub store={store} cid={cid}/>
  if(view==='package_recommendations')return <V42PackageRecommendations cid={cid}/>
- if(view==='package_matrix')return <V66PackageMatrixEditor store={store}/>
+ if(view==='package_matrix')return <V42PackageMatrixEditor cid={cid}/>
  if(view==='dynamic_billing')return <V42AnalyticsBilling store={store} cid={cid}/>
  if(view==='smart_automation')return <V40AutomationStudio cid={cid}/>
  if(view==='marketing_automation')return <V41MarketingDetail cid={cid}/>
@@ -3540,7 +3390,7 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
  if(view==='revenue_forecasting')return <><CentralCustomerSelector store={store} cid={cid} setCid={role==='admin'?setCid:undefined} title='Revenue Forecasting · Kunde'/><V41ForecastDetail cid={cid}/></>
  if(view==='revenue_share')return <><CentralCustomerSelector store={store} cid={cid} setCid={role==='admin'?setCid:undefined} title='Revenue Share · Kunde'/><V41RevenueShareDetail cid={cid}/></>
  if(view==='package_recommendations')return <V40PackageDeals cid={cid}/>
- if(view==='package_matrix')return <V66PackageMatrixEditor store={store}/>
+ if(view==='package_matrix')return <V41PackageMatrixDetail cid={cid}/>
  if(view==='timeline_events')return <V40TimelineView cid={cid}/>
  const [items,setItems]=useState<any[]>([])
  const [form,setForm]=useState<any>({})
