@@ -1,5 +1,5 @@
 {
-  "name": "mmos-v10-core-frontend",
+  "name": "mmos-v061-frontend",
   "version": "1.0.0",
   "private": true,
   "engines": {
@@ -13,8 +13,8 @@
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium webkit",
     "e2e:ci": "playwright test --reporter=list",
-    "e2e:headed": "playwright test --headed",
-    "quality:guard": "node ../scripts/quality-guard.mjs"
+    "quality:guard": "node ../scripts/quality-guard.mjs",
+    "fullbuild:check": "node ../scripts/v061-fullbuild-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.106.2",

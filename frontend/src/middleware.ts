@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * MMOS Front-/Backoffice Auth Fix
+ * MMOS V061 Middleware
  *
- * Supabase browser sessions are not reliably available to middleware.
- * Server redirects based on cookie checks caused valid admins to be sent back
- * to /auth when opening Backoffice tools.
+ * Wichtig:
+ * Supabase Browser-Sessions sind in Middleware nicht zuverlässig genug,
+ * um harte Redirects für Admin-/Backoffice-Bereiche zu erzwingen.
  *
- * Access control remains in the client via RoleGate/AdminOnly/ToolAccessGate.
+ * Daher bleibt die Middleware bewusst soft.
+ * Zugriffsschutz erfolgt client- und datenbankseitig über:
+ * - RoleGate
+ * - AdminOnly
+ * - ToolAccessGate
+ * - Supabase RLS / Service Role APIs
  */
 export function middleware(_req: NextRequest) {
   return NextResponse.next()

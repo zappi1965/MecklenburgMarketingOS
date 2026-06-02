@@ -1,0 +1,41 @@
+name: MMOS Fullbuild Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fullbuild:
+    name: MMOS V061 Fullbuild
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: MMOS V061 Fullbuild Guard
+        run: yarn fullbuild:check
+
+      - name: Existing Quality Guard
+        run: yarn quality:guard
+
+      - name: TypeScript Check
+        run: yarn --cwd frontend typecheck
+
+      - name: Production Build
+        run: yarn --cwd frontend build
