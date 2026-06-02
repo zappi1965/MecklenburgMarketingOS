@@ -1,0 +1,16 @@
+{
+  "name": "MMOS Upload-Only Repo-Ready Fullbuild",
+  "version": "2026-05-30-upload-only",
+  "mode": "repo_overlay_no_apply_scripts_required",
+  "included_packages": [
+    "MMOS_InternalAccess_Fullbuild_Package.zip",
+    "MMOS_MediaBinding_Fullbuild_Package.zip",
+    "MMOS_BrandLogo_Fullbuild_Package.zip",
+    "MMOS_Mini_Audit_GoogleOnly_Fullbuild_Package.zip",
+    "MMOS_ProductionReadiness_Fullbuild_Package.zip",
+    "MMOS_ConsentSafe_ErrorTracking_Fullbuild_Package.zip",
+    "MMOS_SecurityCore_Fullbuild_Package.zip",
+    "MMOS_AdminKnowledgeQuiz_Latest_Fullbuild_Package.zip"
+  ],
+  "important": "Entpackten Inhalt in Repo hochladen/überschreiben. Supabase-Migrationen und ENV bleiben manuell."
+}
