@@ -42,7 +42,7 @@ const TABLE_TOOL_ACCESS_MAP={
   consent_center:'consent_center',
   segment_campaigns:'segment_campaigns',
   churn_prevention:'churn_prevention',
-  sumup_revenue_connection:'sumup_revenue_connection',,
+  sumup_revenue_connection:'sumup_revenue_connection',
   sales_workflows:'sales_workflow',
   sales_workflow_events:'sales_workflow',
   sales_workflow_documents:'sales_workflow',

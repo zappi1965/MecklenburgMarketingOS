@@ -336,7 +336,7 @@ const restoredPackageToolFeatures:any={
 function packageDisplayMatrix(d:any){
  const settings=mainLandingSettings(d)
  return ['Starter','Growth','Premium'].map((name:string)=>{
-  const imported=(packageMatrix||[]).find((p:any)=>String(p.name||p.key).toLowerCase()===name.toLowerCase())||{}
+  const imported:any=(packageMatrix||[]).find((p:any)=>String(p.name||p.key).toLowerCase()===name.toLowerCase())||{}
   const cfg=settings.packages?.[name]||{}
   return {
    ...imported,
