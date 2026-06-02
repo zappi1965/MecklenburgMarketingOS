@@ -3662,9 +3662,19 @@ function V30ToolModule({view,store,cid,role,setCid}:any){
   persist(items.map((x:any)=>x.id===id?nextRow:x))
   v33FunctionalClient.updateRecord(cfg.resource,id,nextRow).then(()=>setMsg('Backend aktualisiert')).catch((e:any)=>setMsg(`Backend-Aktualisierung fehlgeschlagen: ${e.message}`))
  }
- function remove(id:string){
-  persist(items.filter((x:any)=>x.id!==id))
-  v33FunctionalClient.deleteRecord(cfg.resource,id,cid).then(()=>setMsg('Backend gelöscht')).catch((e:any)=>setMsg(`Backend-Löschung fehlgeschlagen: ${e.message}`))
+ async function remove(id:string){
+  const row=items.find((x:any)=>String(x.id)===String(id))
+  persist(items.filter((x:any)=>String(x.id)!==String(id)))
+  setMsg('Lösche im Backend...')
+  const results=await Promise.allSettled([
+    store?.remove ? store.remove(cfg.resource,id) : Promise.resolve(null),
+    v33FunctionalClient.deleteRecord(cfg.resource,id,cid)
+  ])
+  const ok=results.some((r:any)=>r.status==='fulfilled')
+  if(ok){setMsg('Backend gelöscht');return}
+  persist(row?[row,...items.filter((x:any)=>String(x.id)!==String(id))]:items)
+  const reason=(results.find((r:any)=>r.status==='rejected') as any)?.reason
+  setMsg(`Backend-Löschung fehlgeschlagen: ${reason?.message||'unbekannter Fehler'}`)
  }
  function testStaff(){
   v33FunctionalClient.verifyStaffCode({customer_id:cid,code:verify}).then(()=>setVerifyResult(true)).catch(()=>setVerifyResult(false))

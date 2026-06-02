@@ -211,6 +211,55 @@ function v33FunctionalRoutes(supabase) {
     return null
   }
 
+
+  function isPostgrestSchemaCacheError(error) {
+    const code = String(error?.code || '')
+    const msg = String(error?.message || error || '')
+    return code === 'PGRST204' || msg.includes('schema cache') || msg.includes('Could not find the') || msg.includes('column') && msg.includes('does not exist')
+  }
+
+  function omitPayloadKeys(payload, keys = []) {
+    const next = { ...(payload || {}) }
+    for (const key of keys) delete next[key]
+    return next
+  }
+
+  function loyaltyCustomerSafePayload(payload = {}) {
+    return omitPayloadKeys(payload, ['device_id', 'total_points', 'total_scans', 'last_activity_at', 'updated_at'])
+  }
+
+  async function insertLoyaltyCustomerSafe(payload = {}) {
+    const first = await supabase.from('loyalty_customers').insert(payload).select('*').single()
+    if (!first.error) return first
+    if (!isPostgrestSchemaCacheError(first.error)) return first
+    return supabase.from('loyalty_customers').insert(loyaltyCustomerSafePayload(payload)).select('*').single()
+  }
+
+  async function updateLoyaltyCustomerSafe(id, patch = {}) {
+    const first = await supabase.from('loyalty_customers').update(patch).eq('id', id).select('*').single()
+    if (!first.error) return first
+    if (!isPostgrestSchemaCacheError(first.error)) return first
+    return supabase.from('loyalty_customers').update(loyaltyCustomerSafePayload(patch)).eq('id', id).select('*').single()
+  }
+
+  function rewardDisplayTitle(reward = {}) {
+    const meta = reward.metadata && typeof reward.metadata === 'object' ? reward.metadata : {}
+    return clean(reward.title || reward.name || reward.label || reward.reward_title || reward.reward_name || reward.display_name || reward.benefit || reward.description || meta.title || meta.name || meta.label) || 'Prämie'
+  }
+
+  function rewardBelongsToPublicSlug(reward = {}, { program, campaignId, activeRecordRewardIds, hasActiveRecordRewards } = {}) {
+    const id = String(reward.id || reward.local_id || reward.reward_id || '')
+    const meta = reward.metadata && typeof reward.metadata === 'object' ? reward.metadata : {}
+    if (!isPublicActiveReward(reward)) return false
+    if (hasActiveRecordRewards && id && !activeRecordRewardIds.has(id) && meta.demo !== true && meta.public_global !== true) return false
+    const programId = reward.loyalty_program_id || reward.program_id || meta.loyalty_program_id || meta.program_id
+    const rewardCampaignId = reward.qr_campaign_id || reward.campaign_id || meta.qr_campaign_id || meta.campaign_id
+    if (programId && program?.id && String(programId) !== String(program.id)) return false
+    if (rewardCampaignId && campaignId && String(rewardCampaignId) !== String(campaignId)) return false
+    if (!programId && !rewardCampaignId && meta.demo !== true && meta.public_global !== true && !activeRecordRewardIds.has(id)) return false
+    return true
+  }
+
   function firstConfiguredNumber(sources, keys, fallback = 0) {
     for (const source of sources || []) {
       if (!source) continue
@@ -604,7 +653,7 @@ function v33FunctionalRoutes(supabase) {
       ...reward,
       id,
       source,
-      title: reward.title || reward.name || reward.label || 'Reward',
+      title: rewardDisplayTitle(reward),
       points_required: rewardRequiredPoints(reward),
       required_points: rewardRequiredPoints(reward),
       allow_multiple_redemptions: rewardAllowsMultiple(reward),
@@ -624,24 +673,28 @@ function v33FunctionalRoutes(supabase) {
       tableQueryFailed = true
     }
 
-    // Nur Legacy-Fallback, wenn loyalty_rewards nicht lesbar ist. Wenn der Reward
-    // aus der Reward-Liste gelöscht wurde, soll kein alter v33-Snapshot einlösbar bleiben.
-    if (tableQueryFailed) {
-      try {
-        const records = await supabase.from('v33_functional_records')
-          .select('*')
-          .eq('customer_id', customerId)
-          .eq('resource', 'loyalty_rewards')
-          .limit(200)
-        if (!records.error) {
-          for (const rec of (records.data || [])) {
+    let activeRecordRewardIds = new Set()
+    let hasActiveRecordRewards = false
+    try {
+      const recordsForFilter = await supabase.from('v33_functional_records')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('resource', 'loyalty_rewards')
+        .limit(200)
+      if (!recordsForFilter.error) {
+        const activeRows = activeFunctionalRecords(recordsForFilter.data || [])
+        const normalizedRows = activeRows.map(r => ({ id: r.local_id || r.id, local_id: r.local_id, customer_id: r.customer_id, ...(r.payload || {}) }))
+        activeRecordRewardIds = new Set(normalizedRows.map(r => String(r.id || r.local_id || r.reward_id || '')).filter(Boolean))
+        hasActiveRecordRewards = activeRecordRewardIds.size > 0
+        if (tableQueryFailed) {
+          for (const rec of activeRows) {
             const nr = normalizeReward(rec, 'v33_functional_records_legacy')
             if (!nr || !isPublicActiveReward(nr)) continue
             if (String(nr?.id || '') === String(rewardId) || String(rec.local_id || '') === String(rewardId) || String(rec.payload?.id || '') === String(rewardId)) matches.push(nr)
           }
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     const activeCampaignIds = new Set()
     try {
@@ -652,7 +705,8 @@ function v33FunctionalRoutes(supabase) {
     } catch (_) {}
     if (campaignId) activeCampaignIds.add(String(campaignId))
 
-    const reward = matches.find(r => r && (!r.qr_campaign_id || activeCampaignIds.has(String(r.qr_campaign_id))))
+    const programForReward = { id: matches.find(r => r?.loyalty_program_id)?.loyalty_program_id || null }
+    const reward = matches.find(r => r && (!r.qr_campaign_id || activeCampaignIds.has(String(r.qr_campaign_id))) && rewardBelongsToPublicSlug(r, { program: programForReward, campaignId, activeRecordRewardIds, hasActiveRecordRewards }))
     return reward || null
   }
 
@@ -1372,13 +1426,17 @@ function v33FunctionalRoutes(supabase) {
       }).filter(Boolean)
 
       const tableRewards = rewards.error ? [] : (rewards.data || [])
-      const recordRewards = rewardRecords.error ? [] : (rewardRecords.data || []).map(r => ({ id: r.local_id || r.id, customer_id: r.customer_id, ...(r.payload || {}) }))
+      const activeRecordRewardRows = rewardRecords.error ? [] : activeFunctionalRecords(rewardRecords.data || [])
+      const recordRewards = activeRecordRewardRows.map(r => ({ id: r.local_id || r.id, local_id: r.local_id, customer_id: r.customer_id, ...(r.payload || {}) }))
+      const activeRecordRewardIds = new Set(recordRewards.map((r) => String(r.id || r.local_id || r.reward_id || '')).filter(Boolean))
+      const hasActiveRecordRewards = activeRecordRewardIds.size > 0
 
-      // Nur noch die aktuelle Reward-Liste ist maßgeblich.
-      // v33_functional_records werden nur als Legacy-Fallback genutzt, wenn die
-      // loyalty_rewards-Tabelle nicht lesbar ist. Dadurch erscheinen gelöschte
-      // Rewards nicht mehr weiter über alte Record-Snapshots.
-      const rewardSourceRows = rewards.error ? recordRewards : tableRewards
+      // Die öffentliche Slug-Seite zeigt nur Rewards, die noch aktiv sind und zur
+      // aktuellen Kampagne bzw. zum aktuellen Programm gehören. Alte gelöschte
+      // Tabellenzeilen werden ausgeblendet, wenn der zugehörige aktive v33-Record
+      // nicht mehr existiert.
+      const rewardSourceRows = (rewards.error ? recordRewards : tableRewards)
+        .filter((r) => rewardBelongsToPublicSlug(r, { program, campaignId, activeRecordRewardIds, hasActiveRecordRewards }))
 
       const activeCampaignIds = new Set()
       try {
@@ -1550,7 +1608,7 @@ function v33FunctionalRoutes(supabase) {
         if (!authOnly && pointLimitNew.limit > 0 && points > pointLimitNew.limit) return res.status(429).json({ ok:false, error: pointLimitNew.error || `Punkte-Tageslimit erreicht. Heute sind maximal ${pointLimitNew.limit} Punkte pro Bonuskonto möglich.`, code:'DAILY_POINT_LIMIT_REACHED', limit: pointLimitNew.limit, points_today: 0 })
         const weeklyPointLimitNew = await checkWeeklyPointLimit({ customerId, member: { id: '__new__' }, pointsToAdd: points, program, qrCampaign })
         if (!authOnly && weeklyPointLimitNew.limit > 0 && points > weeklyPointLimitNew.limit) return res.status(429).json({ ok:false, error: weeklyPointLimitNew.error || `Punkte-Wochenlimit erreicht. Diese Woche sind maximal ${weeklyPointLimitNew.limit} Punkte pro Bonuskonto möglich.`, code:'WEEKLY_POINT_LIMIT_REACHED', limit: weeklyPointLimitNew.limit, points_week: 0 })
-        const created = await supabase.from('loyalty_customers').insert({
+        const created = await insertLoyaltyCustomerSafe({
           customer_id: customerId,
           loyalty_program_id: program.id,
           email,
@@ -1564,7 +1622,7 @@ function v33FunctionalRoutes(supabase) {
           last_seen_at: now,
           last_activity_at: now,
           metadata: { source: 'public_qr', slug, consent_marketing: false, marketing_consent_pending: marketingConsentRequest || null, marketing_consent_status: marketingConsentRequest?.requested ? 'pending_double_opt_in' : 'none', public_auth: { password_hash: publicPasswordHash(password), password_set_at: now, auth_method: 'email_password' } }
-        }).select('*').single()
+        })
 
         if (created.error) throw created.error
         member = created.data
@@ -1589,14 +1647,20 @@ function v33FunctionalRoutes(supabase) {
           last_activity_at: now,
           ...(marketingConsentRequest?.requested ? { metadata: nextMemberMetadata } : {})
         }
-        const updated = await supabase.from('loyalty_customers').update(patch).eq('id', member.id).select('*').single()
+        const updated = await updateLoyaltyCustomerSafe(member.id, patch)
 
-        if (!updated.error) member = updated.data || member
+        if (updated.error) throw updated.error
+        member = updated.data || member
       }
 
       resetPublicAuthRateLimit(slug, email, req.ip || req.get('x-forwarded-for'))
-      const marketingConsentResult = await persistMarketingConsent(supabase, { customerId, program, qrCampaign, member, slug, email, displayName, body, req })
-      if (marketingConsentResult?.member) member = marketingConsentResult.member
+      let marketingConsentResult = null
+      try {
+        marketingConsentResult = await persistMarketingConsent(supabase, { customerId, program, qrCampaign, member, slug, email, displayName, body, req })
+        if (marketingConsentResult?.member) member = marketingConsentResult.member
+      } catch (e) {
+        warnings.push({ code: 'MARKETING_CONSENT_SAVE_FAILED', message: String(e?.message || e) })
+      }
       if (authOnly) {
         const redemptions = await getPublicRewardRedemptions(customerId, member.id).catch(() => [])
         return res.json({
@@ -1647,9 +1711,10 @@ function v33FunctionalRoutes(supabase) {
         }
       } catch (_) {}
 
-      const levelResult = await v37ApplyLevel(customerId, member.id)
+      let levelResult = null
+      try { levelResult = await v37ApplyLevel(customerId, member.id) } catch (e) { warnings.push({ code:'LEVEL_UPDATE_FAILED', message:String(e?.message || e) }) }
 
-      const existingLead = await v39FindRecentLead(customerId, slug, email, deviceId)
+      const existingLead = await v39FindRecentLead(customerId, slug, email, deviceId).catch((e) => { warnings.push({ code:'RECENT_LEAD_LOOKUP_FAILED', message:String(e?.message || e) }); return null })
       const leadPayload = {
         customer_id: customerId,
         loyalty_program_id: program.id,
@@ -1669,7 +1734,10 @@ function v33FunctionalRoutes(supabase) {
       let publicLead = { data: existingLead, error: null }
       if (!existingLead) {
         publicLead = await supabase.from('v33_public_leads').insert(leadPayload).select('*').single()
-        if (publicLead.error) throw publicLead.error
+        if (publicLead.error) {
+          warnings.push({ code: 'PUBLIC_LEAD_SAVE_FAILED', message: String(publicLead.error.message || publicLead.error) })
+          publicLead = { data: null, error: publicLead.error }
+        }
       } else {
         warnings.push({ code: 'DUPLICATE_LEAD_SUPPRESSED', message: 'Lead existierte bereits innerhalb von 24h und wurde nicht doppelt angelegt.' })
       }
@@ -1700,8 +1768,9 @@ function v33FunctionalRoutes(supabase) {
         })
       } catch (_) {}
 
-      await audit('v34_qr_loyalty_lead_created', { customer_id: customerId, slug, email, auth_method: 'email_password' })
-      const v35Snapshot = await engine.recalculateCustomer(customerId) // v35_after_qr_lead_recalculate
+      try { await audit('v34_qr_loyalty_lead_created', { customer_id: customerId, slug, email, auth_method: 'email_password' }) } catch (e) { warnings.push({ code:'AUDIT_FAILED', message:String(e?.message || e) }) }
+      let v35Snapshot = null
+      try { v35Snapshot = await engine.recalculateCustomer(customerId) } catch (e) { warnings.push({ code:'ENGINE_RECALCULATE_FAILED', message:String(e?.message || e) }) }
       let rotatedQr = null
       try { rotatedQr = await rotateQrCampaignAfterSuccessfulScan({ customerId, slug, program, qrCampaign }) } catch (e) { warnings.push({ code:'QR_ROTATION_FAILED', message: String(e?.message || e) }) }
 

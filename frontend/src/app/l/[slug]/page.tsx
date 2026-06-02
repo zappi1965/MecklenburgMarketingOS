@@ -136,6 +136,7 @@ function PublicLoyaltyPageContent() {
   const rewards = status?.rewards || []
   const activeActions = status?.active_actions || []
   const rewardPoints = (r: any) => Number(r.points_required ?? r.required_points ?? r.points ?? 0)
+  const rewardTitle = (r: any) => r?.title || r?.name || r?.label || r?.reward_title || r?.reward_name || r?.display_name || r?.benefit || r?.description || 'Prämie'
   const unlockedRewards = rewards.filter((r: any) => rewardPoints(r) <= points)
   const nextReward = rewards.find((r: any) => rewardPoints(r) > points)
   const redemptions = Array.isArray(result?.redemptions) ? result.redemptions : []
@@ -260,7 +261,7 @@ function PublicLoyaltyPageContent() {
         last_redemption: response.redemption
       }))
       setStatus((current: any) => current ? ({ ...current, rewards: current.rewards }) : current)
-      setHint(`${reward.title || reward.name || 'Prämie'} wurde eingelöst. ${response.points_spent || 0} Punkte wurden abgezogen.`)
+      setHint(`${rewardTitle(reward)} wurde eingelöst. ${response.points_spent || 0} Punkte wurden abgezogen.`)
       setStaffCodes((current) => ({ ...current, [rewardId]: '' }))
     } catch (e: any) {
       const message = e?.message || 'Prämie konnte nicht eingelöst werden.'
@@ -431,7 +432,7 @@ function PublicLoyaltyPageContent() {
                   return (
                     <div key={rewardId || r.title} className={isUnlocked ? 'publicRewardItem publicRewardRedeemItem' : 'publicRewardItem'}>
                       <div className="publicRewardText">
-                        <span>{r.title || r.name || 'Reward'}</span>
+                        <span>{rewardTitle(r)}</span>
                         <em>{required} Punkte · {isUnlocked ? 'verfügbar' : result ? `noch ${missing} Punkte` : 'nach Anmeldung prüfbar'}</em>
                       </div>
 
@@ -490,7 +491,7 @@ function PublicLoyaltyPageContent() {
                     return (
                       <div key={rewardId || r.title} className="publicRewardItem publicRewardRedeemItem">
                         <div className="publicRewardText">
-                          <span>{r.title || r.name || 'Reward'}</span>
+                          <span>{rewardTitle(r)}</span>
                           <em>{rewardPoints(r)} Punkte · {rewardAllowsMultiple(r) ? 'mehrfach einlösbar' : 'einmalig einlösbar'}</em>
                         </div>
                         {onceRedeemed ? (
@@ -520,7 +521,7 @@ function PublicLoyaltyPageContent() {
                 <div className="publicRewards locked">
                   <b>Nächster Reward</b>
                   <div className="publicRewardItem">
-                    <span>{nextReward.title || nextReward.name || 'Reward'}</span>
+                    <span>{rewardTitle(nextReward)}</span>
                     <em>Noch {Math.max(0, rewardPoints(nextReward) - points)} Punkte</em>
                   </div>
                 </div>
