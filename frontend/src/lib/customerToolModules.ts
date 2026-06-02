@@ -77,14 +77,14 @@ export const customerToolModules: CustomerToolModule[] = [
   },
   {
     key: 'qr_slug_loyalty_campaigns',
-    title: 'QR- & Slug-Marketing inkl. Loyalty & Kampagnen',
+    title: 'QR- & Slug-Marketing inkl. Punkteprogramm & Kampagnen',
     shortTitle: 'QR & Slug Marketing',
     category: 'loyalty',
     route: '/qr-campaigns',
     adminRoute: '/qr-campaigns',
-    description: 'Verbindet individuelle Slug-Seite, QR-Codes, Loyalty/Punkte, digitale Stempelkarte, Gutscheine, Rewards und Kampagnen-Auswertung.',
+    description: 'Verbindet individuelle QR-Zielseite, QR-Codes, Punkteprogramm/Punkte, digitale Stempelkarte, Gutscheine, Prämien und Kampagnen-Auswertung.',
     customerValue: 'Der QR-Code fuehrt immer auf eine konkrete Aktionsseite: bewerten, Punkte sammeln, Gutschein einloesen, Aktion ansehen oder Kontakt aufnehmen.',
-    includedTools: ['Slug-Seite', 'QR-Kampagnen', 'Loyalty Programm', 'Rewards', 'Reward Regeln', 'Kampagnen-Auswertung'],
+    includedTools: ['QR-Zielseite', 'QR-Kampagnen', 'Punkteprogramm', 'Prämien', 'Regeln', 'Kampagnen-Auswertung'],
     singlePrice: 69,
     setupFee: 199,
     packageMin: 'growth',
@@ -146,7 +146,7 @@ export const customerToolModules: CustomerToolModule[] = [
     category: 'loyalty',
     route: '/referrals',
     adminRoute: '/referrals',
-    description: 'Erzeugt Empfehlungslinks oder QR-Codes, trackt Weiterempfehlungen und verbindet Praemien mit Loyalty oder Gutscheinen.',
+    description: 'Erzeugt Empfehlungslinks oder QR-Codes, trackt Weiterempfehlungen und verbindet Praemien mit Punkteprogramm oder Gutscheinen.',
     customerValue: 'Zufriedene Kunden bringen neue Kunden, ohne dass der Betrieb selbst dauerhaft Werbung schalten muss.',
     includedTools: ['Empfehlungslink', 'QR-Empfehlung', 'Praemienlogik', 'Tracking', 'Loyalty-Anbindung'],
     singlePrice: 39,
@@ -205,8 +205,8 @@ export const customerToolModules: CustomerToolModule[] = [
   },
   {
     key: 'retention_intelligence_suite',
-    title: 'Retention Intelligence Suite',
-    shortTitle: 'Retention Intelligence',
+    title: 'Kundenbindung & Wiederkehrer',
+    shortTitle: 'Kundenbindung & Wiederkehrer',
     category: 'loyalty',
     route: '/admin/retention/intelligence',
     adminRoute: '/admin/retention/intelligence',
@@ -233,7 +233,7 @@ export const customerToolModules: CustomerToolModule[] = [
     setupFee: 79,
     packageMin: 'growth',
     recommendedFor: ['Kundenbindung', 'Stammkundenpflege', 'Premium Angebote'],
-    sourceInspiration: ['CRM Scoring', 'Loyalty Analytics']
+    sourceInspiration: ['CRM Scoring', 'Punkteprogramm Analytics']
   },
   {
     key: 'segment_campaigns',
@@ -248,7 +248,7 @@ export const customerToolModules: CustomerToolModule[] = [
     singlePrice: 59,
     setupFee: 99,
     packageMin: 'growth',
-    recommendedFor: ['Growth Kunden', 'Loyalty Programme', 'Reaktivierung'],
+    recommendedFor: ['Growth Kunden', 'Punkteprogramme', 'Reaktivierung'],
     sourceInspiration: ['GoHighLevel Campaigns', 'CRM Campaign Builder']
   },
   {
@@ -392,7 +392,7 @@ export const customerToolModules: CustomerToolModule[] = [
     singlePrice: 39,
     setupFee: 149,
     packageMin: 'growth',
-    recommendedFor: ['Gastro', 'Beauty', 'Einzelhandel', 'Dienstleister mit Kartenzahlung', 'Loyalty Kunden'],
+    recommendedFor: ['Gastro', 'Beauty', 'Einzelhandel', 'Dienstleister mit Kartenzahlung', 'Punkteprogramm Kunden'],
     sourceInspiration: ['SumUp Dashboard', 'POS Umsatzexport', 'Marketing Attribution']
   }
 ]
@@ -400,26 +400,26 @@ export const customerPackageComposition: CustomerPackageComposition[] = [
   {
     key: 'starter',
     name: 'Starter',
-    monthlyPrice: 149,
+    monthlyPrice: 199,
     setupFee: 399,
-    positioning: 'Google-Grundlage, Bewertungen, Kundenportal und monatliche Ergebnisuebersicht fuer kleine Betriebe.',
-    includedModules: ['local_business_audit', 'reviews_reputation', 'dashboard_reporting', 'monthly_report_pdf_delivery']
+    positioning: 'Google Business Optimierung mit SEO KPI Übersicht, Heatmap, QR-Code-Kampagne ohne Punkteprogramm sowie Reports/Rechnungen im Kundenportal.',
+    includedModules: ['local_business_audit', 'google_listings_local_seo', 'dashboard_reporting', 'monthly_report_pdf_delivery']
   },
   {
     key: 'growth',
     name: 'Growth',
-    monthlyPrice: 299,
+    monthlyPrice: 499,
     setupFee: 749,
-    positioning: 'Google, Local SEO, QR-/Loyalty, Consent Center, Retention Intelligence und segmentbasierte Kampagnen.',
-    includedModules: ['local_business_audit', 'google_listings_local_seo', 'reviews_reputation', 'qr_slug_loyalty_campaigns', 'dashboard_reporting', 'monthly_report_pdf_delivery', 'sumup_revenue_connection', 'customer_portal_pro', 'retention_intelligence_suite', 'customer_value_score', 'segment_campaigns', 'consent_center_double_optin']
+    positioning: 'Alles aus Starter plus Reviews, QR-/Punkteprogramm, Kundenbindung & Wiederkehrer, Consent Center und Zielgruppen-Kampagnen.',
+    includedModules: ['local_business_audit', 'google_listings_local_seo', 'reviews_reputation', 'qr_slug_loyalty_campaigns', 'dashboard_reporting', 'monthly_report_pdf_delivery', 'customer_portal_pro', 'retention_intelligence_suite', 'customer_value_score', 'segment_campaigns', 'consent_center_double_optin']
   },
   {
     key: 'premium',
     name: 'Premium',
-    monthlyPrice: 499,
+    monthlyPrice: 899,
     setupFee: 1199,
-    positioning: 'Vollstaendiges lokales Marketing-, Kundenbindungs- und Go-Live-System mit Service Recovery, Churn Prevention, Mail Guard und Automationen.',
-    includedModules: ['local_business_audit', 'google_listings_local_seo', 'reviews_reputation', 'qr_slug_loyalty_campaigns', 'booking_utilization', 'inbox_chat_communication', 'payments_vouchers', 'referral_program', 'dashboard_reporting', 'monthly_report_pdf_delivery', 'sumup_revenue_connection', 'customer_portal_pro', 'retention_intelligence_suite', 'customer_value_score', 'segment_campaigns', 'consent_center_double_optin', 'churn_prevention_center', 'feedback_action_board', 'service_recovery_tool', 'mail_domain_consent_guard', 'tool_readiness_center', 'system_completeness_audit', 'go_live_cockpit']
+    positioning: 'Vollstaendiges lokales Marketing-, Kundenbindungs- und Go-Live-System mit Bonusstufen, Churn Prevention, Service Recovery und Automationen.',
+    includedModules: ['local_business_audit', 'google_listings_local_seo', 'reviews_reputation', 'qr_slug_loyalty_campaigns', 'booking_utilization', 'inbox_chat_communication', 'payments_vouchers', 'referral_program', 'dashboard_reporting', 'monthly_report_pdf_delivery', 'customer_portal_pro', 'retention_intelligence_suite', 'customer_value_score', 'segment_campaigns', 'consent_center_double_optin', 'churn_prevention_center', 'feedback_action_board', 'service_recovery_tool', 'mail_domain_consent_guard', 'tool_readiness_center', 'system_completeness_audit', 'go_live_cockpit']
   }
 ]
 

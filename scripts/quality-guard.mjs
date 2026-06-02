@@ -24,34 +24,52 @@ const page = read('frontend/src/app/page.tsx')
 if (!page) {
   fail('frontend/src/app/page.tsx konnte nicht gelesen werden')
 } else {
-  if (page.includes('Backoffice öffnen')) {
-    fail('Separater Backoffice-Einstieg ist nicht mehr erlaubt')
+  if (!page.includes("'backoffice'") || !page.includes('InternalToolsLegacyCenter')) {
+    fail('Backoffice ist nicht vollständig wiederhergestellt')
   } else {
-    ok('Kein separater Backoffice-Einstieg')
+    ok('Backoffice mit alten Funktionen vorhanden')
   }
 
-  if (page.includes("view==='backoffice'&&role==='admin'")) {
-    fail('Backoffice darf nicht mehr als eigene View gerendert werden')
+  if (!page.includes("label:'Akquise'") || !page.includes("label:'Google & Audits'")) {
+    fail('V070 Akquise-/Google-&-Audits-Kategorien fehlen')
   } else {
-    ok('Backoffice wird nicht mehr als eigene View gerendert')
+    ok('V070 Akquise und Google & Audits vorhanden')
   }
 
-  if (page.includes('function BackofficeCenter')) {
-    fail('BackofficeCenter darf nicht mehr als aktive Komponente existieren')
+  if (!page.includes("label:'Backoffice'")) {
+    fail('V070 Backoffice-Kategorie fehlt')
   } else {
-    ok('Keine aktive BackofficeCenter-Komponente')
+    ok('V070 Backoffice-Kategorie vorhanden')
   }
 
-  if (!page.includes('Akquise, Audits & Abschluss')) {
-    fail('Audit-/Akquise-Kategorie fehlt')
+  if (!page.includes("const customer=['dashboard','seo','qr','reports','documents_billing']")) {
+    fail('V070 strikte Kunden-Navigation fehlt')
   } else {
-    ok('Audit-/Akquise-Kategorie vorhanden')
+    ok('V070 strikte Kunden-Navigation vorhanden')
   }
 
-  if (!page.includes('System, Sicherheit & Verwaltung')) {
-    fail('System-/Verwaltungskategorie fehlt')
+  if (!page.includes('function qrKpiSnapshot') || !page.includes('Punkte gesammelt') || !page.includes('Prämien eingelöst')) {
+    fail('V070 QR-KPIs fehlen')
   } else {
-    ok('System-/Verwaltungskategorie vorhanden')
+    ok('V070 QR-KPIs vorhanden')
+  }
+
+  if (!page.includes("retention_intelligence:'Kundenbindung'") || !page.includes("churn_prevention:'Rückhol-Chancen'") || !page.includes("segment_campaigns:'Kundenaktionen'") || !page.includes("consent_center:'Einwilligungen'")) {
+    fail('V071 kundenfreundliche Toolnamen fehlen')
+  } else {
+    ok('V071 kundenfreundliche Toolnamen vorhanden')
+  }
+
+  if (!page.includes("const isStarterPackage=packageName==='Starter'") || !page.includes('individuallyEnabledSections')) {
+    fail('V071 QR-Paketlogik oder Zusatzfreischaltungen fehlen')
+  } else {
+    ok('V071 QR-Paketlogik und Zusatzfreischaltungen vorhanden')
+  }
+
+  if (page.includes("Growth:{") && page.includes("SumUp Integration") && page.indexOf("Growth:{") < page.indexOf("SumUp Integration") && page.indexOf("SumUp Integration") < page.indexOf("Premium:{")) {
+    fail('Growth enthält noch SumUp')
+  } else {
+    ok('Growth ohne SumUp')
   }
 
   if (!page.includes('const usedNavTools=new Set<string>()')) {
@@ -77,6 +95,20 @@ if (!page) {
   if (!page.includes('SecurityCore')) {
     console.warn('⚠️ Hinweis: SecurityCore wurde nicht gefunden')
   }
+}
+
+
+const css = read('frontend/src/app/globals.css')
+if (!css.includes('MMOS V071 Stable Cleanup') || !css.includes('mobileTabRail')) {
+  fail('V071 Mobile-Optimierung fehlt')
+} else {
+  ok('V071 Mobile-Optimierung vorhanden')
+}
+
+if (!fs.existsSync('yarn.lock')) {
+  fail('Root yarn.lock fehlt')
+} else {
+  ok('Root yarn.lock vorhanden')
 }
 
 const middleware = fs.existsSync('frontend/src/middleware.ts')

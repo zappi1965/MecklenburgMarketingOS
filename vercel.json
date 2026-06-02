@@ -1,6 +1,0 @@
-{
-  "framework": "nextjs",
-  "installCommand": "corepack enable && yarn install --production=false",
-  "buildCommand": "yarn --cwd frontend build",
-  "outputDirectory": "frontend/.next"
-}
