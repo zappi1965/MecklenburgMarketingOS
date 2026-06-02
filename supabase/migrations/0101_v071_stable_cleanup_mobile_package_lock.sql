@@ -10,6 +10,14 @@ create table if not exists public.landing_page_settings (
   updated_at timestamptz not null default now()
 );
 
+
+-- Bestehende Installationen hatten teilweise andere Spalten. Daher vor dem Upsert absichern.
+alter table public.landing_page_settings add column if not exists scope text;
+alter table public.landing_page_settings add column if not exists settings jsonb not null default '{}'::jsonb;
+alter table public.landing_page_settings add column if not exists packages jsonb not null default '{}'::jsonb;
+alter table public.landing_page_settings add column if not exists created_at timestamptz not null default now();
+alter table public.landing_page_settings add column if not exists updated_at timestamptz not null default now();
+
 insert into public.landing_page_settings (id, scope, packages, settings, updated_at)
 values (
   'main',
