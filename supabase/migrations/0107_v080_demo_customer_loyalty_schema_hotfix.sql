@@ -1,3 +1,7 @@
+-- MMOS V080: sicherer Demo-Kunden-Migration-Hotfix
+-- Ausführen, wenn 0106 wegen fehlender Loyalty-Spalten fehlgeschlagen ist.
+-- Diese Datei enthält die korrigierte V079-Demo-Seed-Migration inklusive Schema-Hardening.
+
 -- MMOS V079 Demo-Kunde: Starter-Paket + einzeln freigeschalteter Loyalty-Zugriff
 -- Zweck: Ein sauberer Demo-Kunde für Verkaufsgespräche mit vereinfachtem Starter-Portal und sichtbarem Loyalty-Zusatzbereich.
 -- Sicher wiederholbar: feste UUIDs + Upserts.
