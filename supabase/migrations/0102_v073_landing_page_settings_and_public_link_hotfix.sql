@@ -1,30 +1,6 @@
--- MMOS V071 Stable Cleanup: vereinfachte Pakete, Kundenbegriffe und QR-Paketlogik
--- V073 Hotfix: keine Abhängigkeit von landing_page_settings.settings.
--- Nicht-destruktiv. Aktualisiert öffentliche Paketmatrix und hält Zusatzfreischaltungen kompatibel.
+-- MMOS V073 Hotfix
+-- Repariert V071/V072 landing_page_settings Migration ohne settings-Spalte.
 
-create table if not exists public.landing_page_settings (
-  id text primary key,
-  scope text not null default 'public_home',
-  brand_name text,
-  nav_title text,
-  logo_url text,
-  logo_alt text,
-  logo_mark_text text,
-  logo_show_text boolean not null default true,
-  hero_title text,
-  hero_subline text,
-  primary_cta_label text,
-  secondary_cta_label text,
-  show_public_demo_button boolean default true,
-  package_headline text,
-  package_subline text,
-  footer_note text,
-  packages jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
--- Bestehende Installationen hatten teilweise andere Spalten. Nur tatsächlich genutzte Spalten absichern.
 alter table public.landing_page_settings add column if not exists scope text default 'public_home';
 alter table public.landing_page_settings add column if not exists packages jsonb not null default '{}'::jsonb;
 alter table public.landing_page_settings add column if not exists created_at timestamptz not null default now();
@@ -68,20 +44,7 @@ on conflict (id) do update set
   packages=excluded.packages,
   updated_at=now();
 
-create table if not exists public.customer_tool_access (
-  id uuid primary key default gen_random_uuid(),
-  customer_id uuid,
-  tool_key text not null,
-  enabled boolean not null default true,
-  note text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists idx_customer_tool_access_customer_tool on public.customer_tool_access(customer_id, tool_key);
-
--- Optionale Kompatibilität: keine SumUp-Autofreischaltung durch Paketlogik.
 update public.customer_tool_access
-set enabled=false, updated_at=now(), note=coalesce(note,'') || ' · V071: SumUp nicht mehr Bestandteil von Growth'
+set enabled=false, updated_at=now(), note=coalesce(note,'') || ' · V073: SumUp nicht mehr Bestandteil von Growth'
 where tool_key in ('sumup_revenue_connection','SumUp Integration','SumUp Umsatzdaten')
   and enabled=true;

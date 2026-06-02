@@ -181,6 +181,9 @@ export const v33FunctionalClient = {
 
   publicStatus: (slug: string) => request(`/public/loyalty/${slug}/status`),
 
+  // V073: older quality-center code still calls publicLinkStatus. Keep alias for type/build compatibility.
+  publicLinkStatus: (slug: string) => request(`/public/loyalty/${slug}/status`),
+
   publicScanStart: (slug: string) => request(`/public/loyalty/${slug}/scan-start`),
 
   publicJoinOrScan: (slug: string, payload: any) =>
