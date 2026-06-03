@@ -4089,10 +4089,20 @@ function v33FunctionalRoutes(supabase) {
     ].filter(Boolean).join('\n')
   }
 
+  async function safeMaybeSingle(query) {
+    try {
+      const result = await query
+      if (result?.error) return { data: null, error: result.error }
+      return result || { data: null }
+    } catch (error) {
+      return { data: null, error }
+    }
+  }
+
   async function getReactivationSettings(customerId, qrCampaignId) {
-    const byQr = qrCampaignId ? await supabase.from('customer_reactivation_settings').select('*').eq('qr_campaign_id', qrCampaignId).limit(1).maybeSingle().catch(() => ({ data: null })) : { data: null }
+    const byQr = qrCampaignId ? await safeMaybeSingle(supabase.from('customer_reactivation_settings').select('*').eq('qr_campaign_id', qrCampaignId).limit(1).maybeSingle()) : { data: null }
     if (byQr.data) return byQr.data
-    const byCustomer = customerId ? await supabase.from('customer_reactivation_settings').select('*').eq('customer_id', customerId).limit(1).maybeSingle().catch(() => ({ data: null })) : { data: null }
+    const byCustomer = customerId ? await safeMaybeSingle(supabase.from('customer_reactivation_settings').select('*').eq('customer_id', customerId).limit(1).maybeSingle()) : { data: null }
     return byCustomer.data || {}
   }
 
@@ -4113,8 +4123,8 @@ function v33FunctionalRoutes(supabase) {
 
   async function sendReactivationLinkMail(req, link, { settings = null, isReminder = false, testTo = null } = {}) {
     if (!link?.token && !testTo) throw new Error('Rückhol-Link hat keinen Token.')
-    const customerResult = link.customer_id ? await supabase.from('customers').select('*').eq('id', link.customer_id).maybeSingle().catch(() => ({ data: null })) : { data: null }
-    const memberResult = link.loyalty_customer_id ? await supabase.from('loyalty_customers').select('*').eq('id', link.loyalty_customer_id).maybeSingle().catch(() => ({ data: null })) : { data: null }
+    const customerResult = link.customer_id ? await safeMaybeSingle(supabase.from('customers').select('*').eq('id', link.customer_id).maybeSingle()) : { data: null }
+    const memberResult = link.loyalty_customer_id ? await safeMaybeSingle(supabase.from('loyalty_customers').select('*').eq('id', link.loyalty_customer_id).maybeSingle()) : { data: null }
     const customer = customerResult.data || null
     const member = memberResult.data || null
     const resolvedSettings = settings || await getReactivationSettings(link.customer_id, link.qr_campaign_id)
@@ -4182,10 +4192,10 @@ function v33FunctionalRoutes(supabase) {
     const expired = Boolean(expiresMs && expiresMs < nowMs)
     const status = String(link.status || 'open').toLowerCase()
     const [customerRow, qrRow, memberRow, settingRow] = await Promise.all([
-      link.customer_id ? supabase.from('customers').select('*').eq('id', link.customer_id).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null }),
-      link.qr_campaign_id ? supabase.from('qr_campaigns').select('*').eq('id', link.qr_campaign_id).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null }),
-      link.loyalty_customer_id ? supabase.from('loyalty_customers').select('*').eq('id', link.loyalty_customer_id).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null }),
-      link.qr_campaign_id ? supabase.from('customer_reactivation_settings').select('*').eq('qr_campaign_id', link.qr_campaign_id).limit(1).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null })
+      link.customer_id ? safeMaybeSingle(supabase.from('customers').select('*').eq('id', link.customer_id).maybeSingle()) : Promise.resolve({ data: null }),
+      link.qr_campaign_id ? safeMaybeSingle(supabase.from('qr_campaigns').select('*').eq('id', link.qr_campaign_id).maybeSingle()) : Promise.resolve({ data: null }),
+      link.loyalty_customer_id ? safeMaybeSingle(supabase.from('loyalty_customers').select('*').eq('id', link.loyalty_customer_id).maybeSingle()) : Promise.resolve({ data: null }),
+      link.qr_campaign_id ? safeMaybeSingle(supabase.from('customer_reactivation_settings').select('*').eq('qr_campaign_id', link.qr_campaign_id).limit(1).maybeSingle()) : Promise.resolve({ data: null })
     ])
     return { ok: true, link, customer: customerRow.data || null, qr_campaign: qrRow.data || null, member: memberRow.data || null, settings: settingRow.data || null, expired, already_redeemed: ['redeemed','reactivated','used','eingeloest','eingelöst'].includes(status) }
   }
@@ -4304,11 +4314,11 @@ function v33FunctionalRoutes(supabase) {
       const mapped = statusMap[String(eventType).toLowerCase()] || String(eventType).toLowerCase()
       let link = null
       if (providerId) {
-        const r = await supabase.from('customer_reactivation_links').select('*').eq('mail_provider_id', providerId).limit(1).maybeSingle().catch(() => ({ data: null }))
+        const r = await safeMaybeSingle(supabase.from('customer_reactivation_links').select('*').eq('mail_provider_id', providerId).limit(1).maybeSingle())
         link = r.data || null
       }
       if (!link && to) {
-        const r = await supabase.from('customer_reactivation_links').select('*').eq('email', to).order('created_at', { ascending: false }).limit(1).maybeSingle().catch(() => ({ data: null }))
+        const r = await safeMaybeSingle(supabase.from('customer_reactivation_links').select('*').eq('email', to).order('created_at', { ascending: false }).limit(1).maybeSingle())
         link = r.data || null
       }
       if (link?.id) {
