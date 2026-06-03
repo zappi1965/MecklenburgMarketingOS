@@ -16,7 +16,10 @@ export default function QrScanStartPage() {
       try {
         const res: any = await v33FunctionalClient.publicScanStart(slug)
         if (!alive) return
-        const next = res?.redirect_path || `/l/${encodeURIComponent(slug)}`
+        if (res?.scan_token && typeof window !== 'undefined') {
+          try { sessionStorage.setItem(`mmos_qr_scan_token:${slug}`, String(res.scan_token)) } catch {}
+        }
+        const next = res?.redirect_path || `/l/${encodeURIComponent(slug)}${res?.scan_token ? `?scan_token=${encodeURIComponent(String(res.scan_token))}` : ''}`
         window.location.replace(next)
       } catch (error: any) {
         if (!alive) return

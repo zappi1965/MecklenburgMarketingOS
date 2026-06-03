@@ -1202,7 +1202,38 @@ function QRCodes({store,cid,setCid,role='admin',activeView='qr'}:any){
  useEffect(()=>{if(!allowedQrSections.some((s:any)=>s.key===section))setSection('campaigns')},[packageName,role,section,Array.from(individuallyEnabledSections).join('|')])
  const qrKpis=qrKpiSnapshot(store,activeCustomer,rows)
  function QrKpiCards(){return <><div className="grid4 qrKpiGrid"><Metric label="Aktive QR-Kampagnen" value={qrKpis.active}/><Metric label="QR-Scans" value={qrKpis.totalScans}/><Metric label="Punkte gesammelt" value={showLoyaltyKpis?qrKpis.points:'–'}/><Metric label="Prämien eingelöst" value={showLoyaltyKpis?qrKpis.rewards:'–'}/></div>{isStarterPackage&&<Card title={starterHasLoyaltyAddon?'Starter mit Loyalty-Zusatzbereich':'Starter-Paket aktiv'}><div className="sub">{starterHasLoyaltyAddon?'Dieser Demo-Kunde nutzt Starter als Basispaket und hat Loyalty einzeln freigeschaltet. Neue QR-Kampagnen werden weiterhin vom Admin angelegt, Punkte und Prämien sind für zugewiesene Kampagnen sichtbar.':'Starter sieht nur zugewiesene QR-Kampagnen, QR-Zielseite und Bewertungslogik. Neue QR-Kampagnen werden vom Admin angelegt. Punkte, Prämien, Bonusstufen, Kundengruppen und Automationen bleiben ausgeblendet, außer sie werden einzeln freigeschaltet.'}</div></Card>}</>}
- function QrSectionTabs(){return <Card title="QR Kampagnen verwalten"><div className="toolbarActions qrSectionTabs mobileTabRail">{allowedQrSections.map((s:any)=><button key={s.key} type="button" className={section===s.key?'btn':'btn secondary'} onClick={()=>setSection(s.key)}><b>{s.label}</b><span className="sub">{s.hint}</span></button>)}</div><div className="sub">{packageName==='Starter'?(starterHasLoyaltyAddon?'Starter mit Loyalty-Zusatzbereich: zugewiesene Kampagnen plus Punkte/Prämien sind verfügbar. Neue Kampagnen werden vom Admin angelegt.':'Starter zeigt nur zugewiesene Kampagnen, QR-Zielseite und Bewertungen. Neue Kampagnen werden im Starter-Paket vom Admin angelegt.'):'Punkte, Prämien, Regeln und Codes sind direkt hier gebündelt.'}</div></Card>}
+ function QrSectionTabs(){return <Card title="QR Kampagnen verwalten" action={role==='admin'?<button className="btn secondary" onClick={repairCustomerQrCampaigns}>Kampagnen reparieren</button>:null}><div className="toolbarActions qrSectionTabs mobileTabRail">{allowedQrSections.map((s:any)=><button key={s.key} type="button" className={section===s.key?'btn':'btn secondary'} onClick={()=>setSection(s.key)}><b>{s.label}</b><span className="sub">{s.hint}</span></button>)}</div><div className="sub">{packageName==='Starter'?(starterHasLoyaltyAddon?'Starter mit Loyalty-Zusatzbereich: zugewiesene Kampagnen plus Punkte/Prämien sind verfügbar. Neue Kampagnen werden weiterhin vom Admin angelegt. Der Reparatur-Button verknüpft alte QR-/Reward-Daten neu.':'Starter zeigt nur zugewiesene Kampagnen, QR-Zielseite und Bewertungen. Neue Kampagnen werden im Starter-Paket vom Admin angelegt.'):'Punkte, Prämien, Regeln und Codes sind direkt hier gebündelt. Mit „Kampagnen reparieren“ werden alte Slugs, Rewards, Programme und Sicherheitseinstellungen bereinigt.'}</div></Card>}
+ async function repairCustomerQrCampaigns(){
+  if(role!=='admin'){store.notify?.('Nur Admins können Kampagnen reparieren.');return}
+  if(!activeCustomer){store.notify?.('Bitte zuerst einen Kunden auswählen.');return}
+  try{
+   let repaired=0
+   const currentRows=safeList(store.data.qr_campaigns).filter((q:any)=>String(q.customer_id||'')===String(activeCustomer))
+   const programs=safeList(store.data.loyalty_programs).filter((p:any)=>String(p.customer_id||'')===String(activeCustomer))
+   const rewards=safeList(store.data.loyalty_rewards).filter((r:any)=>String(r.customer_id||'')===String(activeCustomer))
+   for(const q of currentRows){
+    const slug=String(q.slug||slugifyLocal(q.title||q.name||q.id||'qr-kampagne')).trim()
+    const qPurpose=q.purpose||q.mode||q.metadata?.purpose||((Number(q.points_per_scan||q.metadata?.points_per_scan||0)>0)?'loyalty':'review')
+    let program=programs.find((p:any)=>String(p.qr_campaign_id||'')===String(q.id))||programs.find((p:any)=>String(p.slug||'')===slug)||programs.find((p:any)=>String(p.public_url||'').includes(`/l/${slug}`))
+    if(!program && canUseLoyaltyForQr && qPurpose!=='review'){
+      try{program=await store.create('loyalty_programs',{customer_id:activeCustomer,qr_campaign_id:q.id,name:`${q.title||q.name||'QR'} Punkteprogramm`,slug:`${slug}-punkte`,status:'active',points_per_scan:Number(q.points_per_scan||q.metadata?.points_per_scan||10),public_url:`/l/${slug}`,rules:{require_rescan_for_points:true},metadata:{created_by_repair:true,qr_slug:slug}})}catch(e){console.warn('[MMOS] loyalty program repair create failed',e)}
+    }
+    const patch:any={slug,public_url:`/q/${slug}`,target_url:`/q/${slug}`,active:q.active!==false,status:q.active===false?'Inaktiv':'Aktiv',purpose:qPurpose,metadata:{...(q.metadata||{}),purpose:qPurpose,qr_scan_url:`/q/${slug}`,landing_url:`/l/${slug}`,require_rescan_for_points:canUseLoyaltyForQr&&qPurpose!=='review',final_slug_rules_source:'qr_campaigns',repaired_at:new Date().toISOString()}}
+    if(canUseLoyaltyForQr&&qPurpose!=='review'){patch.loyalty_enabled=true;patch.require_rescan_for_points=true;patch.points_per_scan=Number(q.points_per_scan||q.metadata?.points_per_scan||10)||10;if(program?.id)patch.loyalty_program_id=program.id}
+    await store.update('qr_campaigns',q.id,patch); repaired++
+    const linkedRewards=rewards.filter((r:any)=>!r.qr_campaign_id||String(r.qr_campaign_id)===String(q.id)||String(r.loyalty_program_id||'')===String(program?.id||''))
+    for(const r of linkedRewards){
+      const title=r.title||r.name||r.label||r.reward_title||r.reward_name||r.description||'Prämie'
+      const deleted=r.deleted===true||r.is_deleted===true||Boolean(r.deleted_at)||['deleted','gelöscht','geloescht','archived','archiviert'].includes(String(r.status||'').toLowerCase())
+      await store.update('loyalty_rewards',r.id,{customer_id:activeCustomer,qr_campaign_id:q.id,loyalty_program_id:program?.id||r.loyalty_program_id,name:title,title,active:!deleted,status:deleted?'deleted':(r.status||'active'),metadata:{...(r.metadata||{}),repaired_at:new Date().toISOString(),qr_slug:slug}})
+    }
+   }
+   await store.load?.()
+   store.notify?.(`Kampagnen repariert: ${repaired}`)
+  }catch(e:any){
+   store.notify?.(`Kampagnen-Reparatur fehlgeschlagen: ${compactLiveError(e)}`)
+  }
+ }
  async function createLocalQr(seedData:any={}){
   const slug=seedData.slug||slugifyLocal(`${cname(store.data,activeCustomer)}-${f.title||seedData.title||'qr'}`)
   const row={id:seedData.id||uid(),customer_id:activeCustomer,title:f.title||seedData.title||'QR Kampagne',name:f.title||seedData.name||'QR Kampagne',slug,public_url:qrScanUrl(slug),target_url:`/q/${slug}`,purpose:canUseLoyaltyForQr?f.purpose:'review',internal_email:f.internal_email,internal_from:f.internal_from,internal_to:f.internal_to,google_from:f.google_from,google_to:f.google_to,google_review_url:f.google_review_url,points_per_scan:canUseLoyaltyForQr?Number(f.points_per_scan||1):0,metadata:{...(seedData.metadata||{}),purpose:canUseLoyaltyForQr?f.purpose:'review',google_review_url:f.google_review_url,points_per_scan:canUseLoyaltyForQr?Number(f.points_per_scan||1):0,max_scans_per_member:Number(f.max_scans_per_member||0),daily_scan_limit_per_member:Number(f.daily_scan_limit_per_member||0),scan_cooldown_minutes:Number(f.scan_cooldown_minutes||0),daily_point_limit_per_member:Number(f.daily_point_limit_per_member||0),suspicion_score_threshold:Number(f.suspicion_score_threshold||70),require_rescan_for_points:canUseLoyaltyForQr&&Number(f.points_per_scan||0)>0?f.require_rescan_for_points!==false:false,rotate_qr_after_scan:canUseLoyaltyForQr&&!!f.rotate_qr_after_scan,qr_scan_url:`/q/${slug}`,landing_url:`/l/${slug}`,final_slug_rules_source:'qr_campaigns'},status:'Aktiv',active:true,scans:0,conversions:0,created_at:new Date().toISOString()}
@@ -3206,13 +3237,13 @@ function CustomerDeleteDangerZone({store,cid,setCid,setView}:any){
   setBusy(true)
   const nextCid=liveCustomers({...store.data,customers:(store.data.customers||[]).filter((x:any)=>String(x.id)!==String(cid))})[0]?.id||''
   try{
-   for(const table of relatedTables){
-    const rows=safeList(store.data[table]).filter((x:any)=>String(x.customer_id||'')===String(cid))
-    for(const row of rows){try{await store.remove(table,row.id)}catch(e){console.warn(`[MMOS] ${table} cleanup failed`,e)}}
-   }
    await store.remove('customers',cid)
-   store.setData((d:any)=>({...d,customers:safeList(d.customers).filter((x:any)=>String(x.id)!==String(cid))}))
-   await store.load?.()
+   store.setData((d:any)=>{
+    const nd:any={...d,customers:safeList(d.customers).filter((x:any)=>String(x.id)!==String(cid))}
+    for(const table of relatedTables){nd[table]=safeList(d[table]).filter((x:any)=>String(x.customer_id||'')!==String(cid))}
+    return nd
+   })
+   try{await store.load?.()}catch(e){console.warn('[MMOS] reload after customer delete failed',e)}
    setCid?.(nextCid)
    setView?.(nextCid?'dashboard':'crm')
    setMsg('Kunde wurde gelöscht.')

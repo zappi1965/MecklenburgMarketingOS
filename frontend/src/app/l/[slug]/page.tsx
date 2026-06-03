@@ -64,7 +64,8 @@ function PublicLoyaltyPageContent() {
   const params = useParams<{ slug: string }>()
   const searchParams = useSearchParams()
   const slug = String(params?.slug || '')
-  const scanToken = String(searchParams?.get('scan_token') || '')
+  const scanTokenFromUrl = String(searchParams?.get('scan_token') || '')
+  const [scanToken, setScanToken] = useState(scanTokenFromUrl)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -90,6 +91,20 @@ function PublicLoyaltyPageContent() {
       .then(setStatus)
       .catch((e: any) => setHint(friendlyHint(e?.message || 'Status konnte nicht geladen werden.')))
   }, [slug])
+
+  useEffect(() => {
+    if (!slug || typeof window === 'undefined') return
+    const key = `mmos_qr_scan_token:${slug}`
+    if (scanTokenFromUrl) {
+      try { sessionStorage.setItem(key, scanTokenFromUrl) } catch {}
+      setScanToken(scanTokenFromUrl)
+      return
+    }
+    try {
+      const fallback = sessionStorage.getItem(key) || ''
+      if (fallback) setScanToken(fallback)
+    } catch {}
+  }, [slug, scanTokenFromUrl])
 
   const settings = status?.settings || null
   const mode = String(status?.mode || status?.qr_campaign?.metadata?.purpose || 'loyalty')
@@ -182,6 +197,8 @@ function PublicLoyaltyPageContent() {
         setResult(response)
         if (response?.scan_token_consumed) {
           setScanTokenConsumed(true)
+          try { sessionStorage.removeItem(`mmos_qr_scan_token:${slug}`) } catch {}
+          setScanToken('')
           setHint('Punkte gesammelt. Für weitere Punkte ist ein erneutes Scannen des QR-Codes erforderlich.')
         }
         if (response?.marketing_consent?.granted) {

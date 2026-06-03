@@ -33,13 +33,30 @@ function sanitizeListQuery(query={}){
   }
   return next
 }
-function sanitizeLandingPageSettingsPayload(row={}){
+function sanitizeLandingPageSettingsPayload(row={}, mode='full'){
   const payload={...(row||{})}
   if(payload.packages && typeof payload.packages !== 'object'){
     try{payload.packages=JSON.parse(payload.packages)}catch(_){payload.packages={}}
   }
-  // Keep package matrix writes schema-safe. Rich landing text fields are added by migration 0108.
+  if(mode==='packages_only'){
+    const safe={}
+    if(payload.id!=null)safe.id=payload.id
+    if(payload.scope!=null)safe.scope=payload.scope
+    if(payload.packages!=null)safe.packages=payload.packages
+    if(payload.updated_at!=null)safe.updated_at=payload.updated_at
+    return safe
+  }
   return payload
+}
+function stripMissingColumnFromPayload(payload,error){
+  const msg=String(error?.message||error?.details||error?.hint||'')
+  const m=msg.match(/'([^']+)' column/i)||msg.match(/column "([^"]+)"/i)
+  if(!m)return null
+  const col=m[1]
+  if(!col||!(col in payload))return null
+  const next={...payload}
+  delete next[col]
+  return next
 }
 const CUSTOMER_CASCADE_TABLES = [
   'loyalty_reward_redemptions','loyalty_transactions','loyalty_member_security_scores','security_events','loyalty_customers','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_programs','public_landing_pages','qr_campaigns','review_feedback',
@@ -122,8 +139,8 @@ function isMissingColumnError(error,columnNames=[]){const msg=String(error?.mess
 function isDuplicateKeyError(error){const msg=String(error?.message||error?.details||'').toLowerCase();const code=String(error?.code||'').toUpperCase();return code==='23505'||msg.includes('duplicate key value')||msg.includes('violates unique constraint')}
 async function existingRowForDuplicate(supabase,table,payload){if(!payload?.id)return null;try{const{data,error}=await supabase.from(table).select('*').eq('id',payload.id).maybeSingle();if(error)return null;if(data&&payload.customer_id&&data.customer_id&&String(data.customer_id)!==String(payload.customer_id))return null;return data||null}catch(_){return null}}
 function isDeletedOrArchivedRow(row){const status=String(row?.status||'').toLowerCase();return row?.is_deleted===true||row?.deleted===true||row?.archived===true||Boolean(row?.deleted_at||row?.archived_at||row?.removed_at)||['deleted','gelöscht','geloescht','archived','archiviert','removed'].includes(status)}
-async function insertWithTimestampRetry(supabase,table,payload){let result=await supabase.from(table).insert(payload).select('*').maybeSingle();if(!result.error)return result;if(isMissingColumnError(result.error,['updated_at','created_at'])){const fallback={...payload};delete fallback.updated_at;delete fallback.created_at;result=await supabase.from(table).insert(fallback).select('*').maybeSingle()}return result}
-async function updateWithTimestampRetry(supabase,table,id,patch){let result=await supabase.from(table).update(patch).eq('id',id).select('*').maybeSingle();if(!result.error)return result;if(isMissingColumnError(result.error,['updated_at'])){const fallback={...patch};delete fallback.updated_at;result=await supabase.from(table).update(fallback).eq('id',id).select('*').maybeSingle()}return result}
+async function insertWithTimestampRetry(supabase,table,payload){let result=await supabase.from(table).insert(payload).select('*').maybeSingle();if(!result.error)return result;if(String(table).toLowerCase()==='landing_page_settings'){let fallback=stripMissingColumnFromPayload(payload,result.error)||sanitizeLandingPageSettingsPayload(payload,'packages_only');result=await supabase.from(table).insert(fallback).select('*').maybeSingle();if(!result.error)return result}if(isMissingColumnError(result.error,['updated_at','created_at'])){const fallback={...payload};delete fallback.updated_at;delete fallback.created_at;result=await supabase.from(table).insert(fallback).select('*').maybeSingle()}return result}
+async function updateWithTimestampRetry(supabase,table,id,patch){let result=await supabase.from(table).update(patch).eq('id',id).select('*').maybeSingle();if(!result.error)return result;if(String(table).toLowerCase()==='landing_page_settings'){let fallback=stripMissingColumnFromPayload(patch,result.error)||sanitizeLandingPageSettingsPayload(patch,'packages_only');result=await supabase.from(table).update(fallback).eq('id',id).select('*').maybeSingle();if(!result.error)return result}if(isMissingColumnError(result.error,['updated_at'])){const fallback={...patch};delete fallback.updated_at;result=await supabase.from(table).update(fallback).eq('id',id).select('*').maybeSingle()}return result}
 async function authorizeWrite({supabase,table,row,user,userRole}){const cfg=tableConfig(table);if(!cfg)throw permissionError(`Tabelle '${table}' ist nicht erlaubt`);const isAdmin=userRole==='admin';if(cfg.scope==='admin'&&!isAdmin)throw permissionError(`Tabelle '${table}' erlaubt nur Admin-Zugriffe`);if(isCustomerReadOnly(cfg)&&!isAdmin)throw permissionError(`Tabelle '${table}' ist fuer Kunden nur lesbar. Erstellung/Aenderung erfolgt intern.`);if(cfg.scope==='customer'&&!isAdmin){const customerId=row?.customer_id||row?.customerId;if(!customerId)throw badRequest('customer_id im Payload fehlt');const ok=await userHasCustomerAccess(supabase,user.id,customerId);if(!ok)throw permissionError('Kein Zugriff auf diesen Customer');await requireCustomerToolAccessIfMapped({supabase,table,customer_id:customerId,userRole})}}
 async function listRows({table,query={},user,userRole}){query=sanitizeListQuery(query);const supabase=getSupabaseAdmin();if(!supabase)throw new Error('Supabase nicht konfiguriert');const cfg=tableConfig(table);if(!cfg)throw permissionError(`Tabelle '${table}' ist nicht erlaubt`);const isAdmin=userRole==='admin';if(cfg.scope==='admin'&&!isAdmin)throw permissionError(`Tabelle '${table}' erlaubt nur Admin-Zugriffe`);if(isCustomerScoped(cfg)&&!isAdmin){const cid=query.customer_id;if(!cid)throw badRequest('customer_id Filter erforderlich');const ok=await userHasCustomerAccess(supabase,user.id,cid);if(!ok)throw permissionError('Kein Zugriff auf diesen Customer');await requireCustomerToolAccessIfMapped({supabase,table,customer_id:cid,userRole})}const limit=Math.min(1000,Number(query.limit)||200);let q=supabase.from(table).select('*').limit(limit);if(query.customer_id)q=q.eq('customer_id',String(query.customer_id));if(query.order_by)q=q.order(String(query.order_by),{ascending:query.order_dir!=='desc'});const{data,error}=await q;if(error)throw error;return (data||[]).filter((row)=>query.include_deleted==='true'||!isDeletedOrArchivedRow(row))}
 async function getRow({table,id,user,userRole}){const supabase=getSupabaseAdmin();if(!supabase)throw new Error('Supabase nicht konfiguriert');const cfg=tableConfig(table);if(!cfg)throw permissionError(`Tabelle '${table}' ist nicht erlaubt`);if(!id)throw badRequest('id fehlt');const{data,error}=await supabase.from(table).select('*').eq('id',id).maybeSingle();if(error)throw error;if(!data||isDeletedOrArchivedRow(data))throw notFound('Datensatz nicht gefunden');if(cfg.scope==='admin'&&userRole!=='admin')throw permissionError(`Tabelle '${table}' erlaubt nur Admin-Zugriffe`);if(isCustomerScoped(cfg)&&userRole!=='admin'){const ok=await userHasCustomerAccess(supabase,user.id,data.customer_id);if(!ok)throw permissionError('Kein Zugriff auf diesen Customer');await requireCustomerToolAccessIfMapped({supabase,table,customer_id:data.customer_id,userRole})}return data}

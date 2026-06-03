@@ -211,6 +211,65 @@ function v33FunctionalRoutes(supabase) {
     return null
   }
 
+  async function resolvePublicLoyaltyContext(slug) {
+    const wantedSlug = String(slug || '').trim()
+    let qrCampaign = null
+    let program = null
+
+    try {
+      const q = await supabase.from('qr_campaigns').select('*').eq('slug', wantedSlug).maybeSingle()
+      if (!q.error && q.data) qrCampaign = q.data
+    } catch (_) {}
+
+    try {
+      const p = await supabase.from('loyalty_programs').select('*').eq('slug', wantedSlug).maybeSingle()
+      if (!p.error && p.data) program = p.data
+    } catch (_) {}
+
+    if (!program && qrCampaign?.loyalty_program_id) {
+      try {
+        const p = await supabase.from('loyalty_programs').select('*').eq('id', qrCampaign.loyalty_program_id).maybeSingle()
+        if (!p.error && p.data) program = p.data
+      } catch (_) {}
+    }
+
+    if (!program && qrCampaign?.id) {
+      try {
+        const p = await supabase.from('loyalty_programs').select('*').eq('qr_campaign_id', qrCampaign.id).maybeSingle()
+        if (!p.error && p.data) program = p.data
+      } catch (_) {}
+    }
+
+    if (!program && qrCampaign?.customer_id) {
+      try {
+        const p = await supabase.from('loyalty_programs')
+          .select('*')
+          .eq('customer_id', qrCampaign.customer_id)
+          .order('updated_at', { ascending: false })
+          .limit(20)
+        if (!p.error) {
+          const rows = p.data || []
+          program = rows.find((row) => String(row.qr_campaign_id || '') === String(qrCampaign.id || '')) || rows.find((row) => row.active !== false) || rows[0] || null
+        }
+      } catch (_) {}
+    }
+
+    if (program && !qrCampaign) {
+      qrCampaign = await getQrCampaignForPublicProgram(program, wantedSlug)
+    }
+
+    // Alte Kampagnen hatten oft getrennte Slugs: QR-Kampagne=/q/[qrSlug], Loyalty-Programm=/l/[programSlug].
+    // Öffentlich ist ab V083 der QR-Kampagnen-Slug führend. Die Aktionen bleiben trotzdem am gefundenen Programm.
+    return {
+      program,
+      qrCampaign,
+      customerId: program?.customer_id || qrCampaign?.customer_id || null,
+      slug: wantedSlug,
+      canonical_slug: qrCampaign?.slug || wantedSlug,
+      program_slug: program?.slug || null
+    }
+  }
+
 
   function isPostgrestSchemaCacheError(error) {
     const code = String(error?.code || '')
@@ -224,22 +283,106 @@ function v33FunctionalRoutes(supabase) {
     return next
   }
 
+  function schemaMissingColumnName(error) {
+    const msg = String(error?.message || error?.details || error || '')
+    const patterns = [
+      /Could not find the '([^']+)' column/i,
+      /column \"([^\"]+)\" of relation/i,
+      /column \"([^\"]+)\" does not exist/i,
+      /'([^']+)' column/i
+    ]
+    for (const pattern of patterns) {
+      const match = msg.match(pattern)
+      if (match?.[1]) return match[1]
+    }
+    return null
+  }
+
   function loyaltyCustomerSafePayload(payload = {}) {
-    return omitPayloadKeys(payload, ['device_id', 'total_points', 'total_scans', 'last_activity_at', 'updated_at'])
+    // Diese Felder existieren nicht in jeder Live-Datenbank bzw. sind nach
+    // Migrationen manchmal noch nicht im PostgREST-Schema-Cache. Für das
+    // Punktezählen sind nur customer_id, loyalty_program_id, email,
+    // points_balance und metadata wirklich kritisch.
+    return omitPayloadKeys(payload, [
+      'device_id',
+      'total_points',
+      'total_scans',
+      'last_activity_at',
+      'updated_at',
+      'last_seen_at',
+      'phone',
+      'tier',
+      'consent_at'
+    ])
   }
 
   async function insertLoyaltyCustomerSafe(payload = {}) {
-    const first = await supabase.from('loyalty_customers').insert(payload).select('*').single()
-    if (!first.error) return first
-    if (!isPostgrestSchemaCacheError(first.error)) return first
-    return supabase.from('loyalty_customers').insert(loyaltyCustomerSafePayload(payload)).select('*').single()
+    let nextPayload = { ...(payload || {}) }
+    let lastResult = null
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const result = await supabase.from('loyalty_customers').insert(nextPayload).select('*').single()
+      lastResult = result
+      if (!result.error) return result
+      if (!isPostgrestSchemaCacheError(result.error)) return result
+      const missing = schemaMissingColumnName(result.error)
+      if (missing && Object.prototype.hasOwnProperty.call(nextPayload, missing)) {
+        delete nextPayload[missing]
+        continue
+      }
+      const stripped = loyaltyCustomerSafePayload(nextPayload)
+      if (Object.keys(stripped).length !== Object.keys(nextPayload).length) {
+        nextPayload = stripped
+        continue
+      }
+      return result
+    }
+    return lastResult || { data: null, error: new Error('Loyalty-Mitglied konnte nicht gespeichert werden.') }
   }
 
   async function updateLoyaltyCustomerSafe(id, patch = {}) {
-    const first = await supabase.from('loyalty_customers').update(patch).eq('id', id).select('*').single()
-    if (!first.error) return first
-    if (!isPostgrestSchemaCacheError(first.error)) return first
-    return supabase.from('loyalty_customers').update(loyaltyCustomerSafePayload(patch)).eq('id', id).select('*').single()
+    let nextPatch = { ...(patch || {}) }
+    let lastResult = null
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const result = await supabase.from('loyalty_customers').update(nextPatch).eq('id', id).select('*').single()
+      lastResult = result
+      if (!result.error) return result
+      if (!isPostgrestSchemaCacheError(result.error)) return result
+      const missing = schemaMissingColumnName(result.error)
+      if (missing && Object.prototype.hasOwnProperty.call(nextPatch, missing)) {
+        delete nextPatch[missing]
+        continue
+      }
+      const stripped = loyaltyCustomerSafePayload(nextPatch)
+      if (Object.keys(stripped).length !== Object.keys(nextPatch).length) {
+        nextPatch = stripped
+        continue
+      }
+      return result
+    }
+    return lastResult || { data: null, error: new Error('Loyalty-Mitglied konnte nicht aktualisiert werden.') }
+  }
+
+  async function insertLoyaltyTransactionSafe(payload = {}) {
+    let nextPayload = { ...(payload || {}) }
+    let lastResult = null
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const result = await supabase.from('loyalty_transactions').insert(nextPayload).select('*').single()
+      lastResult = result
+      if (!result.error) return result
+      if (!isPostgrestSchemaCacheError(result.error)) return result
+      const missing = schemaMissingColumnName(result.error)
+      if (missing && Object.prototype.hasOwnProperty.call(nextPayload, missing)) {
+        delete nextPayload[missing]
+        continue
+      }
+      const stripped = omitPayloadKeys(nextPayload, ['description', 'source', 'metadata', 'created_at', 'qr_campaign_id'])
+      if (Object.keys(stripped).length !== Object.keys(nextPayload).length) {
+        nextPayload = stripped
+        continue
+      }
+      return result
+    }
+    return lastResult || { data: null, error: new Error('Loyalty-Transaktion konnte nicht gespeichert werden.') }
   }
 
   function rewardDisplayTitle(reward = {}) {
@@ -663,37 +806,32 @@ function v33FunctionalRoutes(supabase) {
   }
 
   async function findPublicReward(customerId, rewardId, campaignId = null) {
-    let tableQueryFailed = false
     const matches = []
-    try {
-      const byId = await supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('id', rewardId).maybeSingle()
-      if (byId.error) tableQueryFailed = true
-      if (!byId.error && byId.data && isPublicActiveReward(byId.data)) matches.push(normalizeReward(byId.data, 'loyalty_rewards'))
-    } catch (_) {
-      tableQueryFailed = true
+    const keyMatches = (row = {}) => {
+      const p = row.payload && typeof row.payload === 'object' ? row.payload : {}
+      return [row.id, row.local_id, row.reward_id, p.id, p.local_id, p.reward_id]
+        .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
+        .some(v => String(v) === String(rewardId))
     }
 
-    let activeRecordRewardIds = new Set()
-    let hasActiveRecordRewards = false
     try {
       const recordsForFilter = await supabase.from('v33_functional_records')
         .select('*')
         .eq('customer_id', customerId)
         .eq('resource', 'loyalty_rewards')
-        .limit(200)
+        .limit(300)
       if (!recordsForFilter.error) {
-        const activeRows = activeFunctionalRecords(recordsForFilter.data || [])
-        const normalizedRows = activeRows.map(r => ({ id: r.local_id || r.id, local_id: r.local_id, customer_id: r.customer_id, ...(r.payload || {}) }))
-        activeRecordRewardIds = new Set(normalizedRows.map(r => String(r.id || r.local_id || r.reward_id || '')).filter(Boolean))
-        hasActiveRecordRewards = activeRecordRewardIds.size > 0
-        if (tableQueryFailed) {
-          for (const rec of activeRows) {
-            const nr = normalizeReward(rec, 'v33_functional_records_legacy')
-            if (!nr || !isPublicActiveReward(nr)) continue
-            if (String(nr?.id || '') === String(rewardId) || String(rec.local_id || '') === String(rewardId) || String(rec.payload?.id || '') === String(rewardId)) matches.push(nr)
-          }
+        for (const rec of activeFunctionalRecords(recordsForFilter.data || [])) {
+          if (!keyMatches(rec)) continue
+          const nr = normalizeReward(rec, 'v33_functional_records_legacy')
+          if (nr && isPublicActiveReward(nr)) matches.push(nr)
         }
       }
+    } catch (_) {}
+
+    try {
+      const byId = await supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('id', rewardId).maybeSingle()
+      if (!byId.error && byId.data && isPublicActiveReward(byId.data)) matches.push(normalizeReward(byId.data, 'loyalty_rewards'))
     } catch (_) {}
 
     const activeCampaignIds = new Set()
@@ -705,8 +843,7 @@ function v33FunctionalRoutes(supabase) {
     } catch (_) {}
     if (campaignId) activeCampaignIds.add(String(campaignId))
 
-    const programForReward = { id: matches.find(r => r?.loyalty_program_id)?.loyalty_program_id || null }
-    const reward = matches.find(r => r && (!r.qr_campaign_id || activeCampaignIds.has(String(r.qr_campaign_id))) && rewardBelongsToPublicSlug(r, { program: programForReward, campaignId, activeRecordRewardIds, hasActiveRecordRewards }))
+    const reward = matches.find(r => r && (!r.qr_campaign_id || activeCampaignIds.has(String(r.qr_campaign_id))))
     return reward || null
   }
 
@@ -1381,16 +1518,19 @@ function v33FunctionalRoutes(supabase) {
   router.get('/public/loyalty/:slug/status', async (req, res, next) => {
     try {
       const slug = String(req.params.slug || '').trim()
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = found.error ? null : (found.data || null)
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
       if (!program) return res.status(404).json({ ok: false, error: `Kein Loyalty-Programm für /l/${slug} gefunden.` })
 
-      const customerId = program.customer_id
+      const customerId = ctx.customerId || program.customer_id
+      const resolvedQrCampaign = ctx.qrCampaign || null
       const [settings, qr, rewards, rewardRecords, rules] = await Promise.all([
         v37GetOrCreateLoyaltySettings(customerId).catch(() => null),
-        program.qr_campaign_id
-          ? supabase.from('qr_campaigns').select('*').eq('id', program.qr_campaign_id).maybeSingle()
-          : supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle(),
+        resolvedQrCampaign
+          ? Promise.resolve({ error: null, data: resolvedQrCampaign })
+          : program.qr_campaign_id
+            ? supabase.from('qr_campaigns').select('*').eq('id', program.qr_campaign_id).maybeSingle()
+            : supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle(),
         supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).eq('active', true).limit(50),
         supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_rewards').limit(100),
         supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_reward_rules').limit(50)
@@ -1426,17 +1566,31 @@ function v33FunctionalRoutes(supabase) {
       }).filter(Boolean)
 
       const tableRewards = rewards.error ? [] : (rewards.data || [])
-      const activeRecordRewardRows = rewardRecords.error ? [] : activeFunctionalRecords(rewardRecords.data || [])
+      const allRecordRewardRows = rewardRecords.error ? [] : (rewardRecords.data || [])
+      const activeRecordRewardRows = activeFunctionalRecords(allRecordRewardRows)
       const recordRewards = activeRecordRewardRows.map(r => ({ id: r.local_id || r.id, local_id: r.local_id, customer_id: r.customer_id, ...(r.payload || {}) }))
-      const activeRecordRewardIds = new Set(recordRewards.map((r) => String(r.id || r.local_id || r.reward_id || '')).filter(Boolean))
+      const rewardKeys = (row = {}) => {
+        const p = row.payload && typeof row.payload === 'object' ? row.payload : {}
+        return [row.id, row.local_id, row.reward_id, p.id, p.local_id, p.reward_id]
+          .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
+          .map(v => String(v))
+      }
+      const activeRecordRewardIds = new Set(recordRewards.flatMap(rewardKeys))
+      const inactiveRecordRewardIds = new Set((allRecordRewardRows || [])
+        .filter(r => !isActiveFunctionalRecord(r))
+        .flatMap(rewardKeys))
       const hasActiveRecordRewards = activeRecordRewardIds.size > 0
 
-      // Die öffentliche Slug-Seite zeigt nur Rewards, die noch aktiv sind und zur
-      // aktuellen Kampagne bzw. zum aktuellen Programm gehören. Alte gelöschte
-      // Tabellenzeilen werden ausgeblendet, wenn der zugehörige aktive v33-Record
-      // nicht mehr existiert.
-      const rewardSourceRows = (rewards.error ? recordRewards : tableRewards)
-        .filter((r) => rewardBelongsToPublicSlug(r, { program, campaignId, activeRecordRewardIds, hasActiveRecordRewards }))
+      // V084: Die öffentliche Slug-Seite nutzt aktive v33-Reward-Records als
+      // führende Quelle, weil Admin-Löschen/Umbenennen dort zuerst landet.
+      // Tabellen-Rewards werden nur ergänzt, wenn es keine aktiven Records gibt
+      // oder wenn sie nicht durch einen aktiven/gelöschten Record überlagert sind.
+      const tableRewardCandidates = tableRewards
+        .filter((r) => !rewardKeys(r).some(k => inactiveRecordRewardIds.has(k)))
+        .filter((r) => !rewardKeys(r).some(k => activeRecordRewardIds.has(k)))
+      const rawRewardRows = hasActiveRecordRewards ? [...recordRewards, ...tableRewardCandidates] : tableRewardCandidates
+      const rewardSourceRows = rawRewardRows
+        .filter((r) => rewardBelongsToPublicSlug(r, { program, campaignId, activeRecordRewardIds, hasActiveRecordRewards: false }))
 
       const activeCampaignIds = new Set()
       try {
@@ -1497,11 +1651,11 @@ function v33FunctionalRoutes(supabase) {
       await recordPublicShieldEvent(supabase, shield, { action: 'public_scan_start', slug, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
 
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = found.error ? null : (found.data || null)
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
       if (!program || program.active === false) return res.status(404).json({ ok:false, code:'SLUG_INACTIVE', error:'Dieser QR-Link ist nicht aktiv.' })
 
-      const qrCampaign = await getQrCampaignForPublicProgram(program, slug)
+      const qrCampaign = ctx.qrCampaign || await getQrCampaignForPublicProgram(program, slug)
       if (qrCampaign && qrCampaign.active === false) return res.status(410).json({ ok:false, code:'QR_CAMPAIGN_INACTIVE', error:'Diese Kampagne ist beendet.' })
 
       const token = await createQrScanToken({ customerId: program.customer_id, slug, program, qrCampaign, req })
@@ -1536,17 +1690,16 @@ function v33FunctionalRoutes(supabase) {
       const rate = checkPublicAuthRateLimit(slug, email, req.ip || req.get('x-forwarded-for'))
       if (!rate.ok) return res.status(429).json({ ok:false, error:'Zu viele Login-Versuche. Bitte versuche es später erneut.', retry_after_ms: Math.max(0, rate.reset_at - Date.now()) })
 
-      let program = null
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      if (!found.error) program = found.data || null
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
 
       if (!program) {
         return res.status(404).json({ ok: false, error: `Kein Loyalty-Programm für /l/${slug} gefunden.` })
       }
 
-      const customerId = program.customer_id
+      const customerId = ctx.customerId || program.customer_id
       const settings = await v37GetOrCreateLoyaltySettings(customerId)
-      const qrCampaign = await getQrCampaignForPublicProgram(program, slug)
+      const qrCampaign = ctx.qrCampaign || await getQrCampaignForPublicProgram(program, slug)
       const qrLimitsForProgram = qrScanLimitSettings(qrCampaign, program)
       let points = authOnly ? 0 : num(qrCampaign?.points_per_scan ?? qrCampaign?.metadata?.points_per_scan ?? program.points_per_scan ?? program.metadata?.points_per_scan, 10)
       let member = null
@@ -1683,17 +1836,19 @@ function v33FunctionalRoutes(supabase) {
       }
 
       try {
-        await supabase.from('loyalty_transactions').insert({
+        const tx = await insertLoyaltyTransactionSafe({
           customer_id: customerId,
           loyalty_program_id: program.id,
           loyalty_customer_id: member.id,
-          qr_campaign_id: program.qr_campaign_id || null,
+          qr_campaign_id: qrCampaign?.id || program.qr_campaign_id || null,
           action: 'qr_scan',
           points,
+          source: 'qr',
           description: `QR Scan über /l/${slug}`,
           metadata: { public: true, slug, email, display_name: displayName, auth_method: 'email_password', scan_token_id: scanToken || null, require_rescan_for_points: Boolean(qrLimitsForProgram.require_rescan_for_points), scan_limits: qrScanLimitSettings(qrCampaign, program) }
         })
-      } catch (_) {}
+        if (tx.error) warnings.push({ code: 'LOYALTY_TRANSACTION_SAVE_FAILED', message: String(tx.error.message || tx.error) })
+      } catch (e) { warnings.push({ code: 'LOYALTY_TRANSACTION_SAVE_FAILED', message: String(e?.message || e) }) }
 
       const suspicion = await updateMemberSuspicionScore({ customerId, member, program, qrCampaign })
       if (suspicion) warnings.push({ code:'SUSPICION_SCORE', message:`Verdachts-Score ${suspicion.score}/100`, status:suspicion.status })
@@ -1824,8 +1979,8 @@ function v33FunctionalRoutes(supabase) {
       const password = clean(body.password)
       if (!email || !password) return res.status(400).json({ ok:false, error:'E-Mail und Passwort sind erforderlich.' })
 
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = found.error ? null : (found.data || null)
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
       if (!program) return res.status(404).json({ ok:false, error:'Bonusprogramm nicht gefunden.' })
 
       const existing = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
@@ -1860,8 +2015,8 @@ function v33FunctionalRoutes(supabase) {
       const password = clean(body.password)
       if (!email || !password) return res.status(400).json({ ok:false, error:'E-Mail und Passwort sind erforderlich.' })
 
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = found.error ? null : (found.data || null)
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
       if (!program) return res.status(404).json({ ok:false, error:'Bonusprogramm nicht gefunden.' })
 
       const existing = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
@@ -1899,8 +2054,8 @@ function v33FunctionalRoutes(supabase) {
       }
       if (!email || !password) return res.status(400).json({ ok:false, error:'E-Mail und Passwort sind erforderlich.' })
 
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = found.error ? null : (found.data || null)
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
       if (!program) return res.status(404).json({ ok:false, error:'Bonusprogramm nicht gefunden.' })
 
       const existing = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
@@ -1933,11 +2088,11 @@ function v33FunctionalRoutes(supabase) {
       const rate = checkPublicAuthRateLimit(`${slug}:redeem`, email, req.ip || req.get('x-forwarded-for'))
       if (!rate.ok) return res.status(429).json({ ok:false, error:'Zu viele Einlöse-Versuche. Bitte versuche es später erneut.', retry_after_ms: Math.max(0, rate.reset_at - Date.now()) })
 
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = found.error ? null : found.data
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
       if (!program) return res.status(404).json({ ok: false, error: `Kein Loyalty-Programm für /l/${slug} gefunden.` })
-      const customerId = program.customer_id
-      const campaignId = program.qr_campaign_id || null
+      const customerId = ctx.customerId || program.customer_id
+      const campaignId = ctx.qrCampaign?.id || program.qr_campaign_id || null
 
       const memberQuery = await supabase.from('loyalty_customers')
         .select('*')
@@ -2038,8 +2193,8 @@ function v33FunctionalRoutes(supabase) {
       const slug = String(req.params.slug || '').trim()
       const email = clean(req.body?.email)?.toLowerCase()
       if (!email) return res.status(400).json({ ok:false, error:'E-Mail fehlt.' })
-      const found = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = found.error ? null : found.data
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
       if (!program) return res.status(404).json({ ok:false, error:`Kein Loyalty-Programm für /l/${slug} gefunden.` })
       const member = await supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).maybeSingle()
       const resetToken = safeToken('reset')
@@ -2063,11 +2218,11 @@ function v33FunctionalRoutes(supabase) {
       await recordPublicShieldEvent(supabase, shield, { action: 'public_review', slug, email: body.reviewer_email || body.email, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
 
-      const foundProgram = await supabase.from('loyalty_programs').select('*').eq('slug', slug).maybeSingle()
-      const program = foundProgram.error ? null : (foundProgram.data || null)
-      const qrCampaign = program
+      const ctx = await resolvePublicLoyaltyContext(slug)
+      const program = ctx.program
+      const qrCampaign = ctx.qrCampaign || (program
         ? await getQrCampaignForPublicProgram(program, slug).catch(() => null)
-        : (await supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle().then(r => r.error ? null : r.data).catch(() => null))
+        : (await supabase.from('qr_campaigns').select('*').eq('slug', slug).maybeSingle().then(r => r.error ? null : r.data).catch(() => null)))
 
       const customerId = body.customer_id || program?.customer_id || qrCampaign?.customer_id || null
       const loyaltyProgramId = body.loyalty_program_id || program?.id || null
