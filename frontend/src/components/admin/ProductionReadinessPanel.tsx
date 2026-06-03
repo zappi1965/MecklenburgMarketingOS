@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react'
 import { Activity, DatabaseBackup, RefreshCw, ShieldAlert, WalletCards } from 'lucide-react'
 import { productionClient } from '@/lib/productionClient'
+import { AdminOnly } from '@/components/security/RoleGate'
+import { getCurrentSession } from '@/lib/authClient'
 
 function euro(cents?: number) { return `${((Number(cents || 0)) / 100).toFixed(2)} €` }
 
-export default function ProductionReadinessPanel() {
+function ProductionReadinessPanelContent() {
   const [status, setStatus] = useState<any>(null)
   const [logs, setLogs] = useState<any[]>([])
   const [usage, setUsage] = useState<any>(null)
@@ -16,6 +18,12 @@ export default function ProductionReadinessPanel() {
 
   async function load() {
     setBusy(true); setError('')
+    const session = await getCurrentSession().catch(() => null)
+    if (!session?.access_token) {
+      setError('Bitte im Backoffice neu einloggen. Production-Daten werden erst mit gültiger Admin-Session geladen.')
+      setBusy(false)
+      return
+    }
     try {
       const [s, l, u, b]: any = await Promise.all([
         productionClient.status(),
@@ -105,4 +113,9 @@ export default function ProductionReadinessPanel() {
         </section>
     </main>
   )
+}
+
+
+export default function ProductionReadinessPanel() {
+  return <AdminOnly><ProductionReadinessPanelContent /></AdminOnly>
 }

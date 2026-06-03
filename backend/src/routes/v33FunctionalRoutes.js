@@ -385,6 +385,102 @@ function v33FunctionalRoutes(supabase) {
     return lastResult || { data: null, error: new Error('Loyalty-Transaktion konnte nicht gespeichert werden.') }
   }
 
+
+  async function insertTableSchemaSafe(table, payload = {}, options = {}) {
+    let nextPayload = { ...(payload || {}) }
+    let lastResult = null
+    const single = options.single !== false
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      let query = supabase.from(table).insert(nextPayload).select('*')
+      if (single) query = query.single()
+      const result = await query
+      lastResult = result
+      if (!result.error) return result
+      if (!isPostgrestSchemaCacheError(result.error)) return result
+      const missing = schemaMissingColumnName(result.error)
+      if (missing && Object.prototype.hasOwnProperty.call(nextPayload, missing)) {
+        delete nextPayload[missing]
+        continue
+      }
+      // Fallback: Einstellungen müssen den Public-Flow nie blockieren.
+      const stripped = omitPayloadKeys(nextPayload, [
+        'require_rescan_for_points',
+        'rotate_qr_after_scan',
+        'daily_point_limit_per_member',
+        'weekly_point_limit_per_member',
+        'weekly_scan_limit_enabled',
+        'suspicion_score_threshold',
+        'birthday_bonus_points',
+        'referral_bonus_referrer',
+        'referral_bonus_friend',
+        'qr_style',
+        'qr_foreground',
+        'qr_background',
+        'qr_logo_text',
+        'brand_font',
+        'brand_primary',
+        'brand_secondary',
+        'brand_accent',
+        'level_rules',
+        'metadata',
+        'updated_at'
+      ])
+      if (Object.keys(stripped).length !== Object.keys(nextPayload).length) {
+        nextPayload = stripped
+        continue
+      }
+      return result
+    }
+    return lastResult || { data: null, error: new Error(`${table} konnte nicht gespeichert werden.`) }
+  }
+
+  async function updateTableSchemaSafe(table, patch = {}, applyQuery = (q) => q, options = {}) {
+    let nextPatch = { ...(patch || {}) }
+    let lastResult = null
+    const single = options.single === true
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      let query = applyQuery(supabase.from(table).update(nextPatch)).select('*')
+      if (single) query = query.single()
+      const result = await query
+      lastResult = result
+      if (!result.error) return result
+      if (!isPostgrestSchemaCacheError(result.error)) return result
+      const missing = schemaMissingColumnName(result.error)
+      if (missing && Object.prototype.hasOwnProperty.call(nextPatch, missing)) {
+        delete nextPatch[missing]
+        continue
+      }
+      const stripped = omitPayloadKeys(nextPatch, [
+        'require_rescan_for_points',
+        'rotate_qr_after_scan',
+        'daily_point_limit_per_member',
+        'weekly_point_limit_per_member',
+        'weekly_scan_limit_enabled',
+        'suspicion_score_threshold',
+        'birthday_bonus_points',
+        'referral_bonus_referrer',
+        'referral_bonus_friend',
+        'qr_style',
+        'qr_foreground',
+        'qr_background',
+        'qr_logo_text',
+        'brand_font',
+        'brand_primary',
+        'brand_secondary',
+        'brand_accent',
+        'level_rules',
+        'metadata',
+        'updated_at'
+      ])
+      if (Object.keys(stripped).length !== Object.keys(nextPatch).length) {
+        nextPatch = stripped
+        continue
+      }
+      return result
+    }
+    return lastResult || { data: null, error: new Error(`${table} konnte nicht aktualisiert werden.`) }
+  }
+
   function rewardDisplayTitle(reward = {}) {
     const meta = reward.metadata && typeof reward.metadata === 'object' ? reward.metadata : {}
     return clean(reward.title || reward.name || reward.label || reward.reward_title || reward.reward_name || reward.display_name || reward.benefit || reward.description || meta.title || meta.name || meta.label) || 'Prämie'
@@ -925,13 +1021,20 @@ function v33FunctionalRoutes(supabase) {
 
   async function uniqueSlug(baseSlug, excludeQrId = null) {
     let slug = slugify(baseSlug)
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 50; i++) {
       const candidate = i === 0 ? slug : `${slug}-${i + 1}`
-      let q = supabase.from('qr_campaigns').select('id').eq('slug', candidate).limit(1)
-      if (excludeQrId) q = q.neq('id', excludeQrId)
-      const { data, error } = await q
-      if (error) throw error
-      if (!data || data.length === 0) return candidate
+      let qrQuery = supabase.from('qr_campaigns').select('id').eq('slug', candidate).limit(1)
+      if (excludeQrId) qrQuery = qrQuery.neq('id', excludeQrId)
+      const qr = await qrQuery
+      if (qr.error) throw qr.error
+      const lp = await supabase.from('loyalty_programs').select('id').eq('slug', candidate).limit(1)
+      if (lp.error && !isPostgrestSchemaCacheError(lp.error)) throw lp.error
+      const landing = await supabase.from('public_landing_pages').select('id').eq('slug', candidate).limit(1)
+      if (landing.error && !isPostgrestSchemaCacheError(landing.error)) throw landing.error
+      const qrTaken = (qr.data || []).length > 0
+      const lpTaken = (lp.data || []).length > 0
+      const landingTaken = (landing.data || []).length > 0
+      if (!qrTaken && !lpTaken && !landingTaken) return candidate
     }
     return `${slug}-${crypto.randomBytes(4).toString('hex')}`
   }
@@ -2497,7 +2600,7 @@ function v33FunctionalRoutes(supabase) {
       metadata: { v37_defaults: true, require_rescan_for_points: true, rotate_qr_after_scan: false }
     }
 
-    const created = await supabase.from('v37_loyalty_settings').insert(defaults).select('*').single()
+    const created = await insertTableSchemaSafe('v37_loyalty_settings', defaults, { single: true })
     if (created.error) throw created.error
     return created.data
   }
@@ -2576,12 +2679,7 @@ function v33FunctionalRoutes(supabase) {
 
       Object.keys(patch).forEach(k => patch[k] === undefined && delete patch[k])
 
-      const updated = await supabase
-        .from('v37_loyalty_settings')
-        .update(patch)
-        .eq('customer_id', customerId)
-        .select('*')
-        .single()
+      const updated = await updateTableSchemaSafe('v37_loyalty_settings', patch, (q) => q.eq('customer_id', customerId), { single: true })
 
       if (updated.error) throw updated.error
 
@@ -3534,13 +3632,13 @@ function v33FunctionalRoutes(supabase) {
       }
 
       const settings = await v37GetOrCreateLoyaltySettings(customerId)
-      await supabase.from('v37_loyalty_settings').update({
+      await updateTableSchemaSafe('v37_loyalty_settings', {
         daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
         weekly_scan_limit: Number(body.weekly_scan_limit || settings.weekly_scan_limit || 5),
         daily_point_limit_per_member: Math.max(0, Math.floor(num(body.daily_point_limit_per_member, settings.daily_point_limit_per_member || 0))),
         suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, settings.suspicion_score_threshold || 70)))),
         updated_at: new Date().toISOString()
-      }).eq('customer_id', customerId)
+      }, (q) => q.eq('customer_id', customerId))
 
       res.json({ ok: true, loyalty_program: updated.data, qr_campaign: provisioned.qr_campaign })
     } catch (e) { next(e) }
@@ -3617,7 +3715,7 @@ function v33FunctionalRoutes(supabase) {
         settingsMeta.weekly_scan_limit_enabled = body.weekly_scan_limit_enabled === true
         settingsMeta.require_rescan_for_points = body.require_rescan_for_points !== false
         settingsMeta.rotate_qr_after_scan = body.rotate_qr_after_scan === true
-        await supabase.from('v37_loyalty_settings').update({
+        await updateTableSchemaSafe('v37_loyalty_settings', {
           daily_scan_limit: Number(body.daily_scan_limit || settings.daily_scan_limit || 1),
           weekly_scan_limit: body.weekly_scan_limit_enabled === true ? Math.max(0, Math.floor(num(body.weekly_scan_limit, settings.weekly_scan_limit || 0))) : 0,
           weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true,
@@ -3625,7 +3723,7 @@ function v33FunctionalRoutes(supabase) {
           suspicion_score_threshold: Math.max(0, Math.min(100, Math.floor(num(body.suspicion_score_threshold, settings.suspicion_score_threshold || 70)))),
           metadata: settingsMeta,
           updated_at: new Date().toISOString()
-        }).eq('customer_id', customerId)
+        }, (q) => q.eq('customer_id', customerId))
       }
 
       if (Array.isArray(body.rules)) {

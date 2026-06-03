@@ -5,6 +5,7 @@ const { getSupabaseAdmin } = require('./lib/supabaseAdmin')
 const authMiddleware = require('./middleware/auth')
 const requireCustomerAccess = require('./middleware/requireCustomerAccess')
 const { initSentry, attachErrorHandler, getSentry } = require('./services/sentryService')
+const { recordAdminLog } = require('./services/adminLogService')
 
 const monitoringRoutes = require('./routes/monitoringRoutes')
 const opsRoutes = require('./routes/opsRoutes')
@@ -104,12 +105,35 @@ app.get('/api/health', (_, res) => {
   res.json({ ok: true, service: 'MMOS Backend', timestamp: new Date().toISOString() })
 })
 
+// Public, no-auth client error collector. This prevents public QR/slug pages from
+// creating noisy 401 logs when the browser reports frontend errors without an admin session.
+app.post('/api/production/client-error', async (req, res) => {
+  try {
+    const body = req.body || {}
+    await recordAdminLog(supabaseAdmin, {
+      event_type: 'client_error',
+      severity: 'error',
+      actor_user_id: null,
+      actor_email: null,
+      actor_role: null,
+      customer_id: null,
+      route: body.pathname || req.get('referer') || null,
+      method: 'CLIENT',
+      message: body.message || 'Frontend error',
+      user_agent: req.headers['user-agent'],
+      metadata: { source: 'ClientErrorReporter.public', ...body }
+    }).catch(() => null)
+  } catch (_) {}
+  res.json({ ok: true })
+})
+
 const PUBLIC_PATHS = [
   /^\/api\/health$/,
   /^\/api\/system\/health$/,
   /^\/api\/system\/status$/,
   /^\/api\/v33-functional\/v42\/health$/,
   /^\/api\/auth\//,
+  /^\/api\/production\/client-error$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/status$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/scan-start$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/join-or-scan$/,
