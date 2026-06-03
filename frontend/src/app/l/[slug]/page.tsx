@@ -140,8 +140,8 @@ function PublicLoyaltyPageContent() {
   const successTitle = campaignTexts.success_title || 'Deine Punkte wurden gespeichert.'
   const successMessage = campaignTexts.success_message || 'Danke für deine Teilnahme. Deine Vorteile werden direkt deinem Bonuskonto zugeordnet.'
   const fineprint = campaignTexts.fineprint || 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Deine Angaben werden dem jeweiligen Anbieter zugeordnet.'
-  const marketingConsentVersion = campaignTexts.marketing_consent_version || 'marketing-reminders-v1-2026-06-01'
-  const marketingConsentText = campaignTexts.marketing_consent_text || 'Ich möchte per E-Mail zu Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen dieses Anbieters kontaktiert werden. Ich kann die Einwilligung jederzeit widerrufen.'
+  const marketingConsentVersion = campaignTexts.marketing_consent_version || 'marketing-reactivation-v2-2026-06-03'
+  const marketingConsentText = campaignTexts.marketing_consent_text || 'Ich möchte per E-Mail Informationen zu meinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten. Ich kann diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen.'
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return `/l/${slug}`
@@ -402,7 +402,7 @@ function PublicLoyaltyPageContent() {
                 />
                 <span>
                   <b>Kontakt zu Werbezwecken erlauben</b>
-                  {marketingConsentText} Nach dem Absenden erhältst du eine Bestätigungs-E-Mail. Erst nach dieser Bestätigung werden Werbe-/Reminder-Mails aktiviert.
+                  {marketingConsentText} Nach dem Absenden erhältst du eine Bestätigungs-E-Mail. Erst nach dieser Bestätigung werden Werbe-, Prämien- und Reaktivierungsmails aktiviert.
                 </span>
               </label>
 

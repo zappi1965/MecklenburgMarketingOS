@@ -47,7 +47,7 @@ function htmlReminder({ draft, unsubscribe_url }) {
       </div>
       <div style="background:#fff;border:1px solid #e5e9f3;border-radius:20px;margin-top:16px;padding:24px;line-height:1.6">
         <p>${esc(draft.body)}</p>
-        <p style="margin-top:22px;color:#5c667a;font-size:13px">Du erhältst diese E-Mail, weil du Werbe-/Reminder-Mails für dieses Bonusprogramm bestätigt hast.</p>
+        <p style="margin-top:22px;color:#5c667a;font-size:13px">Du erhältst diese E-Mail, weil du Werbe-, Prämien- und Reaktivierungsmails für dieses Bonusprogramm bestätigt hast.</p>
         <p style="font-size:13px"><a href="${esc(unsubscribe_url)}">Abmelden / Einwilligung widerrufen</a></p>
       </div>
     </div>
@@ -135,7 +135,7 @@ async function sendMarketingReminderDrafts(supabase, { customer_id, draft_ids = 
       failed.push({ id: rec.local_id, error: 'Draft unvollständig oder ohne Abmeldelink.' })
       continue
     }
-    const text = `${draft.body}\n\nDu erhältst diese E-Mail, weil du Werbe-/Reminder-Mails bestätigt hast.\nAbmelden: ${draft.unsubscribe_url}`
+    const text = `${draft.body}\n\nDu erhältst diese E-Mail, weil du Werbe-, Prämien- und Reaktivierungsmails bestätigt hast.\nAbmelden: ${draft.unsubscribe_url}`
     const html = htmlReminder({ draft, unsubscribe_url: draft.unsubscribe_url })
     try {
       const result = await mail.send({

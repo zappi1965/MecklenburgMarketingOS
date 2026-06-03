@@ -4,7 +4,8 @@ const crypto = require('crypto')
 const { V35BusinessEngine, sentimentFromRating } = require('../services/v35BusinessEngine')
 const { inspectPublicAction, recordPublicShieldEvent } = require('../services/publicEndpointShieldService')
 const { writeCriticalAudit } = require('../services/criticalAuditService')
-const { requestMarketingDoubleOptIn, confirmMarketingConsentToken, withdrawMarketingConsentByTokenOrLogin, consentFromBody } = require('../services/marketingConsentMailService')
+const { requestMarketingDoubleOptIn, confirmMarketingConsentToken, withdrawMarketingConsentByTokenOrLogin, consentFromBody, createUnsubscribeToken } = require('../services/marketingConsentMailService')
+const MailService = require('../services/mailService')
 
 const safeToken = (prefix = 'tok') => `${prefix}_${crypto.randomBytes(12).toString('hex')}`
 const clean = (v) => v === undefined || v === null ? null : String(v).trim() || null
@@ -49,7 +50,7 @@ function withPublicPassword(member, password, now = new Date().toISOString()) {
 }
 
 
-const MARKETING_CONSENT_VERSION = 'marketing-reminders-v1-2026-06-01'
+const MARKETING_CONSENT_VERSION = 'marketing-reactivation-v2-2026-06-03'
 function marketingConsentFromBody(body = {}) {
   return consentFromBody(body)
 }
@@ -3895,6 +3896,555 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
+
+
+  async function verifyReactivationStaffCode(customerId, code) {
+    const raw = clean(code)
+    if (!raw) return false
+    const normalized = String(raw).trim()
+    try {
+      const rows = await supabase.from('staff_codes').select('*').eq('customer_id', customerId).limit(300)
+      if (!rows.error && (rows.data || []).some((row) => {
+        const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+        const candidate = clean(row.code || row.pin || row.staff_code || row.value || meta.code || meta.pin)
+        const status = String(row.status || meta.status || '').toLowerCase()
+        return candidate === normalized && row.active !== false && !['deleted','archived','inactive','gesperrt','deaktiviert'].includes(status)
+      })) return true
+    } catch (_) {}
+    try {
+      const records = await supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'staff_codes').limit(300)
+      if (!records.error && activeFunctionalRecords(records.data || []).some((r) => {
+        const payload = r.payload || r
+        const candidate = clean(payload.code || payload.pin || payload.staff_code || payload.value)
+        return candidate === normalized && payload.active !== false
+      })) return true
+    } catch (_) {}
+    return false
+  }
+
+  async function recordReactivationEvent(payload = {}) {
+    try { await insertTableSchemaSafe('customer_reactivation_events', { id: payload.id || safeToken('react_event'), created_at: new Date().toISOString(), ...payload }, { single: false }) } catch (_) {}
+  }
+
+  function reactivationMailFrom() {
+    return clean(process.env.REACTIVATION_MAIL_FROM) || 'MecklenburgMarketing Loyalty <loyalty@mecklenburgmarketing.de>'
+  }
+
+  function publicFrontendBase(req) {
+    const envBase = clean(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL)
+    const origin = clean(req?.get?.('origin'))
+    const referer = clean(req?.get?.('referer'))
+    let fromReferer = null
+    try { if (referer) fromReferer = new URL(referer).origin } catch (_) {}
+    return String(envBase || origin || fromReferer || 'https://mecklenburgmarketing.de').replace(/\/+$/, '')
+  }
+
+  function reactivationUrl(req, link = {}) {
+    return `${publicFrontendBase(req)}/reactivate/${encodeURIComponent(link.token || link.recovery_token || '')}`
+  }
+
+  function hasReactivationMailConsent(member = {}, settings = {}) {
+    // V092: Rückholmails dürfen ausschließlich auf bestätigter Slug-/Loyalty-Werbeeinwilligung basieren.
+    // Ein Settings-Fallback auf "ohne Consent versenden" ist bewusst deaktiviert.
+    const meta = member?.metadata || {}
+    const evidence = meta?.marketing_consent || meta?.marketingConsent || {}
+    const purposes = [
+      ...(Array.isArray(evidence?.purposes) ? evidence.purposes : []),
+      ...(Array.isArray(meta?.marketing_consent_purposes) ? meta.marketing_consent_purposes : []),
+      ...(Array.isArray(member?.marketing_consent_purposes) ? member.marketing_consent_purposes : [])
+    ].map((v) => String(v || '').toLowerCase())
+    const text = String(evidence?.text || meta?.marketing_consent_text || member?.marketing_consent_text || '').toLowerCase()
+    const statusGranted = Boolean(
+      member?.marketing_consent_status === 'granted' ||
+      meta?.marketing_consent_status === 'granted' ||
+      evidence?.status === 'granted'
+    )
+    const explicitlyForReactivation = purposes.includes('reactivation') || text.includes('reaktivierung') || text.includes('reaktivierungsaktion')
+    return Boolean(statusGranted && explicitlyForReactivation)
+  }
+
+  function escapeReactivationHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))
+  }
+
+  function reactivationTemplateContext({ link = {}, settings = {}, url = '', customer = null, isReminder = false } = {}) {
+    const displayName = clean(link.display_name || link.name || link.email) || 'du'
+    const firstName = String(displayName).split(/\s+/).filter(Boolean)[0] || displayName
+    const reward = clean(link.reward_name || settings?.reward_name) || 'Deine Rückhol-Prämie'
+    const points = num(link.reward_points ?? settings?.reward_points, 0)
+    const expiry = link.expires_at ? new Date(link.expires_at).toLocaleDateString('de-DE') : 'auf Widerruf'
+    const provider = clean(customer?.name || customer?.company || customer?.title || settings?.provider_name || settings?.business_name) || 'dein Anbieter'
+    const redeemHint = clean(settings?.redeem_hint || settings?.email_redeem_hint) || 'Die Einlösung ist nur einmal möglich und wird vor Ort mit einem Mitarbeitercode bestätigt.'
+    return {
+      vorname: firstName,
+      first_name: firstName,
+      name: displayName,
+      endkunde: displayName,
+      kunde: provider,
+      betrieb: provider,
+      anbieter: provider,
+      praemie: reward,
+      prämie: reward,
+      reward,
+      punkte: points > 0 ? String(points) : '',
+      points: points > 0 ? String(points) : '',
+      punkte_text: points > 0 ? `${points} Bonuspunkte / Vorteil` : 'Persönliche Prämie',
+      gueltig_bis: expiry,
+      gültig_bis: expiry,
+      rueckhol_link: url,
+      rückhol_link: url,
+      link: url,
+      button_link: url,
+      einloese_hinweis: redeemHint,
+      einlöse_hinweis: redeemHint,
+      mail_typ: isReminder ? 'Reminder' : 'Rückholmail'
+    }
+  }
+
+  function renderReactivationTemplate(template, context = {}) {
+    const source = String(template || '')
+    return source.replace(/\{\s*([^{}]+?)\s*\}/g, (match, key) => {
+      const normalized = String(key || '').trim().toLowerCase()
+      if (Object.prototype.hasOwnProperty.call(context, normalized)) return context[normalized] ?? ''
+      return match
+    })
+  }
+
+  function defaultReactivationBody(isReminder = false) {
+    return isReminder
+      ? [
+          'Hallo {vorname},',
+          '',
+          'deine persönliche Rückhol-Prämie bei {betrieb} wartet noch auf dich:',
+          '',
+          '{praemie}',
+          '',
+          'Hier kannst du sie öffnen:',
+          '{rueckhol_link}',
+          '',
+          '{einloese_hinweis}'
+        ].join('\n')
+      : [
+          'Hallo {vorname},',
+          '',
+          'wir haben dich bei {betrieb} vermisst. Als kleines Dankeschön wartet diese persönliche Rückhol-Prämie auf dich:',
+          '',
+          '{praemie}',
+          '',
+          'Öffne deinen persönlichen Einmal-Link:',
+          '{rueckhol_link}',
+          '',
+          'Gültig bis: {gueltig_bis}',
+          '{einloese_hinweis}'
+        ].join('\n')
+  }
+
+  function reactivationMailSubject({ link, settings, url, customer, isReminder = false }) {
+    const context = reactivationTemplateContext({ link, settings, url, customer, isReminder })
+    const template = isReminder
+      ? (settings?.reminder_subject || 'Erinnerung: Deine Rückhol-Prämie wartet noch')
+      : (settings?.email_subject || 'Wir haben dich vermisst ☕')
+    return renderReactivationTemplate(template, context).replace(/[\r\n]+/g, ' ').trim()
+  }
+
+  function reactivationMailHtml({ link, settings, url, customer, isReminder = false, unsubscribeUrl = '' }) {
+    const context = reactivationTemplateContext({ link, settings, url, customer, isReminder })
+    const bodyTemplate = isReminder
+      ? (settings?.reminder_body_template || settings?.reminder_intro || defaultReactivationBody(true))
+      : (settings?.email_body_template || settings?.email_intro || defaultReactivationBody(false))
+    const renderedBody = renderReactivationTemplate(bodyTemplate, context)
+    const signature = renderReactivationTemplate(settings?.email_signature || '', context)
+    const reward = context.praemie
+    const pointsText = context.punkte_text
+    const expiry = context.gueltig_bis
+    const buttonLabel = renderReactivationTemplate(isReminder ? (settings?.reminder_button_label || settings?.email_button_label || 'Rückhol-Prämie öffnen') : (settings?.email_button_label || 'Rückhol-Prämie öffnen'), context)
+    const bodyEscUrl = escapeReactivationHtml(url)
+    const bodyHtml = escapeReactivationHtml(renderedBody)
+      .split(bodyEscUrl).join(`<a href="${escapeReactivationHtml(url)}">${bodyEscUrl}</a>`)
+      .replace(/\n/g, '<br/>')
+    const signatureHtml = signature ? `<p style="white-space:pre-line;color:#475569;margin-top:18px">${escapeReactivationHtml(signature)}</p>` : ''
+    return `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f6f7fb;margin:0;padding:24px;color:#172033"><div style="max-width:620px;margin:auto;background:#fff;border-radius:18px;padding:28px;border:1px solid #e7eaf3"><p style="margin:0 0 8px;color:#64748b;font-size:13px">${escapeReactivationHtml(context.betrieb)}</p><h1 style="margin:0 0 12px;font-size:26px">${isReminder ? 'Deine Rückhol-Prämie wartet noch' : 'Wir haben dich vermisst'}</h1><div style="line-height:1.58;font-size:15px;color:#172033">${bodyHtml}</div><div style="background:#f3f7ff;border:1px solid #dbe7ff;border-radius:14px;padding:18px;margin:20px 0"><b style="font-size:18px">${escapeReactivationHtml(reward)}</b><p style="margin:8px 0 0;color:#475569">${escapeReactivationHtml(pointsText)} · gültig bis ${escapeReactivationHtml(expiry)}</p></div><p><a href="${escapeReactivationHtml(url)}" style="display:inline-block;background:#172033;color:#fff;text-decoration:none;padding:13px 18px;border-radius:12px;font-weight:bold">${escapeReactivationHtml(buttonLabel)}</a></p><p style="color:#475569">${escapeReactivationHtml(context.einloese_hinweis)}</p>${signatureHtml}<hr style="border:none;border-top:1px solid #e7eaf3;margin:24px 0"/><p style="font-size:12px;color:#64748b">Du erhältst diese E-Mail, weil du die Werbe-, Prämien- und Reaktivierungsmails dieses Anbieters per Double-Opt-in bestätigt hast. Der Pflichtfooter und der Abmeldelink werden automatisch durch MMOS ergänzt. ${unsubscribeUrl ? `<br/><a href="${escapeReactivationHtml(unsubscribeUrl)}">Abmelden / Einwilligung widerrufen</a>` : ''}</p></div></body></html>`
+  }
+
+  function reactivationMailText({ link, settings, url, isReminder = false, unsubscribeUrl = '', customer = null }) {
+    const context = reactivationTemplateContext({ link, settings, url, customer, isReminder })
+    const bodyTemplate = isReminder
+      ? (settings?.reminder_body_template || settings?.reminder_intro || defaultReactivationBody(true))
+      : (settings?.email_body_template || settings?.email_intro || defaultReactivationBody(false))
+    const body = renderReactivationTemplate(bodyTemplate, context)
+    const signature = renderReactivationTemplate(settings?.email_signature || '', context)
+    return [
+      body,
+      '',
+      `Prämie: ${context.praemie}`,
+      context.punkte ? `Bonuspunkte / Vorteil: ${context.punkte}` : '',
+      `Gültig bis: ${context.gueltig_bis}`,
+      `Link: ${url}`,
+      '',
+      context.einloese_hinweis,
+      signature ? `\n${signature}` : '',
+      '',
+      'Du erhältst diese E-Mail, weil du die Werbe-, Prämien- und Reaktivierungsmails dieses Anbieters per Double-Opt-in bestätigt hast.',
+      unsubscribeUrl ? `Abmelden / Einwilligung widerrufen: ${unsubscribeUrl}` : ''
+    ].filter(Boolean).join('\n')
+  }
+
+  async function getReactivationSettings(customerId, qrCampaignId) {
+    const byQr = qrCampaignId ? await supabase.from('customer_reactivation_settings').select('*').eq('qr_campaign_id', qrCampaignId).limit(1).maybeSingle().catch(() => ({ data: null })) : { data: null }
+    if (byQr.data) return byQr.data
+    const byCustomer = customerId ? await supabase.from('customer_reactivation_settings').select('*').eq('customer_id', customerId).limit(1).maybeSingle().catch(() => ({ data: null })) : { data: null }
+    return byCustomer.data || {}
+  }
+
+  async function logReactivationMailEvent({ link, to, subject, status, provider = 'resend', result = null, error = null, isReminder = false }) {
+    try {
+      await insertTableSchemaSafe('mail_events', {
+        customer_id: link.customer_id ? String(link.customer_id) : null,
+        recipient: to,
+        subject,
+        template_key: isReminder ? 'customer_reactivation_reminder' : 'customer_reactivation',
+        provider,
+        status,
+        metadata: { link_id: link.id, token: link.token, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id, result, error },
+        created_at: new Date().toISOString()
+      }, { single: false })
+    } catch (_) {}
+  }
+
+  async function sendReactivationLinkMail(req, link, { settings = null, isReminder = false, testTo = null } = {}) {
+    if (!link?.token && !testTo) throw new Error('Rückhol-Link hat keinen Token.')
+    const customerResult = link.customer_id ? await supabase.from('customers').select('*').eq('id', link.customer_id).maybeSingle().catch(() => ({ data: null })) : { data: null }
+    const memberResult = link.loyalty_customer_id ? await supabase.from('loyalty_customers').select('*').eq('id', link.loyalty_customer_id).maybeSingle().catch(() => ({ data: null })) : { data: null }
+    const customer = customerResult.data || null
+    const member = memberResult.data || null
+    const resolvedSettings = settings || await getReactivationSettings(link.customer_id, link.qr_campaign_id)
+    if (!testTo && !hasReactivationMailConsent(member || {}, resolvedSettings || {})) {
+      const now = new Date().toISOString()
+      await updateTableSchemaSafe('customer_reactivation_links', { email_status: 'skipped_no_consent', last_mail_error: 'Keine bestätigte Slug-Double-Opt-in-Einwilligung für Reaktivierungsmails.', consent_basis: 'slug_double_opt_in_reactivation', consent_checked_at: now, updated_at: now, metadata: { ...(link.metadata || {}), last_mail_skip_reason: 'no_reactivation_double_opt_in', last_mail_skip_at: now } }, (q) => q.eq('id', link.id))
+      await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id, reactivation_link_id: link.id, event_type: 'mail_skipped_no_consent', metadata: { email: link.email } })
+      return { ok: false, skipped: true, reason: 'no_marketing_consent', email: link.email }
+    }
+    const to = clean(testTo || link.email || member?.email)
+    if (!to) throw new Error('E-Mail-Adresse fehlt.')
+    const url = testTo && !link.token ? `${publicFrontendBase(req)}/reactivate/test-token` : reactivationUrl(req, link)
+    let unsubscribeUrl = ''
+    try {
+      if (!testTo && member?.id && to) {
+        const unsub = await createUnsubscribeToken(supabase, { customer_id: link.customer_id, member_id: member.id, email: to, slug: link.metadata?.slug || '' })
+        unsubscribeUrl = unsub?.url || ''
+      }
+    } catch (_) {}
+    const subject = reactivationMailSubject({ link, settings: resolvedSettings, url, customer, isReminder })
+    const html = reactivationMailHtml({ link, settings: resolvedSettings, url, customer, isReminder, unsubscribeUrl })
+    const text = reactivationMailText({ link, settings: resolvedSettings, url, customer, isReminder, unsubscribeUrl })
+    const mail = new MailService()
+    const now = new Date().toISOString()
+    try {
+      const result = await mail.send({ to, subject, html, text, from: reactivationMailFrom(), replyTo: clean(process.env.REACTIVATION_MAIL_REPLY_TO || process.env.MAIL_REPLY_TO) || 'info@mecklenburgmarketing.de', requireDelivery: false })
+      if (!testTo && link.id) {
+        const patch = isReminder
+          ? { email_status: result?.dryRun ? 'dry_run' : 'reminder_sent', last_reminder_at: now, reminder_count: num(link.reminder_count, 0) + 1, mail_provider_id: result?.id || link.mail_provider_id || null, consent_basis: 'slug_double_opt_in_reactivation', consent_checked_at: now, updated_at: now, metadata: { ...(link.metadata || {}), last_reminder_result: result } }
+          : { status: ['open','created',''].includes(String(link.status || 'open').toLowerCase()) ? 'sent' : link.status, email_status: result?.dryRun ? 'dry_run' : 'sent', sent_at: link.sent_at || now, mail_sent_at: now, mail_provider_id: result?.id || null, consent_basis: 'slug_double_opt_in_reactivation', consent_checked_at: now, updated_at: now, metadata: { ...(link.metadata || {}), mail_result: result } }
+        await updateTableSchemaSafe('customer_reactivation_links', patch, (q) => q.eq('id', link.id))
+        await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id, reactivation_link_id: link.id, event_type: isReminder ? 'mail_reminder_sent' : 'mail_sent', metadata: { email: to, result } })
+      }
+      await logReactivationMailEvent({ link, to, subject, status: result?.dryRun ? 'dry_run' : 'sent', provider: result?.provider || 'resend', result, isReminder })
+      return { ok: true, email: to, result }
+    } catch (error) {
+      if (!testTo && link.id) {
+        await updateTableSchemaSafe('customer_reactivation_links', { email_status: 'failed', failed_at: now, last_mail_error: error.message, updated_at: now, metadata: { ...(link.metadata || {}), last_mail_error: error.message, last_mail_error_at: now } }, (q) => q.eq('id', link.id))
+        await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id, reactivation_link_id: link.id, event_type: 'mail_failed', metadata: { email: to, error: error.message, code: error.code || null } })
+      }
+      await logReactivationMailEvent({ link, to, subject, status: 'failed', provider: 'resend', error: { message: error.message, code: error.code || null }, isReminder })
+      throw error
+    }
+  }
+
+  async function loadReactivationLinks(customerId, qrCampaignId, statuses = []) {
+    let query = supabase.from('customer_reactivation_links').select('*').eq('customer_id', customerId).eq('qr_campaign_id', qrCampaignId).limit(500)
+    if (statuses.length) query = query.in('status', statuses)
+    const result = await query
+    return result.error ? [] : (result.data || [])
+  }
+
+  async function getReactivationLinkByToken(token) {
+    if (!token) return null
+    const result = await supabase.from('customer_reactivation_links').select('*').eq('token', token).limit(1).maybeSingle()
+    if (!result.error && result.data) return result.data
+    return null
+  }
+
+  async function getReactivationContext(token) {
+    const link = await getReactivationLinkByToken(token)
+    if (!link) return { ok: false, status: 404, error: 'Rückhol-Link nicht gefunden.' }
+    const nowMs = Date.now()
+    const expiresMs = link.expires_at ? Date.parse(link.expires_at) : 0
+    const expired = Boolean(expiresMs && expiresMs < nowMs)
+    const status = String(link.status || 'open').toLowerCase()
+    const [customerRow, qrRow, memberRow, settingRow] = await Promise.all([
+      link.customer_id ? supabase.from('customers').select('*').eq('id', link.customer_id).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+      link.qr_campaign_id ? supabase.from('qr_campaigns').select('*').eq('id', link.qr_campaign_id).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+      link.loyalty_customer_id ? supabase.from('loyalty_customers').select('*').eq('id', link.loyalty_customer_id).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+      link.qr_campaign_id ? supabase.from('customer_reactivation_settings').select('*').eq('qr_campaign_id', link.qr_campaign_id).limit(1).maybeSingle().catch(() => ({ data: null })) : Promise.resolve({ data: null })
+    ])
+    return { ok: true, link, customer: customerRow.data || null, qr_campaign: qrRow.data || null, member: memberRow.data || null, settings: settingRow.data || null, expired, already_redeemed: ['redeemed','reactivated','used','eingeloest','eingelöst'].includes(status) }
+  }
+
+  router.get('/customers/:customer_id/reactivation/:qr_campaign_id/mail-diagnostics', async (req, res, next) => {
+    try {
+      const mail = new MailService()
+      res.json({ ok: true, from: reactivationMailFrom(), diagnostics: mail.diagnostics(), automation_enabled: process.env.REACTIVATION_AUTOMATION_ENABLED === 'true' })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/customers/:customer_id/reactivation/:qr_campaign_id/test-mail', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const qrCampaignId = req.params.qr_campaign_id
+      const body = req.body || {}
+      const to = clean(body.to || body.email || process.env.ADMIN_NOTIFY_EMAIL || process.env.MAIL_REPLY_TO)
+      if (!to) return res.status(400).json({ ok:false, error:'Test-E-Mail-Adresse fehlt.' })
+      const settings = { ...(await getReactivationSettings(customerId, qrCampaignId)), ...(body.settings || {}) }
+      const link = {
+        id: 'test_reactivation_mail',
+        customer_id: customerId,
+        qr_campaign_id: qrCampaignId,
+        loyalty_customer_id: null,
+        email: to,
+        display_name: body.display_name || 'Testkunde',
+        token: body.token || 'test-token',
+        reward_name: settings.reward_name || 'Test Rückhol-Prämie',
+        reward_type: settings.reward_type || 'test',
+        reward_points: num(settings.reward_points, 0),
+        expires_at: new Date(Date.now() + num(settings.valid_days, 14) * 86400000).toISOString(),
+        metadata: { slug: body.slug || '' }
+      }
+      const result = await sendReactivationLinkMail(req, link, { settings, testTo: to })
+      res.json({ ok:true, from: reactivationMailFrom(), result })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/customers/:customer_id/reactivation/:qr_campaign_id/send-mails', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const qrCampaignId = req.params.qr_campaign_id
+      const body = req.body || {}
+      const settings = await getReactivationSettings(customerId, qrCampaignId)
+      const limit = Math.max(1, Math.min(200, num(body.limit, 100)))
+      let links = await loadReactivationLinks(customerId, qrCampaignId, [])
+      const wantedIds = Array.isArray(body.link_ids || body.linkIds) ? (body.link_ids || body.linkIds).map(String) : []
+      links = links.filter((l) => {
+        if (wantedIds.length && !wantedIds.includes(String(l.id))) return false
+        const st = String(l.status || 'open').toLowerCase()
+        const emailStatus = String(l.email_status || '').toLowerCase()
+        return ['open','created','pending',''].includes(st) && !['sent','dry_run','delivered'].includes(emailStatus)
+      }).slice(0, limit)
+      const sent = []
+      const failed = []
+      const skipped = []
+      for (const link of links) {
+        try {
+          const result = await sendReactivationLinkMail(req, link, { settings, isReminder: false })
+          if (result.skipped) skipped.push(result)
+          else sent.push({ id: link.id, email: link.email, result: result.result })
+        } catch (error) {
+          failed.push({ id: link.id, email: link.email, error: error.message })
+        }
+      }
+      res.json({ ok: failed.length === 0, from: reactivationMailFrom(), sent, failed, skipped, counts: { sent: sent.length, failed: failed.length, skipped: skipped.length, considered: links.length } })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/customers/:customer_id/reactivation/:qr_campaign_id/send-reminders', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const qrCampaignId = req.params.qr_campaign_id
+      const body = req.body || {}
+      const settings = await getReactivationSettings(customerId, qrCampaignId)
+      const reminderEnabled = body.force === true || settings.reminder_enabled !== false
+      if (!reminderEnabled) return res.json({ ok:true, sent:[], failed:[], skipped:[{ reason:'reminder_disabled' }] })
+      const afterDays = Math.max(1, num(body.reminder_after_days ?? settings.reminder_after_days, 3))
+      const maxCount = Math.max(1, num(body.reminder_max_count ?? settings.reminder_max_count, 1))
+      const cutoff = Date.now() - afterDays * 86400000
+      const links = (await loadReactivationLinks(customerId, qrCampaignId, []))
+        .filter((l) => ['sent','opened'].includes(String(l.status || '').toLowerCase()))
+        .filter((l) => !l.redeemed_at && !l.reactivated_at)
+        .filter((l) => num(l.reminder_count, 0) < maxCount)
+        .filter((l) => Date.parse(l.last_reminder_at || l.mail_sent_at || l.sent_at || l.created_at || '') < cutoff)
+        .slice(0, Math.max(1, Math.min(200, num(body.limit, 100))))
+      const sent = []
+      const failed = []
+      const skipped = []
+      for (const link of links) {
+        try {
+          const result = await sendReactivationLinkMail(req, link, { settings, isReminder: true })
+          if (result.skipped) skipped.push(result)
+          else sent.push({ id: link.id, email: link.email, result: result.result })
+        } catch (error) {
+          failed.push({ id: link.id, email: link.email, error: error.message })
+        }
+      }
+      res.json({ ok: failed.length === 0, from: reactivationMailFrom(), sent, failed, skipped, counts: { sent: sent.length, failed: failed.length, skipped: skipped.length, considered: links.length } })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/reactivation/mail-webhook', async (req, res, next) => {
+    try {
+      const secret = clean(process.env.REACTIVATION_WEBHOOK_SECRET || process.env.RESEND_WEBHOOK_SECRET)
+      if (secret) {
+        const supplied = clean(req.get('x-webhook-secret') || req.get('x-resend-webhook-secret') || req.query.secret)
+        if (supplied !== secret) return res.status(401).json({ ok:false })
+      }
+      const body = req.body || {}
+      const eventType = clean(body.type || body.event || body.event_type || body.data?.event) || 'mail_event'
+      const data = body.data || body
+      const providerId = clean(data.email_id || data.id || data.message_id || data.messageId || data.mail_id)
+      const to = clean(data.to || data.recipient || (Array.isArray(data.recipients) ? data.recipients[0] : null))
+      const statusMap = { delivered: 'delivered', bounced: 'bounced', bounce: 'bounced', complained: 'complained', complaint: 'complained', opened: 'mail_opened', clicked: 'mail_clicked', failed: 'failed' }
+      const mapped = statusMap[String(eventType).toLowerCase()] || String(eventType).toLowerCase()
+      let link = null
+      if (providerId) {
+        const r = await supabase.from('customer_reactivation_links').select('*').eq('mail_provider_id', providerId).limit(1).maybeSingle().catch(() => ({ data: null }))
+        link = r.data || null
+      }
+      if (!link && to) {
+        const r = await supabase.from('customer_reactivation_links').select('*').eq('email', to).order('created_at', { ascending: false }).limit(1).maybeSingle().catch(() => ({ data: null }))
+        link = r.data || null
+      }
+      if (link?.id) {
+        const now = new Date().toISOString()
+        const patch = { email_status: mapped, updated_at: now, metadata: { ...(link.metadata || {}), last_mail_webhook: body, last_mail_webhook_at: now } }
+        if (mapped === 'delivered') patch.delivered_at = now
+        if (mapped === 'bounced') patch.bounced_at = now
+        if (mapped === 'failed') patch.failed_at = now
+        await updateTableSchemaSafe('customer_reactivation_links', patch, (q) => q.eq('id', link.id))
+        await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id, reactivation_link_id: link.id, event_type: `mail_${mapped}`, metadata: body })
+      }
+      res.json({ ok:true, matched: Boolean(link), status: mapped })
+    } catch (e) { next(e) }
+  })
+
+  router.get('/public/reactivation/:token/status', async (req, res, next) => {
+    try {
+      const token = clean(req.params.token)
+      const ctx = await getReactivationContext(token)
+      if (!ctx.ok) return res.status(ctx.status || 404).json({ ok:false, error: ctx.error })
+      const { link, customer, qr_campaign, member, settings, expired, already_redeemed } = ctx
+      await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id, reactivation_link_id: link.id, event_type: 'opened', metadata: { token, user_agent: req.get('user-agent') || null, ip_hash: marketingConsentIpHash(req) } })
+      if (!already_redeemed && !expired) {
+        await updateTableSchemaSafe('customer_reactivation_links', { status: String(link.status || 'open') === 'open' ? 'opened' : link.status, last_opened_at: new Date().toISOString(), opened_count: num(link.opened_count, 0) + 1, updated_at: new Date().toISOString() }, (q) => q.eq('id', link.id))
+      }
+      res.json({
+        ok: true,
+        token,
+        status: expired ? 'expired' : already_redeemed ? 'redeemed' : (link.status || 'open'),
+        expired,
+        already_redeemed,
+        customer_name: customer?.name || customer?.company || 'Dein Anbieter',
+        display_name: link.display_name || member?.display_name || member?.name || link.email || 'Gast',
+        email: link.email || member?.email || null,
+        reward_name: link.reward_name || settings?.reward_name || 'Deine Rückhol-Prämie',
+        reward_type: link.reward_type || settings?.reward_type || 'reactivation',
+        reward_points: num(link.reward_points ?? settings?.reward_points, 0),
+        staff_code_required: link.staff_code_required !== false && settings?.staff_code_required !== false,
+        expires_at: link.expires_at || null,
+        qr_slug: qr_campaign?.slug || link.metadata?.slug || null,
+        metadata: link.metadata || {}
+      })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/reactivation/:token/redeem', async (req, res, next) => {
+    try {
+      const token = clean(req.params.token)
+      const body = req.body || {}
+      const ctx = await getReactivationContext(token)
+      if (!ctx.ok) return res.status(ctx.status || 404).json({ ok:false, error: ctx.error })
+      const { link, member, settings, expired, already_redeemed } = ctx
+      if (expired) return res.status(410).json({ ok:false, code:'REACTIVATION_LINK_EXPIRED', error:'Dieser Rückhol-Link ist abgelaufen.' })
+      if (already_redeemed) return res.status(409).json({ ok:false, code:'REACTIVATION_LINK_ALREADY_REDEEMED', error:'Dieser Rückhol-Link wurde bereits eingelöst.' })
+      const staffRequired = link.staff_code_required !== false && settings?.staff_code_required !== false
+      if (staffRequired) {
+        const ok = await verifyReactivationStaffCode(link.customer_id, body.staff_code || body.staffCode)
+        if (!ok) return res.status(400).json({ ok:false, code:'INVALID_STAFF_CODE', error:'Mitarbeitercode ungültig.' })
+      }
+      const now = new Date().toISOString()
+      let updatedMember = member
+      const bonusPoints = num(link.reward_points ?? settings?.reward_points, 0)
+      if (member?.id) {
+        const patch = { points_balance: num(member.points_balance, 0) + bonusPoints, total_points: num(member.total_points, 0) + bonusPoints, last_seen_at: now, last_activity_at: now, metadata: { ...(member.metadata || {}), last_reactivation_at: now, last_reactivation_link_id: link.id } }
+        const updated = await updateLoyaltyCustomerSafe(member.id, patch)
+        if (!updated.error && updated.data) updatedMember = updated.data
+      }
+      await insertLoyaltyTransactionSafe({ customer_id: link.customer_id, loyalty_program_id: link.loyalty_program_id || member?.loyalty_program_id || null, loyalty_customer_id: link.loyalty_customer_id || member?.id || null, qr_campaign_id: link.qr_campaign_id || null, action: 'reactivation', points: bonusPoints, source: 'reactivation_link', description: `Rückholaktion eingelöst: ${link.reward_name || settings?.reward_name || ''}`, metadata: { token, link_id: link.id, staff_code_used: Boolean(body.staff_code || body.staffCode) } })
+      await insertTableSchemaSafe('loyalty_reward_redemptions', { customer_id: link.customer_id, loyalty_customer_id: link.loyalty_customer_id || member?.id || null, qr_campaign_id: link.qr_campaign_id || null, points_spent: 0, status: 'Eingelöst', payload: { source: 'reactivation_link', token, link_id: link.id, reward_name: link.reward_name || settings?.reward_name || null, staff_code_used: Boolean(body.staff_code || body.staffCode) } }, { single: false })
+      const linkPatch = { status: 'redeemed', redeemed_at: now, reactivated_at: now, staff_code_used: clean(body.staff_code || body.staffCode) || null, updated_at: now, metadata: { ...(link.metadata || {}), redeemed_user_agent: req.get('user-agent') || null, redeemed_ip_hash: marketingConsentIpHash(req), reactivated: true } }
+      await updateTableSchemaSafe('customer_reactivation_links', linkPatch, (q) => q.eq('id', link.id))
+      await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id || member?.id || null, reactivation_link_id: link.id, event_type: 'redeemed', metadata: { token, reward_points: bonusPoints, staff_code_used: Boolean(body.staff_code || body.staffCode) } })
+      await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id || member?.id || null, reactivation_link_id: link.id, event_type: 'reactivated', metadata: { token, reward_points: bonusPoints } })
+      res.json({ ok:true, status:'redeemed', reward_name: link.reward_name || settings?.reward_name || 'Rückhol-Prämie', points_added: bonusPoints, member: updatedMember })
+    } catch (e) { next(e) }
+  })
+
+  async function runReactivationMailAutomation(reqLike = null) {
+    const settingsResult = await supabase.from('customer_reactivation_settings').select('*').eq('active', true).limit(200).catch(() => ({ data: [], error: null }))
+    const rows = (settingsResult.data || []).filter((s) => s.email_automation_enabled === true || s.metadata?.email_automation_enabled === true)
+    const summary = { settings: rows.length, sent: 0, reminders: 0, failed: 0, skipped: 0, details: [] }
+    for (const setting of rows) {
+      const customerId = setting.customer_id
+      const qrCampaignId = setting.qr_campaign_id
+      if (!customerId || !qrCampaignId) continue
+      const open = (await loadReactivationLinks(customerId, qrCampaignId, []))
+        .filter((l) => ['open','created','pending',''].includes(String(l.status || 'open').toLowerCase()))
+        .filter((l) => !['sent','dry_run','delivered'].includes(String(l.email_status || '').toLowerCase()))
+        .slice(0, 50)
+      for (const link of open) {
+        try {
+          const r = await sendReactivationLinkMail(reqLike, link, { settings: setting, isReminder: false })
+          if (r.skipped) summary.skipped += 1
+          else summary.sent += 1
+        } catch (error) {
+          summary.failed += 1
+          summary.details.push({ link_id: link.id, error: error.message })
+        }
+      }
+      if (setting.reminder_enabled !== false) {
+        const afterDays = Math.max(1, num(setting.reminder_after_days, 3))
+        const maxCount = Math.max(1, num(setting.reminder_max_count, 1))
+        const cutoff = Date.now() - afterDays * 86400000
+        const due = (await loadReactivationLinks(customerId, qrCampaignId, []))
+          .filter((l) => ['sent','opened'].includes(String(l.status || '').toLowerCase()))
+          .filter((l) => !l.redeemed_at && !l.reactivated_at)
+          .filter((l) => num(l.reminder_count, 0) < maxCount)
+          .filter((l) => Date.parse(l.last_reminder_at || l.mail_sent_at || l.sent_at || l.created_at || '') < cutoff)
+          .slice(0, 50)
+        for (const link of due) {
+          try {
+            const r = await sendReactivationLinkMail(reqLike, link, { settings: setting, isReminder: true })
+            if (r.skipped) summary.skipped += 1
+            else summary.reminders += 1
+          } catch (error) {
+            summary.failed += 1
+            summary.details.push({ link_id: link.id, reminder: true, error: error.message })
+          }
+        }
+      }
+    }
+    return summary
+  }
+
+  router.post('/reactivation-mail-automation/run', async (req, res, next) => {
+    try {
+      const result = await runReactivationMailAutomation(req)
+      res.json({ ok: result.failed === 0, result })
+    } catch (e) { next(e) }
+  })
+
+  if (!global.__mmosReactivationMailAutomationStarted && process.env.REACTIVATION_AUTOMATION_ENABLED === 'true') {
+    global.__mmosReactivationMailAutomationStarted = true
+    const intervalMs = Math.max(15 * 60 * 1000, num(process.env.REACTIVATION_AUTOMATION_INTERVAL_MS, 6 * 60 * 60 * 1000))
+    setInterval(() => runReactivationMailAutomation(null).catch((e) => console.error('[reactivation-mail-automation]', e.message || e)), intervalMs)
+  }
 
   router.get('/v42/url-debug', async (req, res) => {
     res.json({

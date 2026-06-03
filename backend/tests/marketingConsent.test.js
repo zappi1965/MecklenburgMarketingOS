@@ -14,7 +14,7 @@ const { inspectMarketingConsentWording } = require('../src/services/marketingCon
 
 test('marketing consent wording passes technical legal guard', () => {
   const result = inspectMarketingConsentWording({
-    text: 'Ich möchte per E-Mail zu Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen dieses Anbieters kontaktiert werden. Ich kann die Einwilligung jederzeit widerrufen.',
+    text: 'Ich möchte per E-Mail Informationen zu meinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten. Ich kann diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen.',
     checkbox_preselected: false,
     participation_coupled: false,
     double_opt_in_enabled: true,

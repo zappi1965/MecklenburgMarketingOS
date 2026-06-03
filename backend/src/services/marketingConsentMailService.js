@@ -3,7 +3,7 @@ const MailService = require('./mailService')
 
 const COMPANY_NAME = process.env.COMPANY_NAME || process.env.MAIL_COMPANY_NAME || 'MecklenburgMarketing GbR'
 const FRONTEND_URL = String(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || 'https://mecklenburgmarketing.de').replace(/\/$/, '')
-const DEFAULT_CONSENT_VERSION = 'marketing-reminders-v1-2026-06-01'
+const DEFAULT_CONSENT_VERSION = 'marketing-reactivation-v2-2026-06-03'
 const TOKEN_TTL_HOURS = Number(process.env.MARKETING_DOUBLE_OPT_IN_TTL_HOURS || 72)
 
 function esc(v = '') {
@@ -47,7 +47,7 @@ function consentFromBody(body = {}) {
     purposes: Array.isArray(body.marketing_consent_purposes || body.marketingConsentPurposes)
       ? (body.marketing_consent_purposes || body.marketingConsentPurposes).map(clean).filter(Boolean)
       : ['loyalty_reminders','reward_reminders','coupon_offers','reactivation'],
-    text: clean(body.marketing_consent_text || body.marketingConsentText) || 'Ich möchte per E-Mail zu Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen dieses Anbieters kontaktiert werden. Ich kann die Einwilligung jederzeit widerrufen.',
+    text: clean(body.marketing_consent_text || body.marketingConsentText) || 'Ich möchte per E-Mail Informationen zu meinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten. Ich kann diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen.',
     requested_at: nowIso()
   }
 }
@@ -147,20 +147,20 @@ async function requestMarketingDoubleOptIn(supabase, { customerId, program, qrCa
   const text = [
     `Hallo ${displayName || ''},`,
     '',
-    'bitte bestätige, dass du per E-Mail zu Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen dieses Anbieters kontaktiert werden möchtest.',
+    'bitte bestätige, dass du per E-Mail Informationen zu deinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten möchtest.',
     '',
     `Bestätigen: ${confirm}`,
     '',
     `Diese Bestätigung ist ${TOKEN_TTL_HOURS} Stunden gültig.`,
-    'Ohne Bestätigung erhältst du keine Werbe-/Reminder-Mails.'
+    'Ohne Bestätigung erhältst du keine Werbe-, Prämien- und Reaktivierungsmails.'
   ].join('\n')
 
   const html = layout({
     title: 'E-Mail-Erinnerungen bestätigen',
     intro: 'Bitte bestätige deine Einwilligung per Klick.',
     body: `<p>Hallo ${esc(displayName || '')},</p>
-      <p>du hast angekreuzt, dass du per E-Mail zu <b>Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen</b> dieses Anbieters kontaktiert werden möchtest.</p>
-      <p>Bitte bestätige diese Einwilligung über den Button. Ohne Bestätigung erhältst du keine Werbe-/Reminder-Mails.</p>
+      <p>du hast angekreuzt, dass du per E-Mail Informationen zu <b>deinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen</b> dieses Anbieters erhalten möchtest.</p>
+      <p>Bitte bestätige diese Einwilligung über den Button. Ohne Bestätigung erhältst du keine Werbe-, Prämien- und Reaktivierungsmails.</p>
       <p style="color:#5c667a;font-size:13px">Gültig bis: ${esc(expires)}</p>`,
     ctaUrl: confirm,
     ctaLabel: 'Einwilligung bestätigen',

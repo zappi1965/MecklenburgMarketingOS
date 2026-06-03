@@ -1,4 +1,4 @@
-const DEFAULT_MARKETING_CONSENT_TEXT = 'Ich möchte per E-Mail zu Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen dieses Anbieters kontaktiert werden. Ich kann die Einwilligung jederzeit widerrufen.'
+const DEFAULT_MARKETING_CONSENT_TEXT = 'Ich möchte per E-Mail Informationen zu meinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten. Ich kann diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen.'
 
 function includesAny(text, terms = []) {
   const t = String(text || '').toLowerCase()

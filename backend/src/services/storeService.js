@@ -7,7 +7,7 @@ const ALLOWLIST = {
   sales_workflows:{scope:'admin'}, sales_workflow_events:{scope:'admin'}, sales_workflow_documents:{scope:'admin'}, production_health_checks:{scope:'admin'}, production_smoke_tests:{scope:'admin'}, customer_access_audits:{scope:'admin'}, admin_action_logs:{scope:'admin'}, production_readiness_checks:{scope:'admin'}, backup_runs:{scope:'admin'}, workflow_rules:{scope:'admin'}, automations:{scope:'admin'}, acquisition_campaigns:{scope:'admin'}, prospect_leads:{scope:'admin'}, generated_offers:{scope:'customer_readonly'}, generated_contracts:{scope:'customer_readonly'}, mini_audits:{scope:'admin'}, google_business_audits:{scope:'customer_readonly'}, competitor_benchmarks:{scope:'customer_readonly'}, seo_snapshots:{scope:'customer_readonly'},
   dunning_cases:{scope:'customer_readonly'}, retention_intelligence:{scope:'admin'}, consent_center:{scope:'admin'}, segment_campaigns:{scope:'admin'}, churn_prevention:{scope:'admin'}, sumup_revenue_connection:{scope:'admin'}, customer_health_scores:{scope:'customer_readonly'}, monthly_reports:{scope:'customer_readonly'}, onboarding_checklists:{scope:'customer_readonly'}, approval_requests:{scope:'customer'}, output_documents:{scope:'customer_readonly'}, dsar_requests:{scope:'customer'}, loyalty_member_security_scores:{scope:'customer_readonly'},
   knowledge_articles:{scope:'admin'}, api_usage_cache:{scope:'admin'}, data_integrity_checks:{scope:'admin'}, security_events:{scope:'admin'}, activity_logs:{scope:'admin'}, integrations:{scope:'customer_readonly'},
-  tickets:{scope:'customer'}, offers:{scope:'customer_readonly'}, customer_clients:{scope:'customer'}, notifications:{scope:'customer'}, package_requests:{scope:'customer'}, client_success_events:{scope:'customer_readonly'}, loyalty_customers:{scope:'customer_readonly'}, loyalty_transactions:{scope:'customer_readonly'}, loyalty_reward_redemptions:{scope:'customer_readonly'}, customer_tool_access:{scope:'customer_readonly'}, v47_tool_access_rules:{scope:'customer_readonly'},
+  tickets:{scope:'customer'}, offers:{scope:'customer_readonly'}, customer_clients:{scope:'customer'}, notifications:{scope:'customer'}, package_requests:{scope:'customer'}, client_success_events:{scope:'customer_readonly'}, loyalty_customers:{scope:'customer_readonly'}, loyalty_transactions:{scope:'customer_readonly'}, loyalty_reward_redemptions:{scope:'customer_readonly'}, customer_tool_access:{scope:'customer_readonly'}, customer_reactivation_settings:{scope:'customer'}, customer_reactivation_links:{scope:'customer'}, customer_reactivation_events:{scope:'customer_readonly'}, v47_tool_access_rules:{scope:'customer_readonly'},
   customers:{scope:'admin'}, customer_subscriptions:{scope:'admin'}, workflow_runs:{scope:'admin'}, demo_customers:{scope:'admin'}, demo_invoices:{scope:'admin'}, demo_contracts:{scope:'admin'}, demo_notes:{scope:'admin'}, demo_appointments:{scope:'admin'}, demo_files:{scope:'admin'}, demo_notifications:{scope:'admin'}, demo_workflow_runs:{scope:'admin'}, demo_qr_campaigns:{scope:'admin'}, demo_mail_jobs:{scope:'admin'},
   booking_services:{scope:'customer_readonly'}, booking_resources:{scope:'customer_readonly'}, booking_resource_services:{scope:'admin'}, booking_business_hours:{scope:'customer_readonly'}, booking_blackouts:{scope:'customer_readonly'}, booking_settings:{scope:'customer_readonly'}, appointments:{scope:'customer_readonly'}
 }
@@ -62,7 +62,7 @@ const CUSTOMER_CASCADE_TABLES = [
   'loyalty_reward_redemptions','loyalty_transactions','loyalty_member_security_scores','security_events','loyalty_customers','loyalty_rewards','loyalty_reward_rules','staff_codes','loyalty_programs','public_landing_pages','qr_campaigns','review_feedback',
   'monthly_reports','output_documents','approval_requests','onboarding_checklists','customer_files','invoices','tickets','ticket_messages','appointments','customer_clients','offers','workflow_runs','activity_logs','integrations','oauth_tokens','seo_snapshots','notifications',
   'customer_notes','customer_service_categories','customer_seo_metrics','review_funnel_stats','client_success_events','competitor_benchmarks','google_business_audits','mini_audits','prospect_leads','generated_offers','generated_contracts','dunning_cases','customer_health_scores','acquisition_campaigns',
-  'sales_workflow_documents','sales_workflow_events','sales_workflows','customer_tool_access','customer_invites','customer_registrations','customer_users','customer_subscriptions'
+  'sales_workflow_documents','sales_workflow_events','sales_workflows','customer_reactivation_events','customer_reactivation_links','customer_reactivation_settings','customer_tool_access','customer_invites','customer_registrations','customer_users','customer_subscriptions'
 ]
 async function safeDeleteByCustomerId(supabase,table,customerId){
   try{
@@ -99,6 +99,9 @@ const TABLE_TOOL_ACCESS_MAP={
   customer_health_scores:'customer_health',
   package_requests:'packages',
   customer_tool_access:'packages',
+  customer_reactivation_settings:'Rückholaktionen',
+  customer_reactivation_links:'Rückholaktionen',
+  customer_reactivation_events:'Rückholaktionen',
   retention_intelligence:'retention_intelligence',
   consent_center:'consent_center',
   segment_campaigns:'segment_campaigns',

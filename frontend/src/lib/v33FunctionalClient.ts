@@ -48,7 +48,8 @@ async function authHeaders(initHeaders?: HeadersInit): Promise<Record<string, st
 function isPublicV33Path(path: string) {
   return (
     path.startsWith('/v42/health') ||
-    path.startsWith('/public/loyalty/')
+    path.startsWith('/public/loyalty/') ||
+    path.startsWith('/public/reactivation/')
   )
 }
 
@@ -209,6 +210,23 @@ export const v33FunctionalClient = {
 
   publicRedeemReward: (slug: string, rewardId: string, payload: any) =>
     request(`/public/loyalty/${slug}/rewards/${rewardId}/redeem`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  publicReactivationStatus: (token: string) => request(`/public/reactivation/${encodeURIComponent(token)}/status`),
+
+  publicReactivationRedeem: (token: string, payload: any) =>
+    request(`/public/reactivation/${encodeURIComponent(token)}/redeem`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  reactivationMailDiagnostics: (customerId: string, qrCampaignId: string) =>
+    request(`/customers/${encodeURIComponent(customerId)}/reactivation/${encodeURIComponent(qrCampaignId)}/mail-diagnostics`),
+
+  sendReactivationTestMail: (customerId: string, qrCampaignId: string, payload: any) =>
+    request(`/customers/${encodeURIComponent(customerId)}/reactivation/${encodeURIComponent(qrCampaignId)}/test-mail`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  sendReactivationMails: (customerId: string, qrCampaignId: string, payload: any = {}) =>
+    request(`/customers/${encodeURIComponent(customerId)}/reactivation/${encodeURIComponent(qrCampaignId)}/send-mails`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  sendReactivationReminders: (customerId: string, qrCampaignId: string, payload: any = {}) =>
+    request(`/customers/${encodeURIComponent(customerId)}/reactivation/${encodeURIComponent(qrCampaignId)}/send-reminders`, { method: 'POST', body: JSON.stringify(payload) }),
 
   leads: (customerId: string) => request(`/leads/${customerId}`),
 

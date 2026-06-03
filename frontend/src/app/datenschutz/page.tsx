@@ -574,7 +574,7 @@ export default function Datenschutz() {
             <p>
               Bei Bonus-, Loyalty- oder Slug-Seiten kann eine gesonderte
               Einwilligung abgefragt werden, damit der jeweilige Anbieter Sie per
-              E-Mail zu Bonuspunkten, Rewards, Coupons, Reaktivierungsaktionen
+              E-Mail zu ihrem Punktekonto, Bonuspunkten, Rewards, Coupons, persönlichen Reaktivierungsaktionen
               oder ähnlichen Kundenbindungsmaßnahmen kontaktieren darf. Diese
               Einwilligung ist freiwillig und nicht Voraussetzung für die
               Teilnahme am Bonusprogramm.

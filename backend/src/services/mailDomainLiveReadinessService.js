@@ -169,7 +169,7 @@ function privacyMarketingReminderText() {
     sections: [
       {
         title: 'Newsletter, Werbeeinwilligungen und Reminder-Mails',
-        text: 'Wenn Nutzer auf einer Bonus-, Loyalty- oder Slug-Seite ausdrücklich einwilligen, können sie per E-Mail zu Bonuspunkten, Rewards, Coupons, Reaktivierungsaktionen oder ähnlichen Kundenbindungsmaßnahmen kontaktiert werden. Die Einwilligung erfolgt freiwillig, ist nicht Voraussetzung für die Teilnahme am Bonusprogramm und wird über ein Double-Opt-in-Verfahren bestätigt.'
+        text: 'Wenn Nutzer auf einer Bonus-, Loyalty- oder Slug-Seite ausdrücklich einwilligen, können sie per E-Mail zu ihrem Punktekonto, Bonuspunkten, Rewards, Coupons, persönlichen Reaktivierungsaktionen oder ähnlichen Kundenbindungsmaßnahmen kontaktiert werden. Die Einwilligung erfolgt freiwillig, ist nicht Voraussetzung für die Teilnahme am Bonusprogramm und wird über ein Double-Opt-in-Verfahren bestätigt.'
       },
       {
         title: 'Nachweis und Widerruf',
@@ -185,7 +185,7 @@ function privacyMarketingReminderText() {
 
 function finalLegalChecklist() {
   return inspectMarketingConsentWording({
-    text: 'Ich möchte per E-Mail zu Bonuspunkten, Rewards, Coupons und Reaktivierungsaktionen dieses Anbieters kontaktiert werden. Ich kann die Einwilligung jederzeit widerrufen.',
+    text: 'Ich möchte per E-Mail Informationen zu meinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten. Ich kann diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen.',
     checkbox_preselected: false,
     participation_coupled: false,
     double_opt_in_enabled: true,
