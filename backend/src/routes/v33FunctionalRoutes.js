@@ -399,7 +399,9 @@ function v33FunctionalRoutes(supabase) {
     const rewardCampaignId = reward.qr_campaign_id || reward.campaign_id || meta.qr_campaign_id || meta.campaign_id
     if (programId && program?.id && String(programId) !== String(program.id)) return false
     if (rewardCampaignId && campaignId && String(rewardCampaignId) !== String(campaignId)) return false
-    if (!programId && !rewardCampaignId && meta.demo !== true && meta.public_global !== true && !activeRecordRewardIds.has(id)) return false
+    // V086: Public Rewards are strictly bound to the current QR target.
+    // Old/global rewards from other campaigns must not bleed into newly created QR pages.
+    if (!programId && !rewardCampaignId) return meta.public_global === true
     return true
   }
 
