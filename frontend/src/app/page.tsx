@@ -1470,8 +1470,10 @@ function ReactivationPanel({store,q}:any){
  const inactive=members.filter((m:any)=>{const d=Date.parse(lastSeen(m)||'');return d&&d<cutoff})
  const inactiveWithMail=inactive.filter((m:any)=>String(m.email||'').trim()&&hasMailConsent(m))
  const skippedNoConsent=inactive.filter((m:any)=>String(m.email||'').trim()&&!hasMailConsent(m)).length
- const links=safeList(store.data.customer_reactivation_links).filter((l:any)=>String(l.customer_id||'')===String(cid)&&String(l.qr_campaign_id||'')===String(qrId))
- const events=safeList(store.data.customer_reactivation_events).filter((e:any)=>String(e.customer_id||'')===String(cid)&&String(e.qr_campaign_id||'')===String(qrId))
+ const allLinks=safeList(store.data.customer_reactivation_links).filter((l:any)=>String(l.customer_id||'')===String(cid)&&String(l.qr_campaign_id||'')===String(qrId))
+ function isTestReactivationLink(l:any){const meta=l?.metadata||{};const st=String(l?.status||'').toLowerCase();const es=String(l?.email_status||'').toLowerCase();return meta.is_test_mail===true||meta.test_mail===true||st.startsWith('test')||es.startsWith('test')}
+ const links=allLinks.filter((l:any)=>!isTestReactivationLink(l))
+ const events=safeList(store.data.customer_reactivation_events).filter((e:any)=>String(e.customer_id||'')===String(cid)&&String(e.qr_campaign_id||'')===String(qrId)&&e?.metadata?.is_test_mail!==true&&!String(e.event_type||'').startsWith('test_'))
  const openLinks=links.filter((l:any)=>['open','sent','opened'].includes(String(l.status||'open').toLowerCase()))
  const sentLinks=links.filter((l:any)=>['sent','dry_run','delivered','reminder_sent'].includes(String(l.email_status||'').toLowerCase())||l.sent_at||l.mail_sent_at)
  const delivered=links.filter((l:any)=>String(l.email_status||'').toLowerCase()==='delivered'||l.delivered_at).length
@@ -1479,7 +1481,7 @@ function ReactivationPanel({store,q}:any){
  const redeemed=links.filter((l:any)=>['redeemed','reactivated'].includes(String(l.status||'').toLowerCase()))
  const opened=events.filter((e:any)=>e.event_type==='opened').length + links.filter((l:any)=>l.first_opened_at||l.last_opened_at).length
  const placeholders=['{vorname}','{name}','{betrieb}','{praemie}','{punkte}','{punkte_text}','{gueltig_bis}','{rueckhol_link}','{einloese_hinweis}']
- const demoCtx:any={vorname:'Max',name:'Max Mustermann',betrieb:customer?.name||customer?.company||q.title||'Café Demo',praemie:f.reward_name||'Deine Rückhol-Prämie',punkte:String(Number(f.reward_points||0)),punkte_text:Number(f.reward_points||0)>0?`${Number(f.reward_points||0)} Bonuspunkte / Vorteil`:'Persönliche Prämie',gueltig_bis:new Date(Date.now()+Number(f.valid_days||14)*86400000).toLocaleDateString('de-DE'),rueckhol_link:`${typeof window!=='undefined'?window.location.origin:''}/reactivate/demo-token`,einloese_hinweis:'Die Einlösung ist nur einmal möglich und wird vor Ort mit einem Mitarbeitercode bestätigt.'}
+ const demoCtx:any={vorname:'Max',name:'Max Mustermann',betrieb:customer?.name||customer?.company||q.title||'Café Demo',praemie:f.reward_name||'Deine Rückhol-Prämie',punkte:String(Number(f.reward_points||0)),punkte_text:Number(f.reward_points||0)>0?`${Number(f.reward_points||0)} Bonuspunkte / Vorteil`:'Persönliche Prämie',gueltig_bis:new Date(Date.now()+Number(f.valid_days||14)*86400000).toLocaleDateString('de-DE'),rueckhol_link:'wird in der Testmail als echter 24h-Test-Link eingefügt',einloese_hinweis:'Die Einlösung ist nur einmal möglich und wird vor Ort mit einem Mitarbeitercode bestätigt.'}
  function renderPreview(template:string){return String(template||'').replace(/\{\s*([^{}]+?)\s*\}/g,(m,k)=>{const key=String(k||'').trim().toLowerCase();return Object.prototype.hasOwnProperty.call(demoCtx,key)?demoCtx[key]:m})}
  const emailPreview=renderPreview(f.email_body_template||defaultEmailBody)
  const reminderPreview=renderPreview(f.reminder_body_template||defaultReminderBody)
@@ -1513,7 +1515,7 @@ function ReactivationPanel({store,q}:any){
  async function sendTest(){
   const to=String(testEmail||'').trim(); if(!to){setMailMsg('Bitte Test-E-Mail-Adresse eintragen.');return}
   setBusyMail(true); setMailMsg('')
-  try{await saveSettings(); const r:any=await v33FunctionalClient.sendReactivationTestMail(cid,qrId,{to,settings:f,slug:q.slug}); setMailMsg(r?.result?.result?.dryRun?'Testmail als Dry-Run erstellt. RESEND_API_KEY fehlt oder Mailversand ist nicht aktiv.':'Testmail wurde an loyalty@-Absender übergeben.')}catch(e:any){setMailMsg(e.message||'Testmail fehlgeschlagen.')}finally{setBusyMail(false)}
+  try{await saveSettings(); const r:any=await v33FunctionalClient.sendReactivationTestMail(cid,qrId,{to,settings:f,slug:q.slug}); setMailMsg(r?.result?.result?.dryRun?'Testmail als Dry-Run erstellt. Der Rückhol-Link ist als 24h-Test-Link angelegt.':'Testmail wurde gesendet. Der Rückhol-Link ist als 24h-Test-Link angelegt und kann geöffnet werden.')}catch(e:any){setMailMsg(e.message||'Testmail fehlgeschlagen.')}finally{setBusyMail(false)}
  }
  async function markSent(l:any){await store.update('customer_reactivation_links',l.id,{status:'sent',email_status:'manual_sent',sent_at:new Date().toISOString(),updated_at:new Date().toISOString()});await store.load?.()}
  if(!enabled)return <Card title="Rückholaktionen" action={<Badge type="yellow">Add-on</Badge>}><div className="sub">Dieses Modul ist separat zubuchbar. Schalte in der Kundenakte das Tool <b>Rückholaktionen</b> frei, damit der Kunde inaktive Loyalty-Kunden per persönlichem Einmal-Link und E-Mail zurückholen kann.</div></Card>
