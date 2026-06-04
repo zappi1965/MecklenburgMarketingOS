@@ -29,7 +29,7 @@ function canScroll(el: HTMLElement, deltaY: number) {
 }
 
 /**
- * V103.3 App-Shell Scroll Rescue
+ * V103.4 App-Shell Scroll Rescue
  *
  * V103 is built as a dashboard shell: <div class="app appLike"><aside/><main/></div>.
  * Chrome/Safari can stop scrolling when body/html and the shell fight over 100dvh.
@@ -78,7 +78,7 @@ export default function MmosScrollRescue() {
       main.style.maxHeight = '100dvh'
       main.style.overflowY = 'auto'
       main.style.overflowX = 'hidden'
-      main.style.webkitOverflowScrolling = 'touch'
+      main.style.setProperty('-webkit-overflow-scrolling', 'touch')
       main.style.overscrollBehaviorY = 'contain'
       main.style.touchAction = 'pan-y'
       main.setAttribute('data-mmos-scroll-container', 'main')
@@ -87,7 +87,7 @@ export default function MmosScrollRescue() {
         side.style.maxHeight = '100dvh'
         side.style.overflowY = 'auto'
         side.style.overflowX = 'hidden'
-        side.style.webkitOverflowScrolling = 'touch'
+        side.style.setProperty('-webkit-overflow-scrolling', 'touch')
       }
     }
 
