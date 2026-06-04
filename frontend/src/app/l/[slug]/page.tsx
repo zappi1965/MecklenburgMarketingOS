@@ -14,6 +14,16 @@ function titleFromSlug(slug: string) {
     .join(' ')
 }
 
+function publicQrImage(value: string, size = 512) {
+  const params = new URLSearchParams({ value, size: String(size) })
+  return `/api/qr?${params.toString()}`
+}
+
+function absolutePublicUrl(path: string) {
+  if (typeof window === 'undefined') return path
+  return `${window.location.origin}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 // Geräte-ID wird nur gesetzt, wenn der Nutzer der Kategorie "Funktional"
 // zugestimmt hat (§ 25 TDDDG). Ohne Consent läuft Loyalty mit serverseitiger
 // Bindung an E-Mail/Passwort weiter, nur die geräte-spezifischen Limits
@@ -142,6 +152,8 @@ function PublicLoyaltyPageContent() {
   const fineprint = campaignTexts.fineprint || 'Mit dem Absenden nimmst du am digitalen Bonusprogramm teil. Deine Angaben werden dem jeweiligen Anbieter zugeordnet.'
   const marketingConsentVersion = campaignTexts.marketing_consent_version || 'marketing-reactivation-v2-2026-06-03'
   const marketingConsentText = campaignTexts.marketing_consent_text || 'Ich möchte per E-Mail Informationen zu meinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten. Ich kann diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen.'
+  const redemptionMode = campaignTexts.redemption_mode || 'customer_phone_staff_pin'
+  const quickRedemption = result?.quick_redemption || null
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return `/l/${slug}`
@@ -499,6 +511,15 @@ function PublicLoyaltyPageContent() {
                 </div>
               )}
 
+              {quickRedemption?.code && (
+                <div className="publicReviewSavedBox">
+                  <b>{redemptionMode === 'counter_customer_code' ? 'Dein Einlösecode für den Tresen' : 'Einlösecode / Tresen-Backup'}</b>
+                  <span style={{fontSize:'32px',fontWeight:900,letterSpacing:'0.12em',display:'block',marginTop:8}}>{quickRedemption.code}</span>
+                  <span>{redemptionMode === 'counter_customer_code' ? 'Zeige diesen Code dem Team. Der Mitarbeiter löst deine verfügbare Prämie im Tresenmodus ein.' : 'Standard: Das Team tippt die Mitarbeiter-PIN direkt hier auf deinem Handy ein. Der Code ist als Backup für den Tresenmodus nutzbar.'}</span>
+                  <span style={{display:'block',marginTop:8,color:'#6b7280'}}>Der Tresenmodus ist nur für das Team im Kundendashboard verfügbar.</span>
+                </div>
+              )}
+
               {unlockedRewards.length > 0 && (
                 <div className="publicRewards">
                   <b>Jetzt verfügbar</b>
@@ -540,6 +561,17 @@ function PublicLoyaltyPageContent() {
                   <div className="publicRewardItem">
                     <span>{rewardTitle(nextReward)}</span>
                     <em>Noch {Math.max(0, rewardPoints(nextReward) - points)} Punkte</em>
+                  </div>
+                </div>
+              )}
+
+              {result?.qr_rotation?.next_qr_scan_url && (
+                <div className="publicNextQrBox">
+                  <img src={publicQrImage(absolutePublicUrl(result.qr_rotation.next_qr_scan_url), 512)} alt="Neuer QR-Code" />
+                  <div>
+                    <b>Neuer QR-Code wurde erzeugt</b>
+                    <p>Diese Kampagne rotiert nach erfolgreichem Scan. Für den nächsten Gast ist jetzt dieser neue QR-Code gültig.</p>
+                    <a href={`/qr-display/${encodeURIComponent(String(result.qr_rotation.next_slug || '').trim())}`} target="_blank" rel="noopener noreferrer">Neuen QR öffnen</a>
                   </div>
                 </div>
               )}

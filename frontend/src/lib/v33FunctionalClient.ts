@@ -46,6 +46,10 @@ async function authHeaders(initHeaders?: HeadersInit): Promise<Record<string, st
 }
 
 function isPublicV33Path(path: string) {
+  // Tresenmodus ist bewusst eine Mitarbeiter-/Dashboard-Funktion.
+  // Obwohl die Backend-Route historisch unter /public/loyalty liegt,
+  // muss hier ein eingeloggter Admin/Kunde mitgesendet werden.
+  if (/^\/public\/loyalty\/[^/]+\/(counter-status|counter\/)/.test(path)) return false
   return (
     path.startsWith('/v42/health') ||
     path.startsWith('/public/loyalty/') ||
@@ -187,6 +191,16 @@ export const v33FunctionalClient = {
 
   publicScanStart: (slug: string) => request(`/public/loyalty/${slug}/scan-start`),
 
+  publicCurrentQr: (slug: string) => request(`/public/loyalty/${slug}/current-qr`),
+
+  publicCounterStatus: (slug: string) => request(`/public/loyalty/${slug}/counter-status`),
+
+  publicCounterCodeLookup: (slug: string, payload: any) =>
+    request(`/public/loyalty/${slug}/counter/code/lookup`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  publicCounterCodeRedeem: (slug: string, payload: any) =>
+    request(`/public/loyalty/${slug}/counter/code/redeem`, { method: 'POST', body: JSON.stringify(payload) }),
+
   publicJoinOrScan: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/join-or-scan`, { method: 'POST', body: JSON.stringify(payload) }),
 
@@ -218,6 +232,9 @@ export const v33FunctionalClient = {
 
   reactivationMailDiagnostics: (customerId: string, qrCampaignId: string) =>
     request(`/customers/${encodeURIComponent(customerId)}/reactivation/${encodeURIComponent(qrCampaignId)}/mail-diagnostics`),
+
+  pilotReadiness: (customerId: string) =>
+    request(`/customers/${encodeURIComponent(customerId)}/pilot-readiness`),
 
   sendReactivationTestMail: (customerId: string, qrCampaignId: string, payload: any) =>
     request(`/customers/${encodeURIComponent(customerId)}/reactivation/${encodeURIComponent(qrCampaignId)}/test-mail`, { method: 'POST', body: JSON.stringify(payload) }),

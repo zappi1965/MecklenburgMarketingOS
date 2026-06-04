@@ -81,11 +81,38 @@ const trustProxyHopsRaw = process.env.TRUST_PROXY_HOPS || process.env.RAILWAY_TR
 const trustProxyHops = Math.max(0, Number(trustProxyHopsRaw) || 1)
 app.set('trust proxy', trustProxyHops)
 
+const configuredCorsOrigins = String(process.env.CORS_ALLOWED_ORIGINS || process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((v) => v.trim())
+  .filter(Boolean)
+const allowAllCors = process.env.CORS_ALLOW_ALL === 'true' || (configuredCorsOrigins.length === 0 && process.env.NODE_ENV !== 'production')
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true
+  if (allowAllCors) return true
+  if (configuredCorsOrigins.includes(origin)) return true
+  try {
+    const host = new URL(origin).hostname
+    return configuredCorsOrigins.some((allowed) => {
+      try {
+        const allowedHost = new URL(allowed).hostname
+        return host === allowedHost
+      } catch (_) {
+        return false
+      }
+    })
+  } catch (_) {
+    return false
+  }
+}
+
 app.use(cors({
-  origin: true,
+  origin(origin, cb) {
+    if (isAllowedCorsOrigin(origin)) return cb(null, true)
+    return cb(new Error('CORS origin not allowed'))
+  },
   credentials: false,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-MFA-Code', 'X-MMOS-MFA-Code']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-MFA-Code', 'X-MMOS-MFA-Code', 'X-Webhook-Secret', 'X-Resend-Webhook-Secret']
 }))
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204)
@@ -94,7 +121,25 @@ app.use((req, res, next) => {
 
 app.use(securityHeaders)
 app.use(generalRateLimit)
-app.use(express.json({ limit: '50mb' }))
+
+const publicJsonPaths = [
+  /^\/api\/production\/client-error$/,
+  /^\/api\/v33-functional\/public\//,
+  /^\/api\/qr(\/.*)?$/,
+  /^\/api\/chatbot\//,
+  /^\/api\/review-widget\/embed\//,
+  /^\/api\/public\//,
+  /^\/api\/customer-portal\/(register|invite|accept-invite)/,
+  /^\/api\/wallet\/me/,
+  /^\/api\/booking\//
+]
+const publicJsonParser = express.json({ limit: process.env.PUBLIC_JSON_LIMIT || '250kb' })
+const privateJsonParser = express.json({ limit: process.env.JSON_BODY_LIMIT || '50mb' })
+app.use((req, res, next) => {
+  const fullPath = (req.originalUrl || req.url || '').split('?')[0]
+  const parser = publicJsonPaths.some((re) => re.test(fullPath)) ? publicJsonParser : privateJsonParser
+  return parser(req, res, next)
+})
 
 const supabaseAdmin = getSupabaseAdmin()
 const supabaseConfigured = Boolean(supabaseAdmin)
@@ -136,6 +181,7 @@ const PUBLIC_PATHS = [
   /^\/api\/production\/client-error$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/status$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/scan-start$/,
+  /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/current-qr$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/join-or-scan$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/rewards\/[^/]+\/redeem$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/password-reset-request$/,
@@ -278,7 +324,9 @@ attachErrorHandler(app)
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err)
   const status = err.status || err.statusCode || 500
-  const safeMessage = typeof err.message === 'string' ? err.message.slice(0, 500) : 'Interner Serverfehler'
+  const productionRuntime = process.env.NODE_ENV === 'production' || Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.VERCEL)
+  const rawMessage = typeof err.message === 'string' ? err.message.slice(0, 500) : 'Interner Serverfehler'
+  const safeMessage = productionRuntime && status >= 500 ? 'Interner Serverfehler' : rawMessage
   res.status(status).json({
     ok: false,
     code: err.code || 'INTERNAL_ERROR',

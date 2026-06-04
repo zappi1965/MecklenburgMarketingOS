@@ -26,6 +26,31 @@ function checkPublicAuthRateLimit(slug, email, ip) {
   return { ok: entry.count <= max, count: entry.count, reset_at: entry.reset_at, max }
 }
 function resetPublicAuthRateLimit(slug, email, ip) { publicAuthAttempts.delete(publicAuthKey(slug, email, ip)) }
+
+const v098SecurityBuckets = new Map()
+function securityIp(req) {
+  const xf = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim()
+  return req?.ip || xf || req?.socket?.remoteAddress || 'unknown'
+}
+function checkSecurityBucket(key, { windowMs = 15 * 60 * 1000, max = 30 } = {}) {
+  const now = Date.now()
+  const entry = v098SecurityBuckets.get(key) || { count: 0, reset_at: now + windowMs }
+  if (entry.reset_at < now) { entry.count = 0; entry.reset_at = now + windowMs }
+  entry.count += 1
+  v098SecurityBuckets.set(key, entry)
+  return { ok: entry.count <= max, count: entry.count, max, reset_at: entry.reset_at }
+}
+function rateLimitResponse(res, bucket) {
+  const retrySeconds = Math.max(1, Math.ceil(((bucket?.reset_at || Date.now()) - Date.now()) / 1000))
+  res.setHeader('Retry-After', String(retrySeconds))
+  return res.status(429).json({ ok: false, code: 'RATE_LIMITED', error: 'Zu viele Anfragen. Bitte später erneut versuchen.' })
+}
+function hashTokenForLog(token) {
+  try { return crypto.createHash('sha256').update(String(token || '')).digest('hex').slice(0, 18) } catch (_) { return 'unknown' }
+}
+function isProductionRuntime() {
+  return process.env.NODE_ENV === 'production' || Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.VERCEL)
+}
 function publicPasswordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(String(password || ''), salt, 64).toString('hex')
   return `scrypt:${salt}:${hash}`
@@ -127,6 +152,57 @@ function slugify(input, fallback = 'kunde') {
 function v33FunctionalRoutes(supabase) {
   const router = express.Router()
   const engine = new V35BusinessEngine(supabase)
+
+  router.param('customer_id', async (req, res, next, customerId) => {
+    try {
+      if (req.userRole === 'admin') return next()
+      if (!req.user?.id) return res.status(401).json({ ok: false, code: 'UNAUTHENTICATED', error: 'Nicht authentifiziert.' })
+      const normalizedCustomerId = String(customerId || '').trim()
+      if (!normalizedCustomerId) return res.status(400).json({ ok: false, code: 'CUSTOMER_ID_MISSING', error: 'customer_id fehlt im Request.' })
+      const profileCustomerId = req.userProfile?.customer_id ? String(req.userProfile.customer_id) : ''
+      if (profileCustomerId && profileCustomerId === normalizedCustomerId && String(req.userStatus || 'active').toLowerCase() === 'active') return next()
+      const { data, error } = await supabase
+        .from('customer_users')
+        .select('id, role, status')
+        .eq('auth_user_id', req.user.id)
+        .eq('customer_id', normalizedCustomerId)
+        .eq('status', 'active')
+        .maybeSingle()
+      if (error) throw error
+      if (!data) return res.status(403).json({ ok: false, code: 'CUSTOMER_ACCESS_DENIED', error: 'Kein Zugriff auf diesen Kunden.' })
+      req.customerAccess = data
+      return next()
+    } catch (e) { return next(e) }
+  })
+
+  async function requireCustomerAccessForCounter(req, res, customerId) {
+    if (req.userRole === 'admin') return true
+    if (!req.user?.id) {
+      res.status(401).json({ ok: false, code: 'COUNTER_AUTH_REQUIRED', error: 'Tresenmodus ist nur über ein angemeldetes Kundendashboard verfügbar.' })
+      return false
+    }
+    const normalizedCustomerId = String(customerId || '').trim()
+    if (!normalizedCustomerId) {
+      res.status(400).json({ ok: false, code: 'CUSTOMER_ID_MISSING', error: 'customer_id fehlt im Request.' })
+      return false
+    }
+    const profileCustomerId = req.userProfile?.customer_id ? String(req.userProfile.customer_id) : ''
+    if (profileCustomerId && profileCustomerId === normalizedCustomerId && String(req.userStatus || 'active').toLowerCase() === 'active') return true
+    const { data, error } = await supabase
+      .from('customer_users')
+      .select('id, role, status')
+      .eq('auth_user_id', req.user.id)
+      .eq('customer_id', normalizedCustomerId)
+      .eq('status', 'active')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) {
+      res.status(403).json({ ok: false, code: 'CUSTOMER_ACCESS_DENIED', error: 'Kein Zugriff auf diesen Kunden.' })
+      return false
+    }
+    req.customerAccess = data
+    return true
+  }
 
   function v39ErrorPayload(code, message, details = null, hint = null, warnings = []) {
     return { ok: false, code, error: message, details, hint, warnings }
@@ -1236,6 +1312,235 @@ function v33FunctionalRoutes(supabase) {
     return { rotated: true, previous_slug: slug, next_slug: nextSlug, next_qr_campaign_id: nextQr.id, next_qr_scan_url: `/q/${nextSlug}`, next_landing_url: `/l/${nextSlug}` }
   }
 
+
+  function slugFromQrPath(value) {
+    const raw = String(value || '').trim()
+    if (!raw) return null
+    const marker = '/q/'
+    const idx = raw.indexOf(marker)
+    if (idx >= 0) return raw.slice(idx + marker.length).split(/[?#/]/)[0] || null
+    return raw.replace(/^\/+/, '').split(/[?#/]/)[0] || null
+  }
+
+  async function resolveCurrentQrDisplayContext(startSlug) {
+    let currentSlug = String(startSlug || '').trim()
+    const chain = []
+    const seen = new Set()
+    for (let i = 0; i < 12; i += 1) {
+      if (!currentSlug || seen.has(currentSlug)) break
+      seen.add(currentSlug)
+      const ctx = await resolvePublicLoyaltyContext(currentSlug)
+      const qrCampaign = ctx.qrCampaign || (ctx.program ? await getQrCampaignForPublicProgram(ctx.program, currentSlug) : null)
+      const program = ctx.program || null
+      if (!qrCampaign && !program) return { ok: false, slug: currentSlug, chain }
+      const metadata = { ...(qrCampaign?.metadata || {}) }
+      chain.push({ slug: currentSlug, qr_campaign_id: qrCampaign?.id || null, active: qrCampaign?.active !== false, status: qrCampaign?.status || null })
+      const nextSlug = clean(metadata.next_qr_slug || metadata.next_slug || slugFromQrPath(metadata.next_qr_scan_url) || slugFromQrPath(metadata.next_qr_url))
+      if (nextSlug && nextSlug !== currentSlug) {
+        currentSlug = nextSlug
+        continue
+      }
+      const title = qrCampaign?.title || qrCampaign?.name || program?.name || program?.title || 'QR-Code'
+      return {
+        ok: true,
+        requested_slug: String(startSlug || '').trim(),
+        current_slug: currentSlug,
+        rotated: currentSlug !== String(startSlug || '').trim(),
+        chain,
+        qr_campaign: qrCampaign ? {
+          id: qrCampaign.id,
+          title,
+          status: qrCampaign.status || null,
+          active: qrCampaign.active !== false,
+          rotate_qr_after_scan: qrRotationEnabled(qrCampaign, program),
+          metadata: {
+            previous_slug: qrCampaign.metadata?.previous_slug || null,
+            qr_rotation_generation: qrCampaign.metadata?.qr_rotation_generation || 0
+          }
+        } : null,
+        program: program ? { id: program.id, name: program.name || program.title || null, active: program.active !== false } : null,
+        scan_path: `/q/${currentSlug}`,
+        landing_path: `/l/${currentSlug}`,
+        display_path: `/qr-display/${currentSlug}`
+      }
+    }
+    return { ok: false, slug: currentSlug, chain, error: 'QR-Rotation konnte nicht eindeutig aufgelöst werden.' }
+  }
+
+
+  function todayIsoRange() {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+
+  function sixDigitCode() {
+    return String(Math.floor(100000 + Math.random() * 900000))
+  }
+
+  async function loadCounterStaffPins(customerId, campaignId = null) {
+    const rows = []
+    try {
+      const direct = await supabase.from('staff_codes').select('*').eq('customer_id', customerId).limit(50)
+      if (!direct.error) rows.push(...(direct.data || []).map((x) => ({ ...x, source: 'staff_codes', payload: x })))
+    } catch (_) {}
+    try {
+      const legacy = await supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'staff_codes').limit(80)
+      if (!legacy.error) rows.push(...(legacy.data || []))
+    } catch (_) {}
+    return rows
+      .map((row) => {
+        const p = row.payload || row
+        const code = clean(p.code || p.pin || p.staff_pin || p.staff_code || p.value || p.confirmation_code)
+        const status = String(p.status || '').toLowerCase()
+        const scoped = !p.qr_campaign_id || !campaignId || String(p.qr_campaign_id) === String(campaignId)
+        if (!code || p.active === false || !scoped || ['deleted','archived','inactive','gesperrt','deaktiviert'].includes(status)) return null
+        return { id: row.id || p.id || code, label: p.label || p.name || 'Mitarbeiter-PIN', code, last_used_at: p.last_used_at || null, uses: num(p.uses, 0) }
+      })
+      .filter(Boolean)
+      .slice(0, 10)
+  }
+
+  async function loadDailyQrKpis(customerId, qrCampaignId = null, slug = '') {
+    const { start, end } = todayIsoRange()
+    const kpis = { scans: 0, points: 0, redemptions: 0, reactivations: 0, links_opened: 0, last_activity_at: null }
+    const touch = (value) => { if (value && (!kpis.last_activity_at || String(value) > String(kpis.last_activity_at))) kpis.last_activity_at = value }
+    try {
+      let q = supabase.from('loyalty_transactions').select('id,points,action,created_at,qr_campaign_id,metadata').eq('customer_id', customerId).gte('created_at', start).lt('created_at', end).limit(500)
+      if (qrCampaignId) q = q.eq('qr_campaign_id', qrCampaignId)
+      const tx = await q
+      if (!tx.error) {
+        for (const row of tx.data || []) {
+          const action = String(row.action || '').toLowerCase()
+          if (action === 'qr_scan' || action.includes('scan')) { kpis.scans += 1; kpis.points += num(row.points, 0) }
+          if (action.includes('reactivation')) kpis.reactivations += 1
+          touch(row.created_at)
+        }
+      }
+    } catch (_) {}
+    try {
+      let q = supabase.from('loyalty_reward_redemptions').select('id,created_at,qr_campaign_id,status').eq('customer_id', customerId).gte('created_at', start).lt('created_at', end).limit(500)
+      if (qrCampaignId) q = q.eq('qr_campaign_id', qrCampaignId)
+      const red = await q
+      if (!red.error) { kpis.redemptions += (red.data || []).length; for (const r of red.data || []) touch(r.created_at) }
+    } catch (_) {}
+    try {
+      let q = supabase.from('customer_reactivation_events').select('id,event_type,created_at,qr_campaign_id').eq('customer_id', customerId).gte('created_at', start).lt('created_at', end).limit(500)
+      if (qrCampaignId) q = q.eq('qr_campaign_id', qrCampaignId)
+      const ev = await q
+      if (!ev.error) {
+        for (const e of ev.data || []) {
+          const type = String(e.event_type || '').toLowerCase()
+          if (type.includes('opened')) kpis.links_opened += 1
+          if (type.includes('reactivated')) kpis.reactivations += 1
+          touch(e.created_at)
+        }
+      }
+    } catch (_) {}
+    try {
+      const recs = await supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_redeem_codes').gte('created_at', start).lt('created_at', end).limit(500)
+      if (!recs.error) {
+        for (const r of recs.data || []) {
+          const p = r.payload || {}
+          if (String(p.status || '').toLowerCase() === 'redeemed') kpis.redemptions += 1
+          touch(r.updated_at || r.created_at || p.redeemed_at)
+        }
+      }
+    } catch (_) {}
+    return kpis
+  }
+
+  async function createQuickRedemptionCode({ customerId, program, qrCampaign, member, slug, pointsBalance = 0 }) {
+    if (!customerId || !member?.id) return null
+    const expiresMinutes = Math.max(15, num(qrCampaign?.metadata?.redemption_code_ttl_minutes, 240))
+    const expiresAt = new Date(Date.now() + expiresMinutes * 60 * 1000).toISOString()
+    let code = sixDigitCode()
+    for (let i = 0; i < 8; i += 1) {
+      const existing = await supabase.from('v33_functional_records')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('resource', 'loyalty_redeem_codes')
+        .eq('local_id', `redeem_${code}`)
+        .maybeSingle()
+      if (existing.error || !existing.data) break
+      code = sixDigitCode()
+    }
+    const payload = {
+      id: `redeem_${code}`,
+      customer_id: customerId,
+      loyalty_program_id: program?.id || null,
+      loyalty_customer_id: member.id,
+      qr_campaign_id: qrCampaign?.id || program?.qr_campaign_id || null,
+      slug,
+      code,
+      status: 'open',
+      points_balance: pointsBalance,
+      display_name: member.display_name || member.name || null,
+      email: member.email || null,
+      expires_at: expiresAt,
+      created_at: new Date().toISOString(),
+      metadata: { source: 'public_scan_success', redemption_mode: qrCampaign?.metadata?.redemption_mode || 'customer_phone_staff_pin' }
+    }
+    try { await createRecord('loyalty_redeem_codes', payload) } catch (_) {}
+    return { code, expires_at: expiresAt, redemption_mode: payload.metadata.redemption_mode }
+  }
+
+  async function loadOpenRedemptionCode(customerId, code) {
+    const normalized = clean(code)
+    if (!normalized) return null
+    const byLocal = await supabase.from('v33_functional_records')
+      .select('*')
+      .eq('customer_id', customerId)
+      .eq('resource', 'loyalty_redeem_codes')
+      .eq('local_id', `redeem_${normalized}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    let row = byLocal.error ? null : byLocal.data
+    if (!row) {
+      const list = await supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_redeem_codes').order('created_at', { ascending: false }).limit(300)
+      if (!list.error) row = (list.data || []).find((r) => String(r.payload?.code || '') === normalized) || null
+    }
+    return row
+  }
+
+  async function counterContextForSlug(slug) {
+    const ctx = await resolvePublicLoyaltyContext(slug)
+    const program = ctx.program
+    if (!program) return { ok:false, status:404, error:'Kein Loyalty-Programm für diesen QR-Link gefunden.' }
+    const qrCampaign = ctx.qrCampaign || await getQrCampaignForPublicProgram(program, slug)
+    const customerId = ctx.customerId || program.customer_id
+    return { ok:true, ctx, program, qrCampaign, customerId }
+  }
+
+  async function availableRewardsForMember(customerId, campaignId, member) {
+    const redemptions = member?.id ? await getPublicRewardRedemptions(customerId, member.id).catch(() => []) : []
+    const all = []
+    try {
+      const direct = await supabase.from('loyalty_rewards').select('*').eq('customer_id', customerId).limit(250)
+      if (!direct.error) all.push(...(direct.data || []).map((r) => normalizeReward(r, 'loyalty_rewards')))
+    } catch (_) {}
+    try {
+      const recs = await supabase.from('v33_functional_records').select('*').eq('customer_id', customerId).eq('resource', 'loyalty_rewards').limit(250)
+      if (!recs.error) all.push(...activeFunctionalRecords(recs.data || []).map((r) => normalizeReward(r, 'v33_functional_records')))
+    } catch (_) {}
+    const balance = num(member?.points_balance, 0)
+    return all
+      .filter(Boolean)
+      .filter((r) => isPublicActiveReward(r))
+      .filter((r) => !r.qr_campaign_id || !campaignId || String(r.qr_campaign_id) === String(campaignId))
+      .map((r) => {
+        const required = rewardRequiredPoints(r)
+        const already = redemptions.some((x) => String(x.reward_id || '') === String(r.id || r.local_id))
+        const repeatable = rewardAllowsMultiple(r)
+        return { id: r.id || r.local_id, title: rewardDisplayTitle(r), points_required: required, reward_type: r.reward_type || r.type || null, available: balance >= required && (repeatable || !already), already_redeemed: already && !repeatable, staff_code_required: rewardNeedsStaffCode(r) }
+      })
+      .sort((a, b) => Number(a.points_required || 0) - Number(b.points_required || 0))
+      .slice(0, 50)
+  }
+
   async function provisionCustomer(customerId, options = {}) {
     const customer = await getCustomer(customerId)
     if (!customer) throw new Error('Kunde nicht gefunden')
@@ -1750,6 +2055,128 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
+
+  router.get('/public/loyalty/:slug/current-qr', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const shield = inspectPublicAction({ req, action: 'public_current_qr', slug, email: null, body: req.query || {}, max: 160 })
+      await recordPublicShieldEvent(supabase, shield, { action: 'public_current_qr', slug, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
+      const current = await resolveCurrentQrDisplayContext(slug)
+      if (!current.ok) return res.status(404).json({ ok:false, code:'QR_NOT_FOUND', error: current.error || 'QR-Code nicht gefunden.', chain: current.chain || [] })
+      try {
+        const c = await counterContextForSlug(current.current_slug || slug)
+        if (c.ok) {
+          current.daily_kpis = await loadDailyQrKpis(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null, current.current_slug || slug)
+        }
+      } catch (_) {}
+      res.json(current)
+    } catch (e) { next(e) }
+  })
+
+
+  router.get('/public/loyalty/:slug/counter-status', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const shield = inspectPublicAction({ req, action: 'public_counter_status', slug, email: null, body: req.query || {}, max: 120 })
+      await recordPublicShieldEvent(supabase, shield, { action: 'public_counter_status', slug, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
+      const c = await counterContextForSlug(slug)
+      if (!c.ok) return res.status(c.status || 404).json({ ok:false, error:c.error })
+      if (!(await requireCustomerAccessForCounter(req, res, c.customerId))) return
+      const current = await resolveCurrentQrDisplayContext(slug)
+      const metadata = c.qrCampaign?.metadata || {}
+      const pins = metadata.show_staff_pin_on_counter === false ? [] : await loadCounterStaffPins(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null)
+      const kpis = await loadDailyQrKpis(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null, slug)
+      res.json({
+        ok:true,
+        slug,
+        customer_id: c.customerId,
+        customer_name: c.qrCampaign?.metadata?.customer_name || c.program?.metadata?.customer_name || c.program?.name || c.program?.title || 'Betrieb',
+        qr_campaign: c.qrCampaign ? { id:c.qrCampaign.id, slug:c.qrCampaign.slug, title:c.qrCampaign.title || c.qrCampaign.name, metadata: { redemption_mode: metadata.redemption_mode || 'customer_phone_staff_pin', show_staff_pin_on_counter: metadata.show_staff_pin_on_counter !== false, rotate_qr_after_scan: metadata.rotate_qr_after_scan === true } } : null,
+        current_qr: current.ok ? current : null,
+        scan_path: current.ok ? current.scan_path : `/q/${slug}`,
+        display_path: current.ok ? current.display_path : `/qr-display/${slug}`,
+        landing_path: current.ok ? current.landing_path : `/l/${slug}`,
+        redemption_mode: metadata.redemption_mode || 'customer_phone_staff_pin',
+        staff_pins: pins,
+        daily_kpis: kpis,
+        print_templates: ['tresen_aufsteller','tischaufsteller','kassen_sticker','to_go_sticker','a4_plakat','flyer_klein']
+      })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/loyalty/:slug/counter/code/lookup', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const body = req.body || {}
+      const code = clean(body.code)
+      const shield = inspectPublicAction({ req, action: 'public_counter_code_lookup', slug, email: null, body, max: 30 })
+      await recordPublicShieldEvent(supabase, shield, { action: 'public_counter_code_lookup', slug, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
+      const c = await counterContextForSlug(slug)
+      if (!c.ok) return res.status(c.status || 404).json({ ok:false, error:c.error })
+      if (!(await requireCustomerAccessForCounter(req, res, c.customerId))) return
+      const row = await loadOpenRedemptionCode(c.customerId, code)
+      if (!row) return res.status(404).json({ ok:false, code:'REDEMPTION_CODE_NOT_FOUND', error:'Einlösecode nicht gefunden.' })
+      const payload = row.payload || {}
+      if (payload.expires_at && Date.parse(payload.expires_at) < Date.now()) return res.status(410).json({ ok:false, code:'REDEMPTION_CODE_EXPIRED', error:'Dieser Einlösecode ist abgelaufen.' })
+      if (!['open','created',''].includes(String(payload.status || 'open').toLowerCase())) return res.status(409).json({ ok:false, code:'REDEMPTION_CODE_USED', error:'Dieser Einlösecode wurde bereits verwendet.' })
+      const memberRes = payload.loyalty_customer_id ? await safeMaybeSingle(supabase.from('loyalty_customers').select('*').eq('id', payload.loyalty_customer_id).maybeSingle()) : { data: null }
+      const member = memberRes.data || null
+      const rewards = await availableRewardsForMember(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null, member)
+      res.json({ ok:true, code, link_id: row.id, member: member ? { id: member.id, display_name: member.display_name || member.name || payload.display_name || 'Gast', points_balance: num(member.points_balance, payload.points_balance || 0), email_hint: member.email ? `${String(member.email).slice(0,2)}***@${String(member.email).split('@')[1] || 'mail'}` : null } : { display_name: payload.display_name || 'Gast', points_balance: num(payload.points_balance, 0) }, rewards, expires_at: payload.expires_at || null })
+    } catch (e) { next(e) }
+  })
+
+  router.post('/public/loyalty/:slug/counter/code/redeem', async (req, res, next) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const body = req.body || {}
+      const code = clean(body.code)
+      const rewardId = clean(body.reward_id || body.rewardId)
+      const staffCode = clean(body.staff_code || body.staffCode || body.pin || body.staff_pin)
+      const shield = inspectPublicAction({ req, action: 'public_counter_code_redeem', slug, email: null, body: { code, reward_id: rewardId, has_staff_code: Boolean(staffCode) }, max: 20 })
+      await recordPublicShieldEvent(supabase, shield, { action: 'public_counter_code_redeem', slug, user_agent: req.get('user-agent') })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
+      const c = await counterContextForSlug(slug)
+      if (!c.ok) return res.status(c.status || 404).json({ ok:false, error:c.error })
+      if (!(await requireCustomerAccessForCounter(req, res, c.customerId))) return
+      const row = await loadOpenRedemptionCode(c.customerId, code)
+      if (!row) return res.status(404).json({ ok:false, code:'REDEMPTION_CODE_NOT_FOUND', error:'Einlösecode nicht gefunden.' })
+      const payload = row.payload || {}
+      if (payload.expires_at && Date.parse(payload.expires_at) < Date.now()) return res.status(410).json({ ok:false, code:'REDEMPTION_CODE_EXPIRED', error:'Dieser Einlösecode ist abgelaufen.' })
+      if (!['open','created',''].includes(String(payload.status || 'open').toLowerCase())) return res.status(409).json({ ok:false, code:'REDEMPTION_CODE_USED', error:'Dieser Einlösecode wurde bereits verwendet.' })
+      const staff = await validatePublicStaffCode(c.customerId, staffCode, c.qrCampaign?.id || c.program?.qr_campaign_id || null)
+      if (!staff.ok) return res.status(400).json({ ok:false, code:'INVALID_STAFF_CODE', error: staff.error || 'Mitarbeiter-PIN ungültig.' })
+      const memberRes = payload.loyalty_customer_id ? await safeMaybeSingle(supabase.from('loyalty_customers').select('*').eq('id', payload.loyalty_customer_id).maybeSingle()) : { data: null }
+      const member = memberRes.data || null
+      if (!member?.id) return res.status(404).json({ ok:false, code:'MEMBER_NOT_FOUND', error:'Bonusmitglied zum Code wurde nicht gefunden.' })
+      let reward = rewardId ? await findPublicReward(c.customerId, rewardId, c.qrCampaign?.id || c.program?.qr_campaign_id || null) : null
+      if (!reward) {
+        const available = await availableRewardsForMember(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null, member)
+        const first = available.find((r) => r.available)
+        if (first?.id) reward = await findPublicReward(c.customerId, first.id, c.qrCampaign?.id || c.program?.qr_campaign_id || null)
+      }
+      if (!reward) return res.status(404).json({ ok:false, code:'REWARD_NOT_FOUND', error:'Keine einlösbare Prämie für diesen Code gefunden.' })
+      const requiredPoints = rewardRequiredPoints(reward)
+      const balance = num(member.points_balance, 0)
+      if (balance < requiredPoints) return res.status(400).json({ ok:false, code:'NOT_ENOUGH_POINTS', error:`Für diese Prämie fehlen noch ${Math.max(0, requiredPoints - balance)} Punkte.`, points_balance: balance, required_points: requiredPoints })
+      const existingRedemptions = await getPublicRewardRedemptions(c.customerId, member.id, reward.id)
+      const allowMultiple = rewardAllowsMultiple(reward)
+      if (!allowMultiple && existingRedemptions.length > 0) return res.status(409).json({ ok:false, code:'REWARD_ALREADY_REDEEMED', error:'Diese Prämie wurde bereits eingelöst.' })
+      const now = new Date().toISOString()
+      const nextBalance = Math.max(0, balance - requiredPoints)
+      const updated = await updateLoyaltyCustomerSafe(member.id, { points_balance: nextBalance, last_activity_at: now, last_seen_at: now, metadata: { ...(member.metadata || {}), last_counter_redemption: { reward_id: reward.id, code, redeemed_at: now } } })
+      if (updated.error) throw updated.error
+      const redemptionPayload = { customer_id: c.customerId, loyalty_program_id: c.program.id, loyalty_customer_id: member.id, qr_campaign_id: c.qrCampaign?.id || c.program?.qr_campaign_id || null, reward_id: reward.id, reward_title: rewardDisplayTitle(reward), points_spent: requiredPoints, staff_code_used: true, status: 'redeemed', redeemed_at: now, metadata: { source: 'counter_code', slug, code, staff_code_label: staff.staff_code?.label || null }, created_at: now, updated_at: now }
+      const redemption = await savePublicRewardRedemption(redemptionPayload)
+      await insertLoyaltyTransactionSafe({ customer_id: c.customerId, loyalty_program_id: c.program.id, loyalty_customer_id: member.id, qr_campaign_id: c.qrCampaign?.id || c.program?.qr_campaign_id || null, action: 'reward_redemption', points: -requiredPoints, source: 'counter_code', description: `Tresen-Einlösung: ${rewardDisplayTitle(reward)}`, metadata: { slug, code, reward_id: reward.id, staff_code_used: true } })
+      try { await supabase.from('v33_functional_records').update({ status: 'redeemed', payload: { ...payload, status:'redeemed', reward_id: reward.id, reward_title: rewardDisplayTitle(reward), redeemed_at: now, staff_code_used: true }, updated_at: now }).eq('id', row.id) } catch (_) {}
+      res.json({ ok:true, status:'redeemed', reward: { id: reward.id, title: rewardDisplayTitle(reward), points_required: requiredPoints }, redemption: redemption.data, member: updated.data || member, points_balance: nextBalance })
+    } catch (e) { next(e) }
+  })
+
   router.get('/public/loyalty/:slug/scan-start', async (req, res, next) => {
     try {
       const slug = String(req.params.slug || '').trim()
@@ -2034,6 +2461,8 @@ function v33FunctionalRoutes(supabase) {
       try { v35Snapshot = await engine.recalculateCustomer(customerId) } catch (e) { warnings.push({ code:'ENGINE_RECALCULATE_FAILED', message:String(e?.message || e) }) }
       let rotatedQr = null
       try { rotatedQr = await rotateQrCampaignAfterSuccessfulScan({ customerId, slug, program, qrCampaign }) } catch (e) { warnings.push({ code:'QR_ROTATION_FAILED', message: String(e?.message || e) }) }
+      let quickRedemption = null
+      try { quickRedemption = await createQuickRedemptionCode({ customerId, program, qrCampaign, member, slug, pointsBalance: member.points_balance || points }) } catch (e) { warnings.push({ code:'QUICK_REDEMPTION_CODE_FAILED', message: String(e?.message || e) }) }
 
       res.json({
         ok: true,
@@ -2050,6 +2479,7 @@ function v33FunctionalRoutes(supabase) {
         redemptions: await getPublicRewardRedemptions(customerId, member.id).catch(() => []),
         scan_token_consumed: Boolean(scanToken && qrLimitsForProgram.require_rescan_for_points),
         qr_rotation: rotatedQr,
+        quick_redemption: quickRedemption,
         marketing_consent: marketingConsentResult ? { granted: false, status: marketingConsentResult.status || 'pending_double_opt_in', double_opt_in_required: true, email_sent: Boolean(marketingConsentResult.email_sent), dryRun: Boolean(marketingConsentResult.dryRun), expires_at: marketingConsentResult.expires_at } : { granted: false }
       })
     } catch (e) { next(e) }
@@ -3228,6 +3658,9 @@ function v33FunctionalRoutes(supabase) {
         suspicion_score_threshold: toInt(body.suspicion_score_threshold ?? current.suspicion_score_threshold ?? current.metadata?.suspicion_score_threshold ?? 70, 70, 100),
         require_rescan_for_points: body.require_rescan_for_points === undefined ? (current.metadata?.require_rescan_for_points !== false && toInt(body.points_per_scan ?? current.points_per_scan ?? current.metadata?.points_per_scan ?? 10) > 0 && mode !== 'review') : body.require_rescan_for_points !== false,
         rotate_qr_after_scan: body.rotate_qr_after_scan === undefined ? current.metadata?.rotate_qr_after_scan === true : body.rotate_qr_after_scan === true,
+        redemption_mode: ['customer_phone_staff_pin','counter_customer_code'].includes(String(body.redemption_mode || current.metadata?.redemption_mode || '')) ? String(body.redemption_mode || current.metadata?.redemption_mode) : 'customer_phone_staff_pin',
+        show_staff_pin_on_counter: body.show_staff_pin_on_counter === undefined ? current.metadata?.show_staff_pin_on_counter !== false : body.show_staff_pin_on_counter !== false,
+        redemption_code_ttl_minutes: toInt(body.redemption_code_ttl_minutes ?? current.metadata?.redemption_code_ttl_minutes ?? 240, 240),
         qr_scan_url: slugValue ? `/q/${slugValue}` : current.metadata?.qr_scan_url,
         landing_url: slugValue ? `/l/${slugValue}` : current.metadata?.landing_url,
         final_slug_rules_source: 'qr_campaigns',
@@ -4220,6 +4653,45 @@ function v33FunctionalRoutes(supabase) {
     return Boolean(meta.is_test_mail === true || meta.test_mail === true || status.startsWith('test') || emailStatus.startsWith('test'))
   }
 
+  function checkReactivationRouteRate(req, scope, max = 20, windowMs = 15 * 60 * 1000) {
+    const actor = req.user?.id || securityIp(req)
+    return checkSecurityBucket(`reactivation:${scope}:${actor}`, { max, windowMs })
+  }
+
+  function reactivationLockInfo(link = {}) {
+    const meta = link?.metadata && typeof link.metadata === 'object' ? link.metadata : {}
+    const until = meta.redeem_locked_until || link.redeem_locked_until || null
+    const untilMs = until ? Date.parse(until) : 0
+    return { locked: Boolean(untilMs && untilMs > Date.now()), until, failed_count: num(meta.redeem_failed_count, 0) }
+  }
+
+  async function recordReactivationFailedRedeem(link, req) {
+    const meta = link?.metadata && typeof link.metadata === 'object' ? link.metadata : {}
+    const maxFails = Math.max(2, num(process.env.REACTIVATION_REDEEM_LOCK_MAX_FAILS, 5))
+    const lockMinutes = Math.max(1, num(process.env.REACTIVATION_REDEEM_LOCK_MINUTES, 15))
+    const failedCount = num(meta.redeem_failed_count, 0) + 1
+    const lockUntil = failedCount >= maxFails ? new Date(Date.now() + lockMinutes * 60 * 1000).toISOString() : null
+    const nextMeta = {
+      ...meta,
+      redeem_failed_count: failedCount,
+      redeem_last_failed_at: new Date().toISOString(),
+      redeem_last_failed_ip_hash: marketingConsentIpHash(req),
+      ...(lockUntil ? { redeem_locked_until: lockUntil } : {})
+    }
+    try { await updateTableSchemaSafe('customer_reactivation_links', { metadata: nextMeta, updated_at: new Date().toISOString() }, (q) => q.eq('id', link.id)) } catch (_) {}
+    try { await recordReactivationEvent({ customer_id: link.customer_id, qr_campaign_id: link.qr_campaign_id, loyalty_customer_id: link.loyalty_customer_id || null, reactivation_link_id: link.id, event_type: lockUntil ? 'redeem_locked' : 'redeem_failed_staff_code', metadata: { token_hash: hashTokenForLog(link.token), failed_count: failedCount, locked_until: lockUntil } }) } catch (_) {}
+    return { failed_count: failedCount, locked_until: lockUntil }
+  }
+
+  async function clearReactivationFailedRedeem(link) {
+    const meta = link?.metadata && typeof link.metadata === 'object' ? { ...link.metadata } : {}
+    delete meta.redeem_failed_count
+    delete meta.redeem_locked_until
+    delete meta.redeem_last_failed_at
+    delete meta.redeem_last_failed_ip_hash
+    try { await updateTableSchemaSafe('customer_reactivation_links', { metadata: meta, updated_at: new Date().toISOString() }, (q) => q.eq('id', link.id)) } catch (_) {}
+  }
+
   async function getReactivationContext(token) {
     const link = await getReactivationLinkByToken(token)
     if (!link) return { ok: false, status: 404, error: 'Rückhol-Link nicht gefunden.' }
@@ -4238,6 +4710,8 @@ function v33FunctionalRoutes(supabase) {
 
   router.get('/customers/:customer_id/reactivation/:qr_campaign_id/mail-diagnostics', async (req, res, next) => {
     try {
+      const bucket = checkReactivationRouteRate(req, `mail-diagnostics:${req.params.customer_id}:${req.params.qr_campaign_id}`, 30)
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const mail = new MailService()
       res.json({ ok: true, from: reactivationMailFrom(), diagnostics: mail.diagnostics(), automation_enabled: process.env.REACTIVATION_AUTOMATION_ENABLED === 'true' })
     } catch (e) { next(e) }
@@ -4245,6 +4719,8 @@ function v33FunctionalRoutes(supabase) {
 
   router.post('/customers/:customer_id/reactivation/:qr_campaign_id/test-mail', async (req, res, next) => {
     try {
+      const bucket = checkReactivationRouteRate(req, `test-mail:${req.params.customer_id}:${req.params.qr_campaign_id}`, Math.max(1, num(process.env.REACTIVATION_TEST_MAIL_RATE_MAX, 5)))
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const customerId = req.params.customer_id
       const qrCampaignId = req.params.qr_campaign_id
       const body = req.body || {}
@@ -4284,6 +4760,8 @@ function v33FunctionalRoutes(supabase) {
 
   router.post('/customers/:customer_id/reactivation/:qr_campaign_id/send-mails', async (req, res, next) => {
     try {
+      const bucket = checkReactivationRouteRate(req, `send-mails:${req.params.customer_id}:${req.params.qr_campaign_id}`, Math.max(1, num(process.env.REACTIVATION_SEND_MAIL_RATE_MAX, 5)))
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const customerId = req.params.customer_id
       const qrCampaignId = req.params.qr_campaign_id
       const body = req.body || {}
@@ -4315,6 +4793,8 @@ function v33FunctionalRoutes(supabase) {
 
   router.post('/customers/:customer_id/reactivation/:qr_campaign_id/send-reminders', async (req, res, next) => {
     try {
+      const bucket = checkReactivationRouteRate(req, `send-reminders:${req.params.customer_id}:${req.params.qr_campaign_id}`, Math.max(1, num(process.env.REACTIVATION_SEND_MAIL_RATE_MAX, 5)))
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const customerId = req.params.customer_id
       const qrCampaignId = req.params.qr_campaign_id
       const body = req.body || {}
@@ -4348,7 +4828,10 @@ function v33FunctionalRoutes(supabase) {
 
   router.post('/public/reactivation/mail-webhook', async (req, res, next) => {
     try {
+      const bucket = checkSecurityBucket(`reactivation:webhook:${securityIp(req)}`, { windowMs: 60 * 1000, max: Math.max(5, num(process.env.REACTIVATION_WEBHOOK_RATE_MAX, 60)) })
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const secret = clean(process.env.REACTIVATION_WEBHOOK_SECRET || process.env.RESEND_WEBHOOK_SECRET)
+      if (!secret && isProductionRuntime()) return res.status(403).json({ ok:false, code:'WEBHOOK_SECRET_REQUIRED' })
       if (secret) {
         const supplied = clean(req.get('x-webhook-secret') || req.get('x-resend-webhook-secret') || req.query.secret)
         if (supplied !== secret) return res.status(401).json({ ok:false })
@@ -4385,6 +4868,8 @@ function v33FunctionalRoutes(supabase) {
   router.get('/public/reactivation/:token/status', async (req, res, next) => {
     try {
       const token = clean(req.params.token)
+      const bucket = checkSecurityBucket(`reactivation:status:${securityIp(req)}:${hashTokenForLog(token)}`, { windowMs: 60 * 60 * 1000, max: Math.max(10, num(process.env.REACTIVATION_STATUS_RATE_MAX, 60)) })
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const ctx = await getReactivationContext(token)
       if (!ctx.ok) return res.status(ctx.status || 404).json({ ok:false, error: ctx.error })
       const { link, customer, qr_campaign, member, settings, expired, already_redeemed } = ctx
@@ -4403,15 +4888,13 @@ function v33FunctionalRoutes(supabase) {
         already_redeemed,
         is_test_mail: isTestLink,
         customer_name: customer?.name || customer?.company || 'Dein Anbieter',
-        display_name: link.display_name || member?.display_name || member?.name || link.email || 'Gast',
-        email: link.email || member?.email || null,
+        display_name: link.display_name || member?.display_name || member?.name || 'Gast',
         reward_name: link.reward_name || settings?.reward_name || 'Deine Rückhol-Prämie',
         reward_type: link.reward_type || settings?.reward_type || 'reactivation',
         reward_points: num(link.reward_points ?? settings?.reward_points, 0),
         staff_code_required: link.staff_code_required !== false && settings?.staff_code_required !== false,
         expires_at: link.expires_at || null,
-        qr_slug: qr_campaign?.slug || link.metadata?.slug || null,
-        metadata: link.metadata || {}
+        qr_slug: qr_campaign?.slug || link.metadata?.slug || null
       })
     } catch (e) { next(e) }
   })
@@ -4419,16 +4902,24 @@ function v33FunctionalRoutes(supabase) {
   router.post('/public/reactivation/:token/redeem', async (req, res, next) => {
     try {
       const token = clean(req.params.token)
+      const bucket = checkSecurityBucket(`reactivation:redeem:${securityIp(req)}:${hashTokenForLog(token)}`, { windowMs: 15 * 60 * 1000, max: Math.max(3, num(process.env.REACTIVATION_REDEEM_RATE_MAX, 8)) })
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const body = req.body || {}
       const ctx = await getReactivationContext(token)
       if (!ctx.ok) return res.status(ctx.status || 404).json({ ok:false, error: ctx.error })
       const { link, member, settings, expired, already_redeemed } = ctx
       if (expired) return res.status(410).json({ ok:false, code:'REACTIVATION_LINK_EXPIRED', error:'Dieser Rückhol-Link ist abgelaufen.' })
       if (already_redeemed) return res.status(409).json({ ok:false, code:'REACTIVATION_LINK_ALREADY_REDEEMED', error:'Dieser Rückhol-Link wurde bereits eingelöst.' })
+      const lock = reactivationLockInfo(link)
+      if (lock.locked) return res.status(429).json({ ok:false, code:'REACTIVATION_REDEEM_LOCKED', error:'Zu viele ungültige Einlöseversuche. Bitte später erneut versuchen.', locked_until: lock.until })
       const staffRequired = link.staff_code_required !== false && settings?.staff_code_required !== false
       if (staffRequired) {
         const ok = await verifyReactivationStaffCode(link.customer_id, body.staff_code || body.staffCode)
-        if (!ok) return res.status(400).json({ ok:false, code:'INVALID_STAFF_CODE', error:'Mitarbeitercode ungültig.' })
+        if (!ok) {
+          const failed = await recordReactivationFailedRedeem(link, req)
+          return res.status(failed.locked_until ? 429 : 400).json({ ok:false, code: failed.locked_until ? 'REACTIVATION_REDEEM_LOCKED' : 'INVALID_STAFF_CODE', error: failed.locked_until ? 'Zu viele ungültige Einlöseversuche. Bitte später erneut versuchen.' : 'Mitarbeitercode ungültig.', locked_until: failed.locked_until || null })
+        }
+        await clearReactivationFailedRedeem(link)
       }
       const now = new Date().toISOString()
       const isTestLink = isTestReactivationLink(link)
@@ -4504,6 +4995,9 @@ function v33FunctionalRoutes(supabase) {
 
   router.post('/reactivation-mail-automation/run', async (req, res, next) => {
     try {
+      if (req.userRole !== 'admin') return res.status(403).json({ ok:false, code:'ADMIN_REQUIRED', error:'Nur Admins dürfen den globalen Rückholmail-Lauf starten.' })
+      const bucket = checkReactivationRouteRate(req, 'automation-run', Math.max(1, num(process.env.REACTIVATION_AUTOMATION_RUN_RATE_MAX, 3)))
+      if (!bucket.ok) return rateLimitResponse(res, bucket)
       const result = await runReactivationMailAutomation(req)
       res.json({ ok: result.failed === 0, result })
     } catch (e) { next(e) }
@@ -4514,6 +5008,150 @@ function v33FunctionalRoutes(supabase) {
     const intervalMs = Math.max(15 * 60 * 1000, num(process.env.REACTIVATION_AUTOMATION_INTERVAL_MS, 6 * 60 * 60 * 1000))
     setInterval(() => runReactivationMailAutomation(null).catch((e) => console.error('[reactivation-mail-automation]', e.message || e)), intervalMs)
   }
+
+
+
+  async function v100SafeList(table, select = '*', filters = [], limit = 200) {
+    try {
+      let q = supabase.from(table).select(select).limit(limit)
+      for (const f of filters) {
+        if (!f || !f.key) continue
+        q = q.eq(f.key, f.value)
+      }
+      const { data, error } = await q
+      if (error) return { ok: false, table, data: [], error: error.message, code: error.code || null }
+      return { ok: true, table, data: Array.isArray(data) ? data : [], error: null }
+    } catch (e) {
+      return { ok: false, table, data: [], error: e.message || String(e), code: e.code || null }
+    }
+  }
+
+  async function v100CheckColumn(table, column) {
+    try {
+      const { error } = await supabase.from(table).select(column).limit(1)
+      if (!error) return { column, ok: true }
+      return { column, ok: false, error: error.message, code: error.code || null }
+    } catch (e) {
+      return { column, ok: false, error: e.message || String(e), code: e.code || null }
+    }
+  }
+
+  async function v100CheckSchema() {
+    const required = {
+      customers: ['id','name','company','status'],
+      customer_tool_access: ['id','customer_id','tool_key','enabled'],
+      qr_campaigns: ['id','customer_id','slug','status','active','loyalty_program_id'],
+      loyalty_programs: ['id','customer_id','slug','qr_campaign_id','status'],
+      loyalty_customers: ['id','customer_id','email','display_name','marketing_consent_status','metadata'],
+      loyalty_transactions: ['id','customer_id','loyalty_customer_id','created_at'],
+      loyalty_rewards: ['id','customer_id','qr_campaign_id','name','required_points','active','status'],
+      staff_codes: ['id','customer_id','code','active','status'],
+      customer_reactivation_settings: ['id','customer_id','qr_campaign_id','active','inactive_after_days','reward_name','email_subject','email_body_template','require_marketing_consent'],
+      customer_reactivation_links: ['id','customer_id','qr_campaign_id','loyalty_customer_id','token','status','email_status','reward_name','expires_at','metadata'],
+      customer_reactivation_events: ['id','customer_id','qr_campaign_id','event_type','metadata','created_at']
+    }
+    const results = []
+    for (const [table, columns] of Object.entries(required)) {
+      const checks = []
+      for (const column of columns) checks.push(await v100CheckColumn(table, column))
+      const missing = checks.filter((c) => !c.ok).map((c) => c.column)
+      const firstError = checks.find((c) => !c.ok)
+      results.push({ table, ok: missing.length === 0, missing, error: firstError?.error || null, code: firstError?.code || null })
+    }
+    return results
+  }
+
+  function v100HasReactivationConsent(member) {
+    const meta = member?.metadata || {}
+    const ev = meta.marketing_consent || {}
+    const purposes = [
+      ...(Array.isArray(ev.purposes) ? ev.purposes : []),
+      ...(Array.isArray(meta.marketing_consent_purposes) ? meta.marketing_consent_purposes : [])
+    ].map((v) => String(v || '').toLowerCase())
+    const text = String(ev.text || meta.marketing_consent_text || '').toLowerCase()
+    const granted = member?.marketing_consent_status === 'granted' || meta.marketing_consent_status === 'granted' || ev.status === 'granted'
+    const reactivation = purposes.includes('reactivation') || text.includes('reaktivierung') || text.includes('reaktivierungsaktion')
+    return Boolean(granted && reactivation)
+  }
+
+  function v100EnabledTool(accessRows, keys) {
+    const lookup = new Set(keys.map((k) => String(k || '').toLowerCase()))
+    return (accessRows || []).some((row) => row?.enabled !== false && lookup.has(String(row.tool_key || row.tool || '').trim().toLowerCase()))
+  }
+
+  router.get('/customers/:customer_id/pilot-readiness', async (req, res, next) => {
+    try {
+      const customerId = String(req.params.customer_id || '').trim()
+      const now = new Date().toISOString()
+      const [customerResult, accessResult, qrResult, programResult, memberResult, staffResult, rewardResult, settingResult, linkResult, eventResult] = await Promise.all([
+        v100SafeList('customers', 'id,name,company,status,is_demo,package_name', [{ key: 'id', value: customerId }], 1),
+        v100SafeList('customer_tool_access', 'id,customer_id,tool_key,enabled', [{ key: 'customer_id', value: customerId }], 200),
+        v100SafeList('qr_campaigns', 'id,customer_id,title,name,slug,status,active,loyalty_program_id,public_url,target_url', [{ key: 'customer_id', value: customerId }], 200),
+        v100SafeList('loyalty_programs', 'id,customer_id,name,slug,status,qr_campaign_id', [{ key: 'customer_id', value: customerId }], 200),
+        v100SafeList('loyalty_customers', 'id,customer_id,email,display_name,marketing_consent_status,metadata,last_seen_at,last_activity_at,created_at', [{ key: 'customer_id', value: customerId }], 500),
+        v100SafeList('staff_codes', 'id,customer_id,code,active,status,last_used_at', [{ key: 'customer_id', value: customerId }], 200),
+        v100SafeList('loyalty_rewards', 'id,customer_id,qr_campaign_id,name,title,required_points,active,status', [{ key: 'customer_id', value: customerId }], 200),
+        v100SafeList('customer_reactivation_settings', 'id,customer_id,qr_campaign_id,active,reward_name,email_subject,updated_at', [{ key: 'customer_id', value: customerId }], 200),
+        v100SafeList('customer_reactivation_links', 'id,customer_id,qr_campaign_id,status,email_status,metadata,created_at,sent_at,redeemed_at', [{ key: 'customer_id', value: customerId }], 500),
+        v100SafeList('customer_reactivation_events', 'id,customer_id,qr_campaign_id,event_type,metadata,created_at', [{ key: 'customer_id', value: customerId }], 500)
+      ])
+
+      const schema = await v100CheckSchema()
+      const customer = customerResult.data[0] || null
+      const access = accessResult.data || []
+      const qrCampaigns = qrResult.data || []
+      const programs = programResult.data || []
+      const members = memberResult.data || []
+      const staffCodes = staffResult.data || []
+      const rewards = rewardResult.data || []
+      const settings = settingResult.data || []
+      const links = linkResult.data || []
+      const events = eventResult.data || []
+      const reactivationTool = v100EnabledTool(access, ['rückholaktionen','rueckholaktionen','customer_reactivation','reactivation','inactive_customer_reactivation'])
+      const qrTool = v100EnabledTool(access, ['qr kampagnen','qr_campaigns','qr','qr-kampagnen']) || qrCampaigns.length > 0
+      const loyaltyTool = v100EnabledTool(access, ['loyalty','punkteprogramm','loyalty/punkteprogramm']) || programs.length > 0
+      const mailEligible = members.filter((m) => String(m.email || '').trim() && v100HasReactivationConsent(m)).length
+      const activeStaff = staffCodes.filter((s) => s.active !== false && !['inactive','gesperrt','archiviert'].includes(String(s.status || '').toLowerCase())).length
+      const activeRewards = rewards.filter((r) => r.active !== false && !['deleted','archiviert','inaktiv'].includes(String(r.status || '').toLowerCase())).length
+      const activeSettings = settings.filter((s) => s.active !== false).length
+      const testMails = links.filter((l) => l?.metadata?.is_test_mail === true || String(l.email_status || '').startsWith('test')).length + events.filter((e) => String(e.event_type || '').startsWith('test_')).length
+      const openLinks = links.filter((l) => ['open','created','sent','opened'].includes(String(l.status || 'open').toLowerCase())).length
+      const redeemedLinks = links.filter((l) => ['redeemed','reactivated'].includes(String(l.status || '').toLowerCase()) || l.redeemed_at).length
+
+      const checklist = [
+        { key: 'customer', label: 'Kunde angelegt', ok: Boolean(customer), hint: customer ? customer.name || customer.company || customer.id : 'Kunde nicht gefunden.' },
+        { key: 'qr_tool', label: 'QR-Kampagnen freigeschaltet / vorhanden', ok: Boolean(qrTool), hint: qrCampaigns.length ? `${qrCampaigns.length} QR-Kampagne(n)` : 'QR Kampagnen in der Kundenakte freischalten.' },
+        { key: 'loyalty_tool', label: 'Loyalty/Punkteprogramm freigeschaltet / vorhanden', ok: Boolean(loyaltyTool), hint: programs.length ? `${programs.length} Punkteprogramm(e)` : 'Punkteprogramm anlegen oder Add-on freischalten.' },
+        { key: 'reactivation_tool', label: 'Rückholaktionen freigeschaltet', ok: Boolean(reactivationTool), hint: reactivationTool ? 'Add-on aktiv.' : 'Tool Rückholaktionen separat freischalten.' },
+        { key: 'qr_campaign', label: 'QR-Zielseite angelegt', ok: qrCampaigns.length > 0, hint: qrCampaigns[0]?.slug ? `/q/${qrCampaigns[0].slug}` : 'QR-Zielseite erstellen.' },
+        { key: 'staff_code', label: 'Mitarbeitercode aktiv', ok: activeStaff > 0, hint: activeStaff ? `${activeStaff} aktiver Code` : 'Mindestens einen Mitarbeitercode anlegen.' },
+        { key: 'reward', label: 'Prämie/Rückholprämie vorhanden', ok: activeRewards > 0 || activeSettings > 0, hint: activeRewards ? `${activeRewards} aktive Prämie(n)` : activeSettings ? 'Rückholprämie in Einstellungen vorhanden.' : 'Prämie anlegen.' },
+        { key: 'reactivation_settings', label: 'Rückholaktion konfiguriert', ok: activeSettings > 0, hint: activeSettings ? `${activeSettings} Einstellung(en)` : 'Inaktivitätsregel, Prämie und Mailtext speichern.' },
+        { key: 'mail_consent', label: 'Mailfähige Kontakte vorhanden', ok: mailEligible > 0, hint: mailEligible ? `${mailEligible} bestätigte Opt-in-Kontakte` : 'Endkunde muss Slug-Double-Opt-in bestätigen.' },
+        { key: 'test_mail', label: 'Testmail / Testlink geprüft', ok: testMails > 0, hint: testMails ? `${testMails} Test-Ereignis(se)` : 'Testmail senden und Link öffnen.' }
+      ]
+
+      const env = {
+        frontend_url: Boolean(process.env.FRONTEND_URL),
+        resend_api_key: Boolean(process.env.RESEND_API_KEY),
+        reactivation_mail_from: Boolean(process.env.REACTIVATION_MAIL_FROM || 'MecklenburgMarketing Loyalty <loyalty@mecklenburgmarketing.de>'),
+        webhook_secret: Boolean(process.env.REACTIVATION_WEBHOOK_SECRET || process.env.RESEND_WEBHOOK_SECRET),
+        cors_allowed_origins: Boolean(process.env.CORS_ALLOWED_ORIGINS || process.env.FRONTEND_URL),
+        public_json_limit: process.env.PUBLIC_JSON_LIMIT || '250kb',
+        automation_enabled: process.env.REACTIVATION_AUTOMATION_ENABLED === 'true'
+      }
+      const envChecklist = [
+        { key: 'frontend_url', label: 'FRONTEND_URL gesetzt', ok: env.frontend_url, hint: env.frontend_url ? 'Öffentliche Links können korrekt gebaut werden.' : 'FRONTEND_URL in Railway setzen.' },
+        { key: 'resend_api_key', label: 'RESEND_API_KEY gesetzt', ok: env.resend_api_key, hint: env.resend_api_key ? 'Mailversand vorbereitet.' : 'Für echte Rückholmails erforderlich.' },
+        { key: 'webhook_secret', label: 'Webhook-Secret gesetzt', ok: env.webhook_secret, hint: env.webhook_secret ? 'Mailtracking abgesichert.' : 'REACTIVATION_WEBHOOK_SECRET setzen.' },
+        { key: 'cors', label: 'CORS / Frontend-Domain konfiguriert', ok: env.cors_allowed_origins, hint: env.cors_allowed_origins ? 'Domain-Allowlist vorhanden.' : 'CORS_ALLOWED_ORIGINS setzen.' }
+      ]
+      const missingSchema = schema.filter((s) => !s.ok)
+      const done = checklist.filter((c) => c.ok).length
+      const score = Math.round((done / Math.max(1, checklist.length)) * 100)
+      res.json({ ok: true, generated_at: now, score, customer, env, env_checklist: envChecklist, schema, missing_schema: missingSchema, checklist, counts: { qr_campaigns: qrCampaigns.length, loyalty_programs: programs.length, loyalty_customers: members.length, mail_eligible: mailEligible, staff_codes: activeStaff, rewards: activeRewards, reactivation_settings: activeSettings, links: links.length, open_links: openLinks, redeemed_links: redeemedLinks, test_events: testMails } })
+    } catch (e) { next(e) }
+  })
 
   router.get('/v42/url-debug', async (req, res) => {
     res.json({
