@@ -139,6 +139,28 @@ async function logMfaEvent({ user_id, event_type, ip_address, user_agent, metada
   } catch (_) {}
 }
 
+async function updateMfaProfile(supabase, profile, patch) {
+  const attempts = []
+  if (profile?.id) attempts.push(['id', profile.id])
+  if (profile?.email) attempts.push(['email', String(profile.email).trim().toLowerCase()])
+
+  let lastError = null
+  for (const [column, value] of attempts) {
+    try {
+      const { error } = await supabase.from('user_profiles').update(patch).eq(column, value)
+      if (!error) return true
+      lastError = error
+    } catch (e) {
+      lastError = e
+    }
+  }
+
+  const e = new Error(lastError?.message || 'MFA-Profil konnte nicht aktualisiert werden')
+  e.status = 500
+  e.code = 'MFA_PROFILE_UPDATE_FAILED'
+  throw e
+}
+
 async function enroll({ user_id, email }) {
   const supabase = getSupabaseAdmin()
   if (!supabase) { const e = new Error('Supabase nicht konfiguriert'); e.status = 503; throw e }
@@ -166,16 +188,13 @@ async function activate({ user_id, email, code, ip_address, user_agent }) {
   const now = new Date().toISOString()
   const backupCodes = generateBackupCodes(10)
   const hashed = backupCodes.map((c) => hashCode(c))
-  await supabase
-    .from('user_profiles')
-    .update({
-      mfa_enabled: true,
-      mfa_enrolled_at: now,
-      mfa_last_used_at: now,
-      mfa_verified_until: verifiedUntil(),
-      mfa_backup_codes_hash: hashed
-    })
-    .eq('id', profile.id)
+  await updateMfaProfile(supabase, profile, {
+    mfa_enabled: true,
+    mfa_enrolled_at: now,
+    mfa_last_used_at: now,
+    mfa_verified_until: verifiedUntil(),
+    mfa_backup_codes_hash: hashed
+  })
   await logMfaEvent({ user_id, event_type: 'enrolled', ip_address, user_agent })
   return { backupCodes }
 }
@@ -193,7 +212,7 @@ async function verify({ user_id, email, code, ip_address, user_agent }) {
 
   const totpResult = verifyTotpCode(code, profile.mfa_secret)
   if (totpResult.ok) {
-    await supabase.from('user_profiles').update({ mfa_last_used_at: now, mfa_verified_until: until }).eq('id', profile.id)
+    await updateMfaProfile(supabase, profile, { mfa_last_used_at: now, mfa_verified_until: until })
     await logMfaEvent({ user_id, event_type: 'verified', ip_address, user_agent, metadata: { verified_until: until, delta: totpResult.delta } })
     return { ok: true, via: 'totp', verified_until: until, delta: totpResult.delta }
   }
@@ -202,10 +221,7 @@ async function verify({ user_id, email, code, ip_address, user_agent }) {
   for (let i = 0; i < hashes.length; i++) {
     if (verifyCodeHash(codeStr, hashes[i])) {
       const remaining = hashes.slice(0, i).concat(hashes.slice(i + 1))
-      await supabase
-        .from('user_profiles')
-        .update({ mfa_backup_codes_hash: remaining, mfa_last_used_at: now, mfa_verified_until: until })
-        .eq('id', profile.id)
+      await updateMfaProfile(supabase, profile, { mfa_backup_codes_hash: remaining, mfa_last_used_at: now, mfa_verified_until: until })
       await logMfaEvent({ user_id, event_type: 'backup_used', ip_address, user_agent, metadata: { remaining: remaining.length, verified_until: until } })
       return { ok: true, via: 'backup', remaining: remaining.length, verified_until: until }
     }

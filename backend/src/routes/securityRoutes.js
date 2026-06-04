@@ -48,9 +48,9 @@ function securityRoutes() {
     } catch (e) { next(e) }
   })
 
-  router.post('/mfa/verify', async (req, res, next) => {
+  router.post('/mfa/verify', async (req, res) => {
     try {
-      if (!req.user?.id) return res.status(401).json({ ok: false, error: 'Nicht authentifiziert' })
+      if (!req.user?.id) return res.status(401).json({ ok: false, code: 'UNAUTHENTICATED', error: 'Nicht authentifiziert' })
       const r = await mfaService.verify({
         user_id: req.user.id,
         email: req.user.email,
@@ -58,9 +58,19 @@ function securityRoutes() {
         ip_address: req.ip,
         user_agent: req.get('user-agent')
       })
-      if (!r.ok) return res.status(401).json({ ok: false, ...r, error: '2FA-Code ungueltig' })
+      if (!r.ok) return res.status(401).json({ ok: false, code: 'MFA_INVALID', ...r, error: '2FA-Code ungueltig' })
       res.json({ ok: true, ...r })
-    } catch (e) { next(e) }
+    } catch (e) {
+      console.error('[MFA_VERIFY_ERROR]', e?.message || e)
+      const status = e?.status && e.status < 500 ? e.status : 500
+      res.status(status).json({
+        ok: false,
+        code: e?.code || 'MFA_VERIFY_INTERNAL',
+        error: status >= 500
+          ? '2FA konnte serverseitig nicht geprüft werden. Prüfe Railway-Logs und ob die MFA-Supabase-Migration ausgeführt wurde.'
+          : (e?.message || '2FA-Code ungueltig')
+      })
+    }
   })
 
   router.post('/mfa/disable', async (req, res, next) => {

@@ -59,13 +59,25 @@ export default function AuthPage() {
     const { data } = await supabaseAuth.auth.getSession()
     const token = data.session?.access_token
     if (!token) return setMessage('Session abgelaufen. Bitte erneut mit Passwort anmelden.')
-    const res = await fetch(`${BROWSER_BACKEND_BASE}/api/security/mfa/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ code: clean })
-    })
-    const payload = await res.json().catch(() => ({}))
-    if (!res.ok || payload?.ok === false) return setMessage(payload?.error || '2FA-Code ist ungültig. Prüfe bitte auch, ob die Uhrzeit auf deinem Handy automatisch synchronisiert wird.')
+    let res: Response
+    let payload: any = {}
+    try {
+      res = await fetch(`${BROWSER_BACKEND_BASE}/api/security/mfa/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: clean }),
+        cache: 'no-store'
+      })
+      const text = await res.text()
+      try { payload = text ? JSON.parse(text) : {} }
+      catch { payload = { ok: false, error: text || res.statusText } }
+    } catch (e:any) {
+      return setMessage(`2FA konnte das Backend nicht erreichen: ${e?.message || 'Netzwerkfehler'}`)
+    }
+    if (!res.ok || payload?.ok === false) {
+      const codeText = payload?.code ? ` (${payload.code})` : ''
+      return setMessage((payload?.error || payload?.message || '2FA-Code ist ungültig. Prüfe bitte auch, ob die Uhrzeit auf deinem Handy automatisch synchronisiert wird.') + codeText)
+    }
     setMfaPending(false)
     setMfaCode('')
     finishLogin(pendingProfile)

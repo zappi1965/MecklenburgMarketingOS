@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import LegalFooter from '@/components/legal/LegalFooter'
 import FieldHelpEnhancer from '@/components/FieldHelpEnhancer'
 import ConsentBanner from '@/components/ConsentBanner'
+import MmosScrollRescue from '@/components/MmosScrollRescue'
 import ClientErrorReporter from '@/components/ClientErrorReporter'
 
 export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 5, viewportFit: 'cover', themeColor: '#070b12' }
@@ -20,5 +21,5 @@ export const metadata = {
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="de"><body><ClientErrorReporter /><FieldHelpEnhancer />{children}<LegalFooter /><ConsentBanner /></body></html>
+  return <html lang="de"><body><MmosScrollRescue /><ClientErrorReporter /><FieldHelpEnhancer />{children}<LegalFooter /><ConsentBanner /></body></html>
 }
