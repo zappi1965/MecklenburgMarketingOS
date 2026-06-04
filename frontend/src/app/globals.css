@@ -5783,3 +5783,115 @@ body[data-scroll-locked] {
   overflow-y: auto !important;
 }
 
+
+/* === MMOS V103.1 CHROME/FIREFOX SCROLLFIX - APP SHELL MODE ===
+   In V103 the dashboard is rendered as a 100dvh app shell:
+   <div class="app appLike"><aside class="side"/><main class="main appMainShell"/></div>
+   A previous body-scroll fix is not sufficient because .main had overflow:hidden.
+   Desktop/tablet: main is the scroll container.
+   Mobile: page/body remains scrollable so fixed top/bottom bars continue to work.
+*/
+@media (min-width: 861px) {
+  html,
+  body {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  body > .siteLegalFooter,
+  body > .cookieBanner,
+  body > .consentBanner {
+    position: relative;
+    z-index: 30;
+  }
+
+  .app.appLike,
+  .appLike {
+    display: grid !important;
+    grid-template-columns: 280px minmax(0, 1fr) !important;
+    width: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .side {
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: sticky !important;
+    top: 0 !important;
+    align-self: start !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .main,
+  .main.appMainShell,
+  .appMainShell {
+    min-height: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 96px !important;
+  }
+
+  .top.appMobileTop {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 70 !important;
+  }
+}
+
+@media (max-width: 860px) {
+  html,
+  body {
+    height: auto !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .app.appLike,
+  .appLike {
+    display: block !important;
+    height: auto !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .main,
+  .main.appMainShell,
+  .appMainShell {
+    height: auto !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: calc(120px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .mobileOverlay {
+    pointer-events: none !important;
+  }
+
+  .app.navOpen .mobileOverlay {
+    pointer-events: auto !important;
+  }
+}
