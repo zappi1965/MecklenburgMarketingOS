@@ -2,11 +2,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { getCurrentUserProfile } from '@/lib/authClient'
 import { isActiveAdmin, isActiveCustomer } from '@/lib/routeAccessPolicy'
+import { isDemoMode } from '@/lib/environmentMode'
 
 type GateMode = 'admin' | 'customer' | 'customer_or_admin'
 
 function localProfileFallback() {
-  if (typeof window === 'undefined') return undefined
+  // V103.8: localStorage role fallback is demo-only.
+  if (typeof window === 'undefined' || !isDemoMode()) return undefined
   try {
     const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
     const storedCustomer = localStorage.getItem('mmos_customer_id') || ''

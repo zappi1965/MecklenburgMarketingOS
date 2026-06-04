@@ -2233,7 +2233,7 @@ export default function App(){
   if(isDemoFeatureEnabled()&&params.get('demo')){setLiveAuthChecked(true);return}
   const openApp=params.get('app')==='1'||params.get('mode')==='app'
   if(!openApp){setLiveAuthChecked(true);return}
-  ;(async()=>{try{const requestedView=params.get('view')||'dashboard'; const profile=await getCurrentUserProfile(); if(profile){markLiveMode();const nextRole=profile.role==='admin'?'admin':'customer';setRole(nextRole);try{localStorage.setItem('mmos_role',nextRole);if(profile.customer_id)localStorage.setItem('mmos_customer_id',profile.customer_id)}catch{}; if(profile.customer_id)setCid(profile.customer_id); setView(requestedView)}else{const storedRole=String(localStorage.getItem('mmos_role')||'').toLowerCase(); if(storedRole==='admin'||storedRole==='customer'){setRole(storedRole as Role); setView(requestedView); const storedCid=localStorage.getItem('mmos_customer_id'); if(storedCid)setCid(storedCid)}}}finally{setLiveAuthChecked(true)}})()
+  ;(async()=>{try{const requestedView=params.get('view')||'dashboard'; const profile=await getCurrentUserProfile(); if(profile){markLiveMode();const nextRole=profile.role==='admin'?'admin':'customer';setRole(nextRole);try{localStorage.setItem('mmos_role',nextRole);if(profile.customer_id)localStorage.setItem('mmos_customer_id',profile.customer_id)}catch{}; if(profile.customer_id)setCid(profile.customer_id); setView(requestedView)}else{try{localStorage.removeItem('mmos_role');localStorage.removeItem('mmos_customer_id');sessionStorage.removeItem('mmos_profile_cache_v1')}catch{};setRole('guest')}}finally{setLiveAuthChecked(true)}})()
  },[])
  const [adminAvatars,setAdminAvatars]=useState<any>({DominiqueMM:'',JanneMM:''})
  useEffect(()=>{if(!isDemoFeatureEnabled())return;const p=new URLSearchParams(window.location.search);const demo=p.get('demo');const c=p.get('customer');const requestedView=p.get('view')||'dashboard';if(demo==='admin'){markDemoMode();try{localStorage.setItem('mmos_role','admin')}catch{};setRole('admin');setActiveAdmin('DominiqueMM');setView(requestedView);return}if(demo==='customer'){markDemoMode();try{localStorage.setItem('mmos_role','customer')}catch{};const firstDemo=(demoCustomers(baseStore.data)[0]||allCustomers(baseStore.data)[0]||{}).id;const nextCid=c||firstDemo||cid;if(nextCid){try{localStorage.setItem('mmos_customer_id',nextCid)}catch{};setCid(nextCid)}setRole('customer');setView(requestedView);return}if(c){setRole('customer');setCid(c);setView(requestedView)}},[baseStore.data.customers?.length])
@@ -3210,7 +3210,90 @@ function V37LoyaltyBuilder({cid}:any){
  }
  if(!settings)return <Card title="Punkteprogramm Branding & Regeln"><div className="sub">Lade Einstellungen...</div>{msg&&<Badge type="red">{msg}</Badge>}</Card>
  const qrUrl=typeof window!=='undefined'?`${window.location.origin}/q/${settings.slug||'dein-slug'}`:''
- return <><Head title="Punkteprogramm Branding & Rules Builder" sub="QR & Punkte · mobile optimiert · kundenspezifisch"/><div className="grid2"><Card title="Landingpage Branding"><label className="sub">Kundenname in geschwungener Schrift</label><input className="input" value={settings.brand_name||''} onChange={e=>patch('brand_name',e.target.value)}/><select className="input" value={settings.brand_font||'Pacifico'} onChange={e=>patch('brand_font',e.target.value)}><option>Pacifico</option><option>Great Vibes</option><option>Dancing Script</option><option>Georgia</option></select><input className="input" value={settings.hero_headline||''} onChange={e=>patch('hero_headline',e.target.value)} placeholder="Headline"/><textarea className="input" value={settings.hero_subline||''} onChange={e=>patch('hero_subline',e.target.value)} placeholder="Subline"/><div className="grid2 mini"><input className="input" type="color" value={settings.brand_primary||'#d4af37'} onChange={e=>patch('brand_primary',e.target.value)}/><input className="input" type="color" value={settings.brand_secondary||'#111827'} onChange={e=>patch('brand_secondary',e.target.value)}/></div><div className="v37BrandPreview" style={{background:settings.brand_secondary,color:settings.brand_primary}}><div style={{fontFamily:settings.brand_font}}>{settings.brand_name}</div><span>{settings.hero_headline}</span></div></Card><Card title="QR-Code Design"><select className="input" value={settings.qr_style||'luxury'} onChange={e=>patch('qr_style',e.target.value)}><option value="luxury">Luxury</option><option value="minimal">Minimal</option><option value="bold">Bold</option><option value="classic">Classic</option></select><input className="input" type="color" value={settings.qr_foreground||'#111827'} onChange={e=>patch('qr_foreground',e.target.value)}/><input className="input" type="color" value={settings.qr_background||'#ffffff'} onChange={e=>patch('qr_background',e.target.value)}/><input className="input" value={settings.qr_logo_text||''} onChange={e=>patch('qr_logo_text',e.target.value)} placeholder="QR Logo Text"/><V37QrDesignPreview settings={settings} url={qrUrl}/></Card></div><div className="grid2"><Card title="Limits & Level-Up Regeln"><div className="grid2 mini"><input className="input" type="number" value={settings.daily_scan_limit||0} onChange={e=>patch('daily_scan_limit',Number(e.target.value))} placeholder="Tageslimit"/><input className="input" type="number" value={settings.weekly_scan_limit||0} onChange={e=>patch('weekly_scan_limit',Number(e.target.value))} placeholder="Wochenlimit"/></div>{(settings.level_rules||[]).map((r:any,i:number)=><div className="item" key={i}><input className="input" value={r.tier} onChange={e=>{const x=[...settings.level_rules];x[i]={...x[i],tier:e.target.value};patch('level_rules',x)}}/><input className="input" type="number" value={r.min_points} onChange={e=>{const x=[...settings.level_rules];x[i]={...x[i],min_points:Number(e.target.value)};patch('level_rules',x)}}/><input className="input" type="number" step="0.05" value={r.multiplier} onChange={e=>{const x=[...settings.level_rules];x[i]={...x[i],multiplier:Number(e.target.value)};patch('level_rules',x)}}/></div>)}<button className="btn secondary" onClick={()=>patch('level_rules',[...(settings.level_rules||[]),{tier:'Neues Level',min_points:1500,multiplier:1.75}])}>Level hinzufügen</button></Card><Card title="Geburtstag & Referral Bonus"><input className="input" type="number" value={settings.birthday_bonus_points||0} onChange={e=>patch('birthday_bonus_points',Number(e.target.value))} placeholder="Geburtstagsbonus"/><input className="input" type="number" value={settings.referral_bonus_referrer||0} onChange={e=>patch('referral_bonus_referrer',Number(e.target.value))} placeholder="Empfehler Bonus"/><input className="input" type="number" value={settings.referral_bonus_friend||0} onChange={e=>patch('referral_bonus_friend',Number(e.target.value))} placeholder="Freund Bonus"/><hr/><input className="input" value={ref.friend_name} onChange={e=>setRef({...ref,friend_name:e.target.value})}/><input className="input" value={ref.friend_email} onChange={e=>setRef({...ref,friend_email:e.target.value})}/><button className="btn secondary" onClick={referral}>Referral Lead testen</button><hr/><input className="input" value={birthday.email} onChange={e=>setBirthday({...birthday,email:e.target.value})} placeholder="Member E-Mail"/><input className="input" type="date" value={birthday.birthday} onChange={e=>setBirthday({...birthday,birthday:e.target.value})}/><button className="btn secondary" onClick={birthdayBonus}>Geburtstagsbonus buchen</button></Card></div><Card title="Reward Ablaufdatum & Einlöselimits"><div className="grid4"><input className="input" value={reward.title} onChange={e=>setReward({...reward,title:e.target.value})}/><input className="input" type="number" value={reward.points} onChange={e=>setReward({...reward,points:Number(e.target.value)})}/><input className="input" type="date" value={reward.expires_at} onChange={e=>setReward({...reward,expires_at:e.target.value})}/><input className="input" type="number" value={reward.max_redemptions} onChange={e=>setReward({...reward,max_redemptions:Number(e.target.value)})}/></div><div className="grid4"><input className="input" type="number" value={reward.max_per_customer} onChange={e=>setReward({...reward,max_per_customer:Number(e.target.value)})}/><input className="input" type="number" value={reward.daily_limit} onChange={e=>setReward({...reward,daily_limit:Number(e.target.value)})}/><input className="input" type="number" value={reward.weekly_limit} onChange={e=>setReward({...reward,weekly_limit:Number(e.target.value)})}/><button className="btn" onClick={saveReward}>Reward speichern</button></div></Card><button className="btn" onClick={save}>Alle Punkteprogramm Einstellungen speichern</button>{msg&&<div className="sub">{msg}</div>}<V38RewardHistory cid={cid}/></>
+ const stampMode=settings.loyalty_display_mode||settings.metadata?.loyalty_display_mode||'classic'
+ const stampSlots=Number(settings.stamp_card_slots||settings.metadata?.stamp_card_slots||10)
+ const stampStyle=settings.stamp_card_stamp_style||settings.metadata?.stamp_card_stamp_style||'logo'
+ const pointsPerStamp=Number(settings.points_per_stamp||settings.metadata?.points_per_stamp||10)
+ return <>
+  <Head title="Punkteprogramm Branding & Rules Builder" sub="QR & Punkte · mobile optimiert · kundenspezifisch"/>
+  <div className="grid2">
+   <Card title="Landingpage Branding">
+    <label className="sub">Kundenname in geschwungener Schrift</label>
+    <input className="input" value={settings.brand_name||''} onChange={e=>patch('brand_name',e.target.value)}/>
+    <select className="input" value={settings.brand_font||'Pacifico'} onChange={e=>patch('brand_font',e.target.value)}>
+     <option>Pacifico</option><option>Great Vibes</option><option>Dancing Script</option><option>Georgia</option>
+    </select>
+    <input className="input" value={settings.hero_headline||''} onChange={e=>patch('hero_headline',e.target.value)} placeholder="Headline"/>
+    <textarea className="input" value={settings.hero_subline||''} onChange={e=>patch('hero_subline',e.target.value)} placeholder="Subline"/>
+    <div className="grid2 mini">
+     <input className="input" type="color" value={settings.brand_primary||'#d4af37'} onChange={e=>patch('brand_primary',e.target.value)}/>
+     <input className="input" type="color" value={settings.brand_secondary||'#111827'} onChange={e=>patch('brand_secondary',e.target.value)}/>
+    </div>
+    <div className="v37BrandPreview" style={{background:settings.brand_secondary,color:settings.brand_primary}}><div style={{fontFamily:settings.brand_font}}>{settings.brand_name}</div><span>{settings.hero_headline}</span></div>
+   </Card>
+   <Card title="QR-Code Design">
+    <select className="input" value={settings.qr_style||'luxury'} onChange={e=>patch('qr_style',e.target.value)}><option value="luxury">Luxury</option><option value="minimal">Minimal</option><option value="bold">Bold</option><option value="classic">Classic</option></select>
+    <input className="input" type="color" value={settings.qr_foreground||'#111827'} onChange={e=>patch('qr_foreground',e.target.value)}/>
+    <input className="input" type="color" value={settings.qr_background||'#ffffff'} onChange={e=>patch('qr_background',e.target.value)}/>
+    <input className="input" value={settings.qr_logo_text||''} onChange={e=>patch('qr_logo_text',e.target.value)} placeholder="QR Logo Text"/>
+    <V37QrDesignPreview settings={settings} url={qrUrl}/>
+   </Card>
+  </div>
+  <div className="grid2">
+   <Card title="Stempelkarten-Ansicht">
+    <div className="sub">Optionale Visualisierung für die öffentliche Loyalty-Slugseite. Die Punktevergabe bleibt unverändert serverseitig geschützt.</div>
+    <select className="input" value={stampMode} onChange={e=>patch('loyalty_display_mode',e.target.value)}>
+     <option value="classic">Punkteansicht</option>
+     <option value="stamp_card">Stempelkarte</option>
+     <option value="hybrid">Kombiniert</option>
+    </select>
+    <select className="input" value={stampSlots} onChange={e=>patch('stamp_card_slots',Number(e.target.value))}>
+     <option value={6}>6 Stempelfelder</option>
+     <option value={8}>8 Stempelfelder</option>
+     <option value={10}>10 Stempelfelder</option>
+     <option value={12}>12 Stempelfelder</option>
+    </select>
+    <select className="input" value={stampStyle} onChange={e=>patch('stamp_card_stamp_style',e.target.value)}>
+     <option value="logo">Kundenlogo</option>
+     <option value="check">Haken</option>
+     <option value="star">Stern</option>
+    </select>
+    <label className="checkline"><input type="checkbox" checked={settings.stamp_card_show_logo!==false} onChange={e=>patch('stamp_card_show_logo',e.target.checked)}/> Kundenlogo als Stempel verwenden, wenn eine Logo-URL hinterlegt ist</label>
+    <input className="input" value={settings.stamp_card_reward_text||settings.metadata?.stamp_card_reward_text||''} onChange={e=>patch('stamp_card_reward_text',e.target.value)} placeholder="Volle Karte = Prämie sichern"/>
+    <input className="input" type="number" min={1} value={pointsPerStamp} onChange={e=>patch('points_per_stamp',Math.max(1,Number(e.target.value)||10))} placeholder="Punkte pro Stempel"/>
+    <input className="input" value={settings.stamp_card_background||settings.metadata?.stamp_card_background||settings.metadata?.brand_logo_url||''} onChange={e=>patch('stamp_card_background',e.target.value)} placeholder="Logo-/Stempel-URL optional"/>
+    <div className="sub">Test: Setze Darstellung auf „Stempelkarte“ oder „Kombiniert“, speichere und öffne anschließend die öffentliche /l/[slug]-Seite.</div>
+   </Card>
+   <Card title="Limits & Level-Up Regeln">
+    <div className="grid2 mini">
+     <input className="input" type="number" value={settings.daily_scan_limit||0} onChange={e=>patch('daily_scan_limit',Number(e.target.value))} placeholder="Tageslimit"/>
+     <input className="input" type="number" value={settings.weekly_scan_limit||0} onChange={e=>patch('weekly_scan_limit',Number(e.target.value))} placeholder="Wochenlimit"/>
+    </div>
+    {(settings.level_rules||[]).map((r:any,i:number)=><div className="item" key={i}><input className="input" value={r.tier} onChange={e=>{const x=[...settings.level_rules];x[i]={...x[i],tier:e.target.value};patch('level_rules',x)}}/><input className="input" type="number" value={r.min_points} onChange={e=>{const x=[...settings.level_rules];x[i]={...x[i],min_points:Number(e.target.value)};patch('level_rules',x)}}/><input className="input" type="number" step="0.05" value={r.multiplier} onChange={e=>{const x=[...settings.level_rules];x[i]={...x[i],multiplier:Number(e.target.value)};patch('level_rules',x)}}/></div>)}
+    <button className="btn secondary" onClick={()=>patch('level_rules',[...(settings.level_rules||[]),{tier:'Neues Level',min_points:1500,multiplier:1.75}])}>Level hinzufügen</button>
+   </Card>
+  </div>
+  <div className="grid2">
+   <Card title="Geburtstag & Referral Bonus">
+    <input className="input" type="number" value={settings.birthday_bonus_points||0} onChange={e=>patch('birthday_bonus_points',Number(e.target.value))} placeholder="Geburtstagsbonus"/>
+    <input className="input" type="number" value={settings.referral_bonus_referrer||0} onChange={e=>patch('referral_bonus_referrer',Number(e.target.value))} placeholder="Empfehler Bonus"/>
+    <input className="input" type="number" value={settings.referral_bonus_friend||0} onChange={e=>patch('referral_bonus_friend',Number(e.target.value))} placeholder="Freund Bonus"/>
+    <hr/>
+    <input className="input" value={ref.friend_name} onChange={e=>setRef({...ref,friend_name:e.target.value})}/>
+    <input className="input" value={ref.friend_email} onChange={e=>setRef({...ref,friend_email:e.target.value})}/>
+    <button className="btn secondary" onClick={referral}>Referral Lead testen</button>
+    <hr/>
+    <input className="input" value={birthday.email} onChange={e=>setBirthday({...birthday,email:e.target.value})} placeholder="Member E-Mail"/>
+    <input className="input" type="date" value={birthday.birthday} onChange={e=>setBirthday({...birthday,birthday:e.target.value})}/>
+    <button className="btn secondary" onClick={birthdayBonus}>Geburtstagsbonus buchen</button>
+   </Card>
+  </div>
+  <Card title="Reward Ablaufdatum & Einlöselimits">
+   <div className="grid4"><input className="input" value={reward.title} onChange={e=>setReward({...reward,title:e.target.value})}/><input className="input" type="number" value={reward.points} onChange={e=>setReward({...reward,points:Number(e.target.value)})}/><input className="input" type="date" value={reward.expires_at} onChange={e=>setReward({...reward,expires_at:e.target.value})}/><input className="input" type="number" value={reward.max_redemptions} onChange={e=>setReward({...reward,max_redemptions:Number(e.target.value)})}/></div>
+   <div className="grid4"><input className="input" type="number" value={reward.max_per_customer} onChange={e=>setReward({...reward,max_per_customer:Number(e.target.value)})}/><input className="input" type="number" value={reward.daily_limit} onChange={e=>setReward({...reward,daily_limit:Number(e.target.value)})}/><input className="input" type="number" value={reward.weekly_limit} onChange={e=>setReward({...reward,weekly_limit:Number(e.target.value)})}/><button className="btn" onClick={saveReward}>Reward speichern</button></div>
+  </Card>
+  <button className="btn" onClick={save}>Alle Punkteprogramm Einstellungen speichern</button>{msg&&<div className="sub">{msg}</div>}<V38RewardHistory cid={cid}/>
+ </>
 }
 
 function V37QrDesignPreview({settings,url}:any){

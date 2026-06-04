@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { supabaseAuth, getCurrentUserProfilePayload } from '@/lib/authClient'
 import { customerPortalClient } from '@/lib/customerPortalClient'
-import { BROWSER_BACKEND_BASE } from '@/lib/backendUrl'
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login'|'register'|'reset'|'invite'>('login')
@@ -59,7 +58,7 @@ export default function AuthPage() {
     const { data } = await supabaseAuth.auth.getSession()
     const token = data.session?.access_token
     if (!token) return setMessage('Session abgelaufen. Bitte erneut mit Passwort anmelden.')
-    const res = await fetch(`${BROWSER_BACKEND_BASE}/api/security/mfa/verify`, {
+    const res = await fetch('/api/security/mfa/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ code: clean })

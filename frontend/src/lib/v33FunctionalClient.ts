@@ -5,7 +5,9 @@ const directBackendFallback =
   process.env.NEXT_PUBLIC_ENABLE_DIRECT_BACKEND === 'true' ||
   process.env.NEXT_PUBLIC_ENABLE_DIRECT_BACKEND_FALLBACK === 'true'
 const publicBackendFallbackEnabled =
-  process.env.NEXT_PUBLIC_DISABLE_PUBLIC_BACKEND_FALLBACK !== 'true'
+  process.env.NEXT_PUBLIC_ENABLE_PUBLIC_BACKEND_FALLBACK === 'true'
+const privateBackendFallbackEnabled =
+  process.env.NEXT_PUBLIC_ENABLE_PRIVATE_BACKEND_FALLBACK === 'true'
 
 function normalizeBase(url: string) {
   const value = String(url || '').trim().replace(/\/+$/, '')
@@ -78,11 +80,15 @@ async function request(path: string, init: RequestInit = {}) {
   // This avoids browser CORS/cross-origin fetch problems.
   targets.push({ url: `/api/v33-functional${normalizedPath}`, label: 'Next API Proxy' })
 
-  // V42.11: if the Vercel proxy itself fails, retry the public Railway URL.
-  // The proxy remains first choice, but demo/live tools should not die on a
-  // single serverless fetch failure.
-  if (V33_API_BASE && !isSameOrigin(V33_API_BASE) && (directBackendFallback || publicBackendFallbackEnabled)) {
-    targets.push({ url: `${V33_API_BASE}/api/v33-functional${normalizedPath}`, label: 'Public Backend Fallback' })
+  // V103.8: same-origin Next API proxy is the default and only path for
+  // authenticated/admin/MFA-like calls. Direct Railway fallback is opt-in and
+  // public-only unless NEXT_PUBLIC_ENABLE_PRIVATE_BACKEND_FALLBACK=true.
+  const publicPath = isPublicV33Path(normalizedPath)
+  const allowDirectFallback = publicPath
+    ? (directBackendFallback || publicBackendFallbackEnabled)
+    : privateBackendFallbackEnabled
+  if (V33_API_BASE && !isSameOrigin(V33_API_BASE) && allowDirectFallback) {
+    targets.push({ url: `${V33_API_BASE}/api/v33-functional${normalizedPath}`, label: publicPath ? 'Public Backend Fallback' : 'Private Backend Fallback' })
   }
 
   let lastError: any = null

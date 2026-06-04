@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import { v33FunctionalClient } from '@/lib/v33FunctionalClient'
 import { requireConsent } from '@/lib/consent'
 import { safeLocalStorageSet, safeLocalStorageText } from '@/lib/safeStorage'
+import StampCardView from '@/components/loyalty/StampCardView'
 
 function titleFromSlug(slug: string) {
   return slug
@@ -124,6 +125,7 @@ function PublicLoyaltyPageContent() {
 
   const points = Number(result?.points_balance || result?.member?.points_balance || 0)
   const pointsAdded = Number(result?.points_added || status?.qr_campaign?.points_per_scan || status?.qr_campaign?.metadata?.points_per_scan || status?.program?.points_per_scan || 10)
+  const totalScans = Number(result?.member?.total_scans ?? result?.total_scans ?? status?.member?.total_scans ?? 0)
   const progress = Math.min(100, Math.round((points / 100) * 100))
 
   const brandName =
@@ -154,6 +156,27 @@ function PublicLoyaltyPageContent() {
   const marketingConsentText = campaignTexts.marketing_consent_text || 'Ich möchte per E-Mail Informationen zu meinem Punktekonto, Bonuspunkten, Rewards, Coupons und persönlichen Reaktivierungsaktionen dieses Anbieters erhalten. Ich kann diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen.'
   const redemptionMode = campaignTexts.redemption_mode || 'customer_phone_staff_pin'
   const quickRedemption = result?.quick_redemption || null
+
+  const stampSettings = {
+    loyalty_display_mode: settings?.loyalty_display_mode || settings?.metadata?.loyalty_display_mode || status?.program?.metadata?.loyalty_display_mode || campaignTexts.loyalty_display_mode || 'classic',
+    stamp_card_slots: settings?.stamp_card_slots || settings?.metadata?.stamp_card_slots || status?.program?.metadata?.stamp_card_slots || campaignTexts.stamp_card_slots || 10,
+    stamp_card_reward_text: settings?.stamp_card_reward_text || settings?.metadata?.stamp_card_reward_text || status?.program?.metadata?.stamp_card_reward_text || campaignTexts.stamp_card_reward_text || 'Volle Karte = Prämie sichern',
+    stamp_card_stamp_style: settings?.stamp_card_stamp_style || settings?.metadata?.stamp_card_stamp_style || status?.program?.metadata?.stamp_card_stamp_style || campaignTexts.stamp_card_stamp_style || 'logo',
+    stamp_card_show_logo: settings?.stamp_card_show_logo ?? settings?.metadata?.stamp_card_show_logo ?? status?.program?.metadata?.stamp_card_show_logo ?? campaignTexts.stamp_card_show_logo ?? true,
+    logo_url: settings?.stamp_card_background || settings?.logo_url || settings?.brand_logo_url || settings?.metadata?.stamp_card_logo_url || settings?.metadata?.brand_logo_url || status?.qr_campaign?.metadata?.stamp_card_logo_url || status?.qr_campaign?.metadata?.brand_logo_url || status?.program?.metadata?.stamp_card_logo_url || status?.program?.metadata?.brand_logo_url || null
+  }
+  const loyaltyDisplayMode = ['classic', 'stamp_card', 'hybrid'].includes(String(stampSettings.loyalty_display_mode)) ? String(stampSettings.loyalty_display_mode) : 'classic'
+  const stampSlotsRaw = Number(stampSettings.stamp_card_slots || 10)
+  const stampSlots = [6, 8, 10, 12].includes(stampSlotsRaw) ? stampSlotsRaw : 10
+  const stampStyleRaw = String(stampSettings.stamp_card_stamp_style || 'logo')
+  const stampStyle = (['logo', 'check', 'star'].includes(stampStyleRaw) ? stampStyleRaw : 'logo') as 'logo' | 'check' | 'star'
+  const pointsPerStampRaw = Number(settings?.points_per_stamp || settings?.metadata?.points_per_stamp || status?.program?.metadata?.points_per_stamp || campaignTexts.points_per_stamp || pointsAdded || 10)
+  const pointsPerStamp = Number.isFinite(pointsPerStampRaw) && pointsPerStampRaw > 0 ? pointsPerStampRaw : Math.max(1, pointsAdded || 10)
+  // V103.8: Stempelkarte zeigt Besuche/Stempel, nicht rohe Punkte.
+  // Bevorzugt total_scans aus loyalty_customers; fallback auf Punkte / pointsPerStamp.
+  const stampCount = Math.max(0, Math.floor(totalScans > 0 ? totalScans : points / pointsPerStamp))
+  const showStampCard = showLoyalty && (loyaltyDisplayMode === 'stamp_card' || loyaltyDisplayMode === 'hybrid')
+  const showClassicLoyaltyStats = showLoyalty && loyaltyDisplayMode !== 'stamp_card'
 
   const publicUrl = useMemo(() => {
     if (typeof window === 'undefined') return `/l/${slug}`
@@ -347,7 +370,23 @@ function PublicLoyaltyPageContent() {
             </div>
           )}
 
-          {showLoyalty && (
+          {showStampCard && (
+            <StampCardView
+              businessName={brandName}
+              logoUrl={stampSettings.logo_url}
+              pointsBalance={stampCount}
+              slots={stampSlots}
+              rewardText={String(stampSettings.stamp_card_reward_text || 'Volle Karte = Prämie sichern')}
+              stampStyle={stampStyle}
+              showLogo={stampSettings.stamp_card_show_logo !== false}
+            />
+          )}
+
+          {showLoyalty && loyaltyDisplayMode === 'stamp_card' && (
+            <p className="publicStampCompactPoints">Aktueller Punktestand: {points} Punkte · {pointsAdded || 10} pro Scan · {stampCount} Stempel · Level {result?.loyalty_level?.tier || result?.member?.tier || 'Basic'}</p>
+          )}
+
+          {showClassicLoyaltyStats && (
             <>
               <div className="publicStats">
                 <div><strong>{points}</strong><span>Punkte</span></div>
@@ -581,11 +620,11 @@ function PublicLoyaltyPageContent() {
                 <button type="button" onClick={copyReferral}>Freund empfehlen</button>
               </div>
 
-              {status?.google_review_url && rating >= 4 && (
+              {status?.google_review_url && (
                 <div className="publicGoogleReview">
                   <p>
-                    Freut uns, dass es dir gefallen hat. Wenn du magst, kannst du deine
-                    Bewertung auch auf Google teilen — das hilft anderen, uns zu finden.
+                    Danke für dein Feedback. Wenn du möchtest, kannst du deine Erfahrung
+                    zusätzlich öffentlich auf Google teilen — unabhängig davon, wie deine Bewertung ausgefallen ist.
                   </p>
                   <a
                     className="publicGoogleReviewBtn"

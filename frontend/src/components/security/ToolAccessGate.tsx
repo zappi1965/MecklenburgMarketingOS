@@ -4,13 +4,15 @@ import { getCurrentUserProfile } from '@/lib/authClient'
 import { storeClient } from '@/lib/storeClient'
 import { canAccessTool, accessStatus } from '@/lib/toolAccess'
 import { isActiveAdmin, isActiveCustomer } from '@/lib/routeAccessPolicy'
+import { isDemoMode } from '@/lib/environmentMode'
 
 let cachedProfile: any = undefined
 let pendingProfile: Promise<any> | null = null
 const rulesMemoryCache = new Map<string, any[]>()
 
 function localProfileFallback() {
-  if (typeof window === 'undefined') return undefined
+  // V103.8: localStorage role fallback is demo-only.
+  if (typeof window === 'undefined' || !isDemoMode()) return undefined
   try {
     const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
     const storedCustomer = localStorage.getItem('mmos_customer_id') || ''

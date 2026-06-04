@@ -1,14 +1,26 @@
-'use client'
+use client'
 
 import { useEffect } from 'react'
 
 /**
- * V103.5 passive scroll rescue.
- * Important: this does NOT lock html/body and does NOT intercept wheel/touch events.
- * It only removes leftover lock classes / inline styles and lets the document scroll normally.
+ * V103.8 gated scroll rescue.
+ * Default is OFF: regular layouts must scroll through CSS, not global JS mutation.
+ * Enable temporarily with NEXT_PUBLIC_SCROLL_RESCUE=true or ?scroll_rescue=1 while debugging.
  */
+function rescueEnabled() {
+  if (process.env.NEXT_PUBLIC_SCROLL_RESCUE === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return new URLSearchParams(window.location.search).get('scroll_rescue') === '1'
+  } catch {
+    return false
+  }
+}
+
 export default function MmosScrollUnlock() {
   useEffect(() => {
+    if (!rescueEnabled()) return
+
     const unlock = () => {
       const html = document.documentElement
       const body = document.body

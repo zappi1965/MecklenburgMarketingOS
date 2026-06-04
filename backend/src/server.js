@@ -75,6 +75,7 @@ const { securityHeaders, generalRateLimit } = require('./middleware/securityHard
 const { createAdminAuditMiddleware } = require('./middleware/adminAuditMiddleware')
 
 const app = express()
+const MMOS_VERSION = process.env.MMOS_VERSION || 'v103.8-stability-security-cleanup'
 
 initSentry(app)
 
@@ -196,7 +197,24 @@ app.locals.supabaseAdmin = supabaseAdmin
 const demoModeEnabled = process.env.ENABLE_DEMO_MODE === 'true'
 
 app.get('/api/health', (_, res) => {
-  res.json({ ok: true, service: 'MMOS Backend', timestamp: new Date().toISOString() })
+  res.json({ ok: true, service: 'MMOS Backend', version: MMOS_VERSION, timestamp: new Date().toISOString() })
+})
+
+app.get('/api/version', (_, res) => {
+  res.json({ ok: true, service: 'MMOS Backend', version: MMOS_VERSION, timestamp: new Date().toISOString() })
+})
+
+app.get('/api/system/runtime', (_, res) => {
+  res.json({
+    ok: true,
+    service: 'MMOS Backend',
+    version: MMOS_VERSION,
+    node_env: process.env.NODE_ENV || 'unknown',
+    supabase_configured: Boolean(supabaseAdmin),
+    public_shield_mode: process.env.PUBLIC_SHIELD_PERSISTENT === 'false' ? 'memory' : 'persistent_with_memory_fallback',
+    cors_allow_all: process.env.CORS_ALLOW_ALL === 'true',
+    timestamp: new Date().toISOString()
+  })
 })
 // Public client error collector; must stay before the global /api auth guard.
 app.post('/api/client-error', async (req, res) => res.json({ ok: true }))
@@ -247,7 +265,9 @@ const PUBLIC_PATHS = [
   /^\/api\/client-error$/,
   /^\/api\/security\/mfa\/verify$/,
   /^\/api\/health$/,
+  /^\/api\/version$/,
   /^\/api\/system\/health$/,
+  /^\/api\/system\/runtime$/,
   /^\/api\/system\/status$/,
   /^\/api\/v33-functional\/v42\/health$/,
   /^\/api\/auth\//,

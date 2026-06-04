@@ -16,7 +16,8 @@
     "quality:guard": "node scripts/quality-guard.mjs",
     "fullbuild:check": "node scripts/v061-fullbuild-check.mjs",
     "production:check": "yarn quality:guard && yarn fullbuild:check && yarn --cwd frontend typecheck",
-    "production:final-check": "yarn quality:guard && yarn fullbuild:check && yarn --cwd frontend typecheck && yarn --cwd frontend build"
+    "production:final-check": "yarn quality:guard && yarn fullbuild:check && yarn --cwd frontend typecheck && yarn --cwd frontend build",
+    "tenant:isolation:smoke": "node scripts/v1038-tenant-isolation-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.106.2",

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { BROWSER_BACKEND_BASE } from './backendUrl'
 import { apiRequest } from './apiRequest'
+import { isDemoMode } from './environmentMode'
 
 // Supabase darf beim Modul-Load NICHT crashen, wenn ENV fehlt
 // (Vercel-Pre-Render ohne NEXT_PUBLIC_SUPABASE_URL).
@@ -54,7 +54,9 @@ function buildAuthClient(): SupabaseClient {
 export const supabaseAuth = buildAuthClient()
 
 function browserProfileFallback(session: any) {
-  if (typeof window === 'undefined' || !session?.user) return null
+  // V103.8: localStorage role fallback is only allowed in explicit demo mode.
+  // Live roles must come from the backend/Supabase profile.
+  if (typeof window === 'undefined' || !session?.user || !isDemoMode()) return null
   try {
     const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
     const storedCustomer = localStorage.getItem('mmos_customer_id') || ''
@@ -102,7 +104,12 @@ function normalizeProfileResponse(payload: any) {
 }
 
 async function getProfileViaBackend(accessToken: string) {
-  return apiRequest(`${BROWSER_BACKEND_BASE}/api/auth/me`, {
+  // V103.8: Auth/profile checks stay same-origin by default to avoid CORS and
+  // preview-domain drift. Direct auth backend is only a deliberate debug escape hatch.
+  const base = process.env.NEXT_PUBLIC_ENABLE_DIRECT_AUTH_BACKEND === 'true'
+    ? String(process.env.NEXT_PUBLIC_BACKEND_URL || '').replace(/\/+$/, '')
+    : ''
+  return apiRequest(`${base}/api/auth/me`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
     timeoutMs: 15000
@@ -127,7 +134,9 @@ export async function getCurrentUserProfile() {
   const browserFallback = browserProfileFallback(session)
   if (browserFallback) return browserFallback
 
-  // Best-effort fallback for local/offline development only.
+  if (!isDemoMode() && process.env.NODE_ENV === 'production') return null
+
+  // Best-effort fallback for local/offline development / explicit demo only.
   let profile:any = null
   const { data: byId } = await supabaseAuth
     .from('user_profiles')

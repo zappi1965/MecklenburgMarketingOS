@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getOptionalEnv, getPublicAppUrl } from '../../../../lib/mmos/env'
-import { createSupabaseAdminClient } from '../../../../lib/mmos/supabaseAdmin'
+import { cleanProxyHeaders, isHtmlResponse, proxyErrorMessage, resolveBackendCandidates } from '../../_proxy/backend'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type ReviewPayload = {
-  customerId?: string
-  customerName?: string
+  slug?: string
+  publicSlug?: string
+  public_slug?: string
+  campaignSlug?: string
   rating?: number | string
   feedback?: string
   comment?: string
@@ -15,7 +16,8 @@ type ReviewPayload = {
   name?: string
   customerEmail?: string
   email?: string
-  source?: string
+  customerId?: string
+  customerName?: string
   googleReviewUrl?: string
 }
 
@@ -30,88 +32,9 @@ function json(payload: unknown, status = 200) {
   return withCors(NextResponse.json(payload, { status }))
 }
 
-function normalizeRating(value: unknown): number | null {
-  const rating = Number(value)
-
-  if (!Number.isFinite(rating)) return null
-
-  const rounded = Math.round(rating)
-
-  if (rounded < 1 || rounded > 5) return null
-
-  return rounded
-}
-
-function cleanText(value: unknown, maxLength = 2000): string | null {
-  const cleaned = String(value ?? '').trim()
-
-  if (!cleaned) return null
-
-  return cleaned.slice(0, maxLength)
-}
-
-async function sendInternalReviewAlert(input: {
-  rating: number
-  customerName: string | null
-  feedback: string | null
-  reviewerName: string | null
-  customerEmail: string | null
-}) {
-  const apiKey = getOptionalEnv(['RESEND_API_KEY'])
-  const from = getOptionalEnv(['MAIL_FROM'])
-  const to = getOptionalEnv(['REVIEW_ALERT_TO', 'MAIL_TO', 'MAIL_FROM'])
-
-  if (!apiKey || !from || !to) {
-    return {
-      sent: false,
-      skipped: true,
-      reason: 'mail_not_configured'
-    }
-  }
-
-  const subject = `MMOS Review Shield: ${input.rating}-Sterne Feedback`
-
-  const text = [
-    'Neues internes Kundenfeedback ist eingegangen.',
-    '',
-    `Bewertung: ${input.rating} / 5`,
-    `Betrieb: ${input.customerName ?? 'Nicht angegeben'}`,
-    `Name: ${input.reviewerName ?? 'Nicht angegeben'}`,
-    `E-Mail: ${input.customerEmail ?? 'Nicht angegeben'}`,
-    '',
-    'Feedback:',
-    input.feedback ?? 'Kein Textfeedback angegeben.',
-    '',
-    `Quelle: ${getPublicAppUrl()}`
-  ].join('\n')
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from,
-      to,
-      subject,
-      text
-    })
-  })
-
-  if (!response.ok) {
-    return {
-      sent: false,
-      skipped: false,
-      reason: `resend_${response.status}`
-    }
-  }
-
-  return {
-    sent: true,
-    skipped: false,
-    reason: null
-  }
+function clean(value: unknown, max = 300) {
+  const v = String(value ?? '').trim()
+  return v ? v.slice(0, max) : ''
 }
 
 export async function OPTIONS() {
@@ -120,107 +43,68 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   let payload: ReviewPayload
-
   try {
     payload = await request.json()
   } catch {
-    return json(
-      {
-        ok: false,
-        error: 'invalid_json'
-      },
-      400
-    )
+    return json({ ok: false, error: 'invalid_json' }, 400)
   }
 
-  const rating = normalizeRating(payload.rating)
-
-  if (!rating) {
-    return json(
-      {
-        ok: false,
-        error: 'invalid_rating',
-        message: 'rating muss eine Zahl zwischen 1 und 5 sein.'
-      },
-      400
-    )
-  }
-
-  const feedback = cleanText(payload.feedback ?? payload.comment)
-  const customerName = cleanText(payload.customerName, 180)
-  const reviewerName = cleanText(payload.reviewerName ?? payload.name, 180)
-  const customerEmail = cleanText(payload.customerEmail ?? payload.email, 240)
-  const customerId = cleanText(payload.customerId, 120)
-  const source = cleanText(payload.source, 120) ?? 'public_review_page'
-  const googleReviewUrl = cleanText(payload.googleReviewUrl, 600)
-
-  const shouldRedirectToGoogle = rating >= 4 && Boolean(googleReviewUrl)
-
-  try {
-    const supabase = createSupabaseAdminClient()
-
-    const { error } = await supabase.from('review_feedback').insert({
-      customer_id: customerId,
-      customer_name: customerName,
-      rating,
-      feedback,
-      reviewer_name: reviewerName,
-      customer_email: customerEmail,
-      source,
-      google_review_url: googleReviewUrl,
-      status: rating <= 3 ? 'internal_followup' : 'positive',
-      is_demo: false,
-      metadata: {
-        user_agent: request.headers.get('user-agent'),
-        ip_hint:
-          request.headers.get('x-forwarded-for') ??
-          request.headers.get('x-real-ip') ??
-          null
-      }
-    })
-
-    if (error) {
-      return json(
-        {
-          ok: false,
-          error: 'database_insert_failed',
-          message: error.message
-        },
-        500
-      )
-    }
-
-    const mail =
-      rating <= 3
-        ? await sendInternalReviewAlert({
-            rating,
-            customerName,
-            feedback,
-            reviewerName,
-            customerEmail
-          })
-        : {
-            sent: false,
-            skipped: true,
-            reason: 'positive_review'
-          }
-
+  const slug = clean(payload.slug || payload.publicSlug || payload.public_slug || payload.campaignSlug, 120)
+  if (!slug) {
     return json({
-      ok: true,
-      rating,
-      status: rating <= 3 ? 'internal_followup' : 'positive',
-      redirectToGoogle: shouldRedirectToGoogle,
-      googleReviewUrl: shouldRedirectToGoogle ? googleReviewUrl : null,
-      mail
-    })
-  } catch (error) {
-    return json(
-      {
-        ok: false,
-        error: 'review_feedback_failed',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      },
-      500
-    )
+      ok: false,
+      code: 'PUBLIC_REVIEW_SLUG_REQUIRED',
+      error: 'Diese Review-Route speichert nicht mehr direkt per Vercel-Service-Role. Bitte die Slugseite /l/[slug] bzw. /api/v33-functional/public/loyalty/[slug]/review nutzen oder im Payload slug mitgeben.'
+    }, 400)
   }
+
+  const mappedPayload = {
+    rating: payload.rating,
+    feedback_text: payload.feedback ?? payload.comment ?? null,
+    comment: payload.comment ?? payload.feedback ?? null,
+    reviewer_name: payload.reviewerName ?? payload.name ?? null,
+    reviewer_email: payload.customerEmail ?? payload.email ?? null,
+    customer_id: payload.customerId ?? null,
+    customer_name: payload.customerName ?? null,
+    google_review_url: payload.googleReviewUrl ?? null,
+    source: 'public_review_feedback_proxy'
+  }
+
+  const body = JSON.stringify(mappedPayload)
+  const attempts: any[] = []
+  const backends = resolveBackendCandidates(request)
+
+  for (const backend of backends) {
+    const targetUrl = `${backend.base}/api/v33-functional/public/loyalty/${encodeURIComponent(slug)}/review`
+    try {
+      const upstream = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          ...Object.fromEntries(cleanProxyHeaders(request).entries()),
+          'content-type': 'application/json'
+        },
+        body,
+        cache: 'no-store',
+        redirect: 'manual'
+      })
+      const text = await upstream.text()
+      if (isHtmlResponse(text)) {
+        attempts.push({ targetUrl, backendSource: backend.source, warning: backend.warning, error: 'Backend lieferte HTML statt JSON.' })
+        continue
+      }
+      return withCors(new NextResponse(text, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers: {
+          'content-type': upstream.headers.get('content-type') || 'application/json',
+          'cache-control': 'no-store',
+          'x-mmos-review-feedback-proxy': 'v103.8'
+        }
+      }))
+    } catch (error: any) {
+      attempts.push({ targetUrl, backendSource: backend.source, warning: backend.warning, error: proxyErrorMessage(error) })
+    }
+  }
+
+  return json({ ok: false, code: 'PUBLIC_REVIEW_PROXY_FAILED', error: attempts.at(-1)?.error || 'Backend nicht erreichbar.', attempts }, 502)
 }

@@ -14,7 +14,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: 'MecklenburgMarketingOS',
-    version: 'v061-live-fullbuild',
+    version: process.env.NEXT_PUBLIC_MMOS_VERSION || 'v103.8-stability-security-cleanup',
     nodeEnv: process.env.NODE_ENV ?? 'unknown',
     checks: {
       supabaseConfigured: Boolean(supabaseUrl && serviceRoleKey),

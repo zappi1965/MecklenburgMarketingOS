@@ -2059,7 +2059,7 @@ function v33FunctionalRoutes(supabase) {
   router.get('/public/loyalty/:slug/current-qr', async (req, res, next) => {
     try {
       const slug = String(req.params.slug || '').trim()
-      const shield = inspectPublicAction({ req, action: 'public_current_qr', slug, email: null, body: req.query || {}, max: 160 })
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_current_qr', slug, email: null, body: req.query || {}, max: 160 })
       await recordPublicShieldEvent(supabase, shield, { action: 'public_current_qr', slug, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
       const current = await resolveCurrentQrDisplayContext(slug)
@@ -2078,7 +2078,7 @@ function v33FunctionalRoutes(supabase) {
   router.get('/public/loyalty/:slug/counter-status', async (req, res, next) => {
     try {
       const slug = String(req.params.slug || '').trim()
-      const shield = inspectPublicAction({ req, action: 'public_counter_status', slug, email: null, body: req.query || {}, max: 120 })
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_counter_status', slug, email: null, body: req.query || {}, max: 120 })
       await recordPublicShieldEvent(supabase, shield, { action: 'public_counter_status', slug, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
       const c = await counterContextForSlug(slug)
@@ -2111,7 +2111,7 @@ function v33FunctionalRoutes(supabase) {
       const slug = String(req.params.slug || '').trim()
       const body = req.body || {}
       const code = clean(body.code)
-      const shield = inspectPublicAction({ req, action: 'public_counter_code_lookup', slug, email: null, body, max: 30 })
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_counter_code_lookup', slug, email: null, body, max: 30 })
       await recordPublicShieldEvent(supabase, shield, { action: 'public_counter_code_lookup', slug, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
       const c = await counterContextForSlug(slug)
@@ -2136,7 +2136,7 @@ function v33FunctionalRoutes(supabase) {
       const code = clean(body.code)
       const rewardId = clean(body.reward_id || body.rewardId)
       const staffCode = clean(body.staff_code || body.staffCode || body.pin || body.staff_pin)
-      const shield = inspectPublicAction({ req, action: 'public_counter_code_redeem', slug, email: null, body: { code, reward_id: rewardId, has_staff_code: Boolean(staffCode) }, max: 20 })
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_counter_code_redeem', slug, email: null, body: { code, reward_id: rewardId, has_staff_code: Boolean(staffCode) }, max: 20 })
       await recordPublicShieldEvent(supabase, shield, { action: 'public_counter_code_redeem', slug, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
       const c = await counterContextForSlug(slug)
@@ -2180,7 +2180,7 @@ function v33FunctionalRoutes(supabase) {
   router.get('/public/loyalty/:slug/scan-start', async (req, res, next) => {
     try {
       const slug = String(req.params.slug || '').trim()
-      const shield = inspectPublicAction({ req, action: 'public_scan_start', slug, email: null, body: req.query || {}, max: 80 })
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_scan_start', slug, email: null, body: req.query || {}, max: 80 })
       await recordPublicShieldEvent(supabase, shield, { action: 'public_scan_start', slug, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
 
@@ -2213,7 +2213,7 @@ function v33FunctionalRoutes(supabase) {
       const warnings = []
       const marketingConsentRequest = marketingConsentFromBody(body)
 
-      const shield = inspectPublicAction({ req, action: authOnly ? 'public_auth_only' : 'public_join_or_scan', slug, email, body, max: authOnly ? 45 : 30 })
+      const shield = await inspectPublicAction({ supabase, req, action: authOnly ? 'public_auth_only' : 'public_join_or_scan', slug, email, body, max: authOnly ? 45 : 30 })
       await recordPublicShieldEvent(supabase, shield, { action: authOnly ? 'public_auth_only' : 'public_join_or_scan', slug, email, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok: false, error: shield.error, code: shield.code, retry_after_ms: shield.retry_after_ms })
 
@@ -2616,7 +2616,7 @@ function v33FunctionalRoutes(supabase) {
       const staffCode = clean(body.staff_code || body.staffCode || body.pin || body.staff_pin)
       const now = new Date().toISOString()
 
-      const shield = inspectPublicAction({ req, action: 'public_reward_redeem', slug, email, body, max: 20 })
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_reward_redeem', slug, email, body, max: 20 })
       await recordPublicShieldEvent(supabase, shield, { action: 'public_reward_redeem', slug, email, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
 
@@ -2750,7 +2750,7 @@ function v33FunctionalRoutes(supabase) {
       const slug = String(req.params.slug || '').trim()
       const body = req.body || {}
       const rating = num(body.rating, 0)
-      const shield = inspectPublicAction({ req, action: 'public_review', slug, email: body.reviewer_email || body.email, body, max: 25 })
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_review', slug, email: body.reviewer_email || body.email, body, max: 25 })
       await recordPublicShieldEvent(supabase, shield, { action: 'public_review', slug, email: body.reviewer_email || body.email, user_agent: req.get('user-agent') })
       if (!shield.ok) return res.status(shield.status || 429).json({ ok:false, code: shield.code, error: shield.error, retry_after_ms: shield.retry_after_ms })
 
@@ -2989,6 +2989,21 @@ function v33FunctionalRoutes(supabase) {
   router.post('/v36/:customer_id/reset-test-data', resetCustomerTestData)
 
 
+  function normalizeLoyaltyDisplayMode(value) {
+    const raw = String(value || 'classic').trim().toLowerCase()
+    return ['classic', 'stamp_card', 'hybrid'].includes(raw) ? raw : 'classic'
+  }
+
+  function normalizeStampCardSlots(value) {
+    const n = Number(value || 10)
+    return [6, 8, 10, 12].includes(n) ? n : 10
+  }
+
+  function normalizeStampCardStyle(value) {
+    const raw = String(value || 'logo').trim().toLowerCase()
+    return ['logo', 'check', 'star'].includes(raw) ? raw : 'logo'
+  }
+
   async function v37GetOrCreateLoyaltySettings(customerId) {
     const customer = await getCustomer(customerId)
     const customerName = customer?.name || customer?.title || customer?.company || 'Kunde'
@@ -3018,6 +3033,13 @@ function v33FunctionalRoutes(supabase) {
       weekly_scan_limit: 0,
       weekly_scan_limit_enabled: false,
       require_rescan_for_points: true,
+      loyalty_display_mode: 'classic',
+      stamp_card_slots: 10,
+      stamp_card_reward_text: 'Volle Karte = Prämie sichern',
+      stamp_card_stamp_style: 'logo',
+      stamp_card_show_logo: true,
+      stamp_card_background: null,
+      points_per_stamp: 10,
       birthday_bonus_points: 100,
       referral_bonus_referrer: 100,
       referral_bonus_friend: 50,
@@ -3028,7 +3050,17 @@ function v33FunctionalRoutes(supabase) {
         { tier: 'VIP', min_points: 1000, multiplier: 1.5 }
       ],
       active: true,
-      metadata: { v37_defaults: true, require_rescan_for_points: true, rotate_qr_after_scan: false }
+      metadata: {
+        v37_defaults: true,
+        require_rescan_for_points: true,
+        rotate_qr_after_scan: false,
+        loyalty_display_mode: 'classic',
+        stamp_card_slots: 10,
+        stamp_card_reward_text: 'Volle Karte = Prämie sichern',
+        stamp_card_stamp_style: 'logo',
+        stamp_card_show_logo: true,
+        points_per_stamp: 10
+      }
     }
 
     const created = await insertTableSchemaSafe('v37_loyalty_settings', defaults, { single: true })
@@ -3099,7 +3131,27 @@ function v33FunctionalRoutes(supabase) {
         daily_scan_limit: body.daily_scan_limit,
         weekly_scan_limit: body.weekly_scan_limit_enabled === true ? body.weekly_scan_limit : 0,
         weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true,
-        metadata: { ...(body.metadata || {}), weekly_point_limit_per_member: Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, body.metadata?.weekly_point_limit_per_member || 0))), weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true, require_rescan_for_points: body.require_rescan_for_points !== false, rotate_qr_after_scan: body.rotate_qr_after_scan === true },
+        loyalty_display_mode: normalizeLoyaltyDisplayMode(body.loyalty_display_mode || body.metadata?.loyalty_display_mode),
+        stamp_card_slots: normalizeStampCardSlots(body.stamp_card_slots || body.metadata?.stamp_card_slots),
+        stamp_card_reward_text: String(body.stamp_card_reward_text || body.metadata?.stamp_card_reward_text || 'Volle Karte = Prämie sichern').slice(0, 180),
+        stamp_card_stamp_style: normalizeStampCardStyle(body.stamp_card_stamp_style || body.metadata?.stamp_card_stamp_style),
+        stamp_card_show_logo: body.stamp_card_show_logo !== false,
+        stamp_card_background: body.stamp_card_background || body.metadata?.stamp_card_background || null,
+        points_per_stamp: Math.max(1, Math.floor(num(body.points_per_stamp, body.metadata?.points_per_stamp || 10))),
+        metadata: {
+          ...(body.metadata || {}),
+          weekly_point_limit_per_member: Math.max(0, Math.floor(num(body.weekly_point_limit_per_member, body.metadata?.weekly_point_limit_per_member || 0))),
+          weekly_scan_limit_enabled: body.weekly_scan_limit_enabled === true,
+          require_rescan_for_points: body.require_rescan_for_points !== false,
+          rotate_qr_after_scan: body.rotate_qr_after_scan === true,
+          loyalty_display_mode: normalizeLoyaltyDisplayMode(body.loyalty_display_mode || body.metadata?.loyalty_display_mode),
+          stamp_card_slots: normalizeStampCardSlots(body.stamp_card_slots || body.metadata?.stamp_card_slots),
+          stamp_card_reward_text: String(body.stamp_card_reward_text || body.metadata?.stamp_card_reward_text || 'Volle Karte = Prämie sichern').slice(0, 180),
+          stamp_card_stamp_style: normalizeStampCardStyle(body.stamp_card_stamp_style || body.metadata?.stamp_card_stamp_style),
+          stamp_card_show_logo: body.stamp_card_show_logo !== false,
+          stamp_card_background: body.stamp_card_background || body.metadata?.stamp_card_background || null,
+          points_per_stamp: Math.max(1, Math.floor(num(body.points_per_stamp, body.metadata?.points_per_stamp || 10)))
+        },
         birthday_bonus_points: body.birthday_bonus_points,
         referral_bonus_referrer: body.referral_bonus_referrer,
         referral_bonus_friend: body.referral_bonus_friend,
