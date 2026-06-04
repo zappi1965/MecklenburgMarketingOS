@@ -115,27 +115,14 @@ function hashCode(code, salt) {
 }
 
 function verifyCodeHash(code, stored) {
-  if (!stored || !String(stored).includes(':')) return false
-  const [salt, expected] = String(stored).split(':')
+  if (!stored || !stored.includes(':')) return false
+  const [salt, expected] = stored.split(':')
   const derived = crypto.scryptSync(code, salt, 32).toString('hex')
   try {
     return crypto.timingSafeEqual(Buffer.from(derived), Buffer.from(expected))
   } catch {
     return false
   }
-}
-
-function normalizeBackupHashes(value) {
-  if (!value) return []
-  if (Array.isArray(value)) return value.filter(Boolean).map(String)
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value)
-      if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
-    } catch (_) {}
-    return value.split(',').map((v) => v.trim()).filter(Boolean)
-  }
-  return []
 }
 
 async function logMfaEvent({ user_id, event_type, ip_address, user_agent, metadata }) {
@@ -211,7 +198,7 @@ async function verify({ user_id, email, code, ip_address, user_agent }) {
     return { ok: true, via: 'totp', verified_until: until, delta: totpResult.delta }
   }
 
-  const hashes = normalizeBackupHashes(profile.mfa_backup_codes_hash)
+  const hashes = profile.mfa_backup_codes_hash || []
   for (let i = 0; i < hashes.length; i++) {
     if (verifyCodeHash(codeStr, hashes[i])) {
       const remaining = hashes.slice(0, i).concat(hashes.slice(i + 1))
@@ -250,6 +237,5 @@ module.exports = {
   _hashCode: hashCode,
   _findProfileForMfa: findProfileForMfa,
   _normalizeMfaCode: normalizeMfaCode,
-  _verifyTotpCode: verifyTotpCode,
-  _normalizeBackupHashes: normalizeBackupHashes
+  _verifyTotpCode: verifyTotpCode
 }

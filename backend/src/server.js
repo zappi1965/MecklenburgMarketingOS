@@ -6,7 +6,7 @@ const authMiddleware = require('./middleware/auth')
 const requireCustomerAccess = require('./middleware/requireCustomerAccess')
 const { initSentry, attachErrorHandler, getSentry } = require('./services/sentryService')
 const { recordAdminLog } = require('./services/adminLogService')
-const mfaService = require('./services/mfaService')
+const { verifyMfaWithRescue } = require('./services/mfaVerifyRescueService')
 
 const monitoringRoutes = require('./routes/monitoringRoutes')
 const opsRoutes = require('./routes/opsRoutes')
@@ -127,6 +127,7 @@ const publicJsonPaths = [
   /^\/api\/client-error$/,
   /^\/api\/production\/client-error$/,
   /^\/api\/security\/mfa\/verify$/,
+  /^\/api\/production\/client-error$/,
   /^\/api\/v33-functional\/public\//,
   /^\/api\/qr(\/.*)?$/,
   /^\/api\/chatbot\//,
@@ -136,13 +137,7 @@ const publicJsonPaths = [
   /^\/api\/wallet\/me/,
   /^\/api\/booking\//
 ]
-const publicJsonParser = express.json({ limit: process.env.PUBLIC_JSON_LIMIT || '250kb' })
-const privateJsonParser = express.json({ limit: process.env.JSON_BODY_LIMIT || '50mb' })
-app.use((req, res, next) => {
-  const fullPath = (req.originalUrl || req.url || '').split('?')[0]
-  const parser = publicJsonPaths.some((re) => re.test(fullPath)) ? publicJsonParser : privateJsonParser
-  return parser(req, res, next)
-})
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '50mb' }))
 
 const supabaseAdmin = getSupabaseAdmin()
 const supabaseConfigured = Boolean(supabaseAdmin)
@@ -152,11 +147,13 @@ const demoModeEnabled = process.env.ENABLE_DEMO_MODE === 'true'
 app.get('/api/health', (_, res) => {
   res.json({ ok: true, service: 'MMOS Backend', timestamp: new Date().toISOString() })
 })
+// Public client error collector; must stay before the global /api auth guard.
+app.post('/api/client-error', async (req, res) => res.json({ ok: true }))
+
 
 // Public, no-auth client error collector. This prevents public QR/slug pages from
 // creating noisy 401 logs when the browser reports frontend errors without an admin session.
-// V103.3 accepts both historical aliases: /api/client-error and /api/production/client-error.
-async function publicClientErrorCollector(req, res) {
+app.post('/api/production/client-error', async (req, res) => {
   try {
     const body = req.body || {}
     await recordAdminLog(supabaseAdmin, {
@@ -170,69 +167,33 @@ async function publicClientErrorCollector(req, res) {
       method: 'CLIENT',
       message: body.message || 'Frontend error',
       user_agent: req.headers['user-agent'],
-      metadata: { source: 'ClientErrorReporter.public.v103_3', collector_path: req.path, ...body }
+      metadata: { source: 'ClientErrorReporter.public', ...body }
     }).catch(() => null)
   } catch (_) {}
   res.json({ ok: true })
-}
-app.post('/api/client-error', publicClientErrorCollector)
-app.post('/api/production/client-error', publicClientErrorCollector)
+})
 
-// Pre-auth MFA verify rescue.
-// The normal /api auth guard must not be allowed to turn a valid 2FA check into a generic 500.
-// This route validates the bearer token, verifies MFA, and returns structured JSON errors.
+
+// V103.5 pre-auth MFA verify rescue.
+// Validates the Supabase bearer session first, then verifies TOTP/backup code with a schema-tolerant helper.
 app.post('/api/security/mfa/verify', async (req, res) => {
   try {
     const supabase = supabaseAdmin || getSupabaseAdmin()
-    if (!supabase) {
-      return res.status(503).json({
-        ok: false,
-        code: 'SUPABASE_ADMIN_UNCONFIGURED',
-        error: 'Backend-Supabase ist nicht konfiguriert. Railway ENV SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY prüfen.'
-      })
-    }
-
-    const authHeader = req.headers.authorization || ''
-    const token = String(authHeader).replace(/^Bearer\s+/i, '').trim()
-    if (!token) {
-      return res.status(401).json({ ok: false, code: 'UNAUTHENTICATED', error: 'Nicht authentifiziert' })
-    }
-
+    if (!supabase) return res.status(503).json({ ok: false, code: 'SUPABASE_ADMIN_UNCONFIGURED', error: 'Backend-Supabase ist nicht konfiguriert.' })
+    const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+    if (!token) return res.status(401).json({ ok: false, code: 'UNAUTHENTICATED', error: 'Nicht authentifiziert.' })
     const { data, error } = await supabase.auth.getUser(token)
-    if (error || !data?.user) {
-      return res.status(401).json({ ok: false, code: 'INVALID_SESSION', error: 'Session ungültig oder abgelaufen.' })
-    }
-
-    const r = await mfaService.verify({
-      user_id: data.user.id,
-      email: data.user.email,
-      code: req.body?.code,
-      ip_address: req.ip,
-      user_agent: req.get('user-agent')
-    })
-
-    if (!r.ok) {
-      return res.status(401).json({ ok: false, code: 'MFA_INVALID', ...r, error: '2FA-Code ungueltig' })
-    }
-
-    return res.json({ ok: true, ...r })
+    if (error || !data?.user) return res.status(401).json({ ok: false, code: 'INVALID_SESSION', error: 'Session ungültig oder abgelaufen.' })
+    const result = await verifyMfaWithRescue(supabase, data.user, req.body?.code, { ip_address: req.ip, user_agent: req.get('user-agent') })
+    return res.status(result.status || (result.ok ? 200 : 401)).json(result)
   } catch (e) {
-    console.error('[MFA_VERIFY_ROUTE_ERROR]', e?.code || '', e?.message || e)
-    const missingSchema = /column .* does not exist|relation .* does not exist|schema|mfa_/i.test(String(e?.message || ''))
-    return res.status(e?.status && e.status < 500 ? e.status : 500).json({
-      ok: false,
-      code: e?.code || (missingSchema ? 'MFA_SCHEMA_MISSING' : 'MFA_VERIFY_INTERNAL'),
-      error: missingSchema
-        ? '2FA-Schema fehlt oder ist unvollständig. Bitte die Migration supabase/migrations/0103_3_mfa_schema.sql in Supabase ausführen.'
-        : '2FA konnte serverseitig nicht geprüft werden. Railway-Logs nach [MFA_VERIFY_ROUTE_ERROR] prüfen.',
-      detail: process.env.NODE_ENV === 'production' ? undefined : (e?.message || String(e))
-    })
+    console.error('[MFA_VERIFY_RESCUE_FATAL]', e?.code || '', e?.message || e)
+    return res.status(500).json({ ok: false, code: 'MFA_VERIFY_FATAL', error: e?.message || '2FA konnte serverseitig nicht geprüft werden.' })
   }
 })
 
 const PUBLIC_PATHS = [
   /^\/api\/client-error$/,
-  /^\/api\/production\/client-error$/,
   /^\/api\/security\/mfa\/verify$/,
   /^\/api\/health$/,
   /^\/api\/system\/health$/,
@@ -387,7 +348,8 @@ app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500
   const productionRuntime = process.env.NODE_ENV === 'production' || Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.VERCEL)
   const rawMessage = typeof err.message === 'string' ? err.message.slice(0, 500) : 'Interner Serverfehler'
-  const safeMessage = productionRuntime && status >= 500 ? 'Interner Serverfehler' : rawMessage
+  const isMfaVerifyRoute = req.path === '/api/security/mfa/verify'
+  const safeMessage = productionRuntime && status >= 500 && !isMfaVerifyRoute ? 'Interner Serverfehler' : rawMessage
   res.status(status).json({
     ok: false,
     code: err.code || 'INTERNAL_ERROR',

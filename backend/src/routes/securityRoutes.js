@@ -1,6 +1,7 @@
 const express = require('express')
 const mfaService = require('../services/mfaService')
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
+const { verifyMfaWithRescue } = require('../services/mfaVerifyRescueService')
 
 function securityRoutes() {
   const router = express.Router()
@@ -51,25 +52,12 @@ function securityRoutes() {
   router.post('/mfa/verify', async (req, res) => {
     try {
       if (!req.user?.id) return res.status(401).json({ ok: false, code: 'UNAUTHENTICATED', error: 'Nicht authentifiziert' })
-      const r = await mfaService.verify({
-        user_id: req.user.id,
-        email: req.user.email,
-        code: req.body?.code,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      })
-      if (!r.ok) return res.status(401).json({ ok: false, code: 'MFA_INVALID', ...r, error: '2FA-Code ungueltig' })
-      res.json({ ok: true, ...r })
+      const supabase = getSupabaseAdmin()
+      const result = await verifyMfaWithRescue(supabase, req.user, req.body?.code, { ip_address: req.ip, user_agent: req.get('user-agent') })
+      return res.status(result.status || (result.ok ? 200 : 401)).json(result)
     } catch (e) {
-      console.error('[MFA_VERIFY_ROUTE_ERROR]', e?.code || '', e?.message || e)
-      const missingSchema = /column .* does not exist|relation .* does not exist|schema|mfa_/i.test(String(e?.message || ''))
-      res.status(e?.status && e.status < 500 ? e.status : 500).json({
-        ok: false,
-        code: e?.code || (missingSchema ? 'MFA_SCHEMA_MISSING' : 'MFA_VERIFY_INTERNAL'),
-        error: missingSchema
-          ? '2FA-Schema fehlt oder ist unvollständig. Bitte die Migration supabase/migrations/0103_3_mfa_schema.sql in Supabase ausführen.'
-          : '2FA konnte serverseitig nicht geprüft werden. Railway-Logs nach [MFA_VERIFY_ROUTE_ERROR] prüfen.'
-      })
+      console.error('[MFA_VERIFY_SECURITY_ROUTE_FATAL]', e?.code || '', e?.message || e)
+      return res.status(500).json({ ok: false, code: 'MFA_VERIFY_FATAL', error: e?.message || '2FA konnte serverseitig nicht geprüft werden.' })
     }
   })
 
