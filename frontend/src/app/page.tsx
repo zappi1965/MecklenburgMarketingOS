@@ -1187,7 +1187,7 @@ function QRCodes({store,cid,setCid,role='admin',activeView='qr'}:any){
   .filter((x:any)=>String(x.customer_id||'')===String(activeCustomer||'')&&x.enabled!==false)
   .map((x:any)=>String(x.tool_key||x.tool||'').trim())
   .flatMap((k:string)=>{
-   const m:any={qr:['campaigns'],public_landing:['public_landing'],loyalty:['loyalty'],loyalty_rewards:['loyalty_rewards'],loyalty_rules:['loyalty_rules'],staff_codes:['staff_codes'],reactivation:['reactivation'],customer_reactivation:['reactivation'],inactive_customer_reactivation:['reactivation'],Rückholaktionen:['reactivation'],Rueckholaktionen:['reactivation'],loyalty_segments:['loyalty_segments'],smart_loyalty:['smart_loyalty'],Punkteprogramm:['loyalty'],Prämien:['loyalty_rewards'],Regeln:['loyalty_rules'],Mitarbeitercodes:['staff_codes'],Rückholaktionen:['reactivation'],Rueckholaktionen:['reactivation'],Kundengruppen:['loyalty_segments'],Bonusstufen:['smart_loyalty']}
+   const m:any={qr:['campaigns'],public_landing:['public_landing'],loyalty:['loyalty'],loyalty_rewards:['loyalty_rewards'],loyalty_rules:['loyalty_rules'],staff_codes:['staff_codes'],reactivation:['reactivation'],customer_reactivation:['reactivation'],inactive_customer_reactivation:['reactivation'],loyalty_segments:['loyalty_segments'],smart_loyalty:['smart_loyalty'],Punkteprogramm:['loyalty'],Prämien:['loyalty_rewards'],Regeln:['loyalty_rules'],Mitarbeitercodes:['staff_codes'],Rückholaktionen:['reactivation'],Rueckholaktionen:['reactivation'],Kundengruppen:['loyalty_segments'],Bonusstufen:['smart_loyalty']}
    return m[k]||[]
   }))
  const starterQrSections=['campaigns','public_landing']
