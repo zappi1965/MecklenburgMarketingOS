@@ -82,38 +82,83 @@ const trustProxyHopsRaw = process.env.TRUST_PROXY_HOPS || process.env.RAILWAY_TR
 const trustProxyHops = Math.max(0, Number(trustProxyHopsRaw) || 1)
 app.set('trust proxy', trustProxyHops)
 
-const configuredCorsOrigins = String(process.env.CORS_ALLOWED_ORIGINS || process.env.FRONTEND_URL || '')
-  .split(',')
-  .map((v) => v.trim())
+// V103.6 CORS Rescue
+// Problem in V103.5: production requests were rejected unless FRONTEND_URL/CORS_ALLOWED_ORIGINS
+// matched the browser origin exactly. That broke /api/security/mfa/verify on Vercel previews/custom domains.
+// Safe defaults: explicit ENV origins + your production domain + Vercel preview domains.
+function splitCsv(value = '') {
+  return String(value || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+}
+
+function normalizeOrigin(value = '') {
+  const raw = String(value || '').trim().replace(/\/+$/, '')
+  if (!raw) return ''
+  try {
+    return new URL(raw.startsWith('http') ? raw : `https://${raw}`).origin
+  } catch (_) {
+    return raw
+  }
+}
+
+const configuredCorsOrigins = [
+  ...splitCsv(process.env.CORS_ALLOWED_ORIGINS),
+  process.env.FRONTEND_URL,
+  process.env.PUBLIC_APP_URL,
+  process.env.NEXT_PUBLIC_APP_URL,
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '',
+  'https://mecklenburgmarketing.de',
+  'https://www.mecklenburgmarketing.de'
+]
+  .map(normalizeOrigin)
   .filter(Boolean)
+
+const configuredCorsPatterns = [
+  ...splitCsv(process.env.CORS_ALLOWED_ORIGIN_PATTERNS),
+  'https://*.vercel.app',
+  'https://*.mecklenburgmarketing.de'
+]
+  .map((v) => String(v || '').trim())
+  .filter(Boolean)
+
 const allowAllCors = process.env.CORS_ALLOW_ALL === 'true' || (configuredCorsOrigins.length === 0 && process.env.NODE_ENV !== 'production')
+
+function wildcardToRegExp(pattern) {
+  const escaped = String(pattern)
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+  return new RegExp(`^${escaped}$`, 'i')
+}
+
 function isAllowedCorsOrigin(origin) {
   if (!origin) return true
   if (allowAllCors) return true
-  if (configuredCorsOrigins.includes(origin)) return true
-  try {
-    const host = new URL(origin).hostname
-    return configuredCorsOrigins.some((allowed) => {
-      try {
-        const allowedHost = new URL(allowed).hostname
-        return host === allowedHost
-      } catch (_) {
-        return false
-      }
-    })
-  } catch (_) {
-    return false
-  }
+  const normalized = normalizeOrigin(origin)
+  if (configuredCorsOrigins.includes(normalized)) return true
+  return configuredCorsPatterns.some((pattern) => wildcardToRegExp(normalizeOrigin(pattern)).test(normalized))
 }
 
 app.use(cors({
   origin(origin, cb) {
     if (isAllowedCorsOrigin(origin)) return cb(null, true)
-    return cb(new Error('CORS origin not allowed'))
+    // Do not throw here. Throwing turns CORS into a noisy 500 and hides the real auth/MFA error.
+    console.warn('[CORS_BLOCKED]', origin || 'no-origin')
+    return cb(null, false)
   },
   credentials: false,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-MFA-Code', 'X-MMOS-MFA-Code', 'X-Webhook-Secret', 'X-Resend-Webhook-Secret']
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-MFA-Code',
+    'X-MMOS-MFA-Code',
+    'X-Webhook-Secret',
+    'X-Resend-Webhook-Secret'
+  ],
+  exposedHeaders: ['Content-Type']
 }))
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204)
@@ -137,7 +182,13 @@ const publicJsonPaths = [
   /^\/api\/wallet\/me/,
   /^\/api\/booking\//
 ]
-app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '50mb' }))
+const publicJsonParser = express.json({ limit: process.env.PUBLIC_JSON_LIMIT || '250kb' })
+const privateJsonParser = express.json({ limit: process.env.JSON_BODY_LIMIT || '50mb' })
+app.use((req, res, next) => {
+  const fullPath = (req.originalUrl || req.url || '').split('?')[0]
+  const parser = publicJsonPaths.some((re) => re.test(fullPath)) ? publicJsonParser : privateJsonParser
+  return parser(req, res, next)
+})
 
 const supabaseAdmin = getSupabaseAdmin()
 const supabaseConfigured = Boolean(supabaseAdmin)
