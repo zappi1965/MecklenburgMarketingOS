@@ -28,20 +28,20 @@ async function sendClientError(payload: any) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
 
-    await fetch('/api/production/client-error', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        ...payload,
-        pathname: safePathname(),
-        // bewusst nicht die komplette URL inkl. Query-Parametern senden
-        origin: safeOrigin(),
-        user_agent: navigator.userAgent,
-        consent_category: FORCE_ESSENTIAL ? 'essential' : CONSENT_CATEGORY,
-        created_at: new Date().toISOString()
-      }),
-      keepalive: true
+    const reportBody = JSON.stringify({
+      ...payload,
+      pathname: safePathname(),
+      // bewusst nicht die komplette URL inkl. Query-Parametern senden
+      origin: safeOrigin(),
+      user_agent: navigator.userAgent,
+      consent_category: FORCE_ESSENTIAL ? 'essential' : CONSENT_CATEGORY,
+      created_at: new Date().toISOString()
     })
+    async function sendErrorEndpoint(path: string) {
+      return fetch(path, { method: 'POST', headers, body: reportBody, keepalive: true })
+    }
+    const r = await sendErrorEndpoint('/api/production/client-error')
+    if (r.status === 401 || r.status === 404) await sendErrorEndpoint('/api/client-error')
   } catch (_) {}
 }
 

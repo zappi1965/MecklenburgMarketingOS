@@ -115,14 +115,27 @@ function hashCode(code, salt) {
 }
 
 function verifyCodeHash(code, stored) {
-  if (!stored || !stored.includes(':')) return false
-  const [salt, expected] = stored.split(':')
+  if (!stored || !String(stored).includes(':')) return false
+  const [salt, expected] = String(stored).split(':')
   const derived = crypto.scryptSync(code, salt, 32).toString('hex')
   try {
     return crypto.timingSafeEqual(Buffer.from(derived), Buffer.from(expected))
   } catch {
     return false
   }
+}
+
+function normalizeBackupHashes(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter(Boolean).map(String)
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
+    } catch (_) {}
+    return value.split(',').map((v) => v.trim()).filter(Boolean)
+  }
+  return []
 }
 
 async function logMfaEvent({ user_id, event_type, ip_address, user_agent, metadata }) {
@@ -137,28 +150,6 @@ async function logMfaEvent({ user_id, event_type, ip_address, user_agent, metada
       metadata: metadata || {}
     })
   } catch (_) {}
-}
-
-async function updateMfaProfile(supabase, profile, patch) {
-  const attempts = []
-  if (profile?.id) attempts.push(['id', profile.id])
-  if (profile?.email) attempts.push(['email', String(profile.email).trim().toLowerCase()])
-
-  let lastError = null
-  for (const [column, value] of attempts) {
-    try {
-      const { error } = await supabase.from('user_profiles').update(patch).eq(column, value)
-      if (!error) return true
-      lastError = error
-    } catch (e) {
-      lastError = e
-    }
-  }
-
-  const e = new Error(lastError?.message || 'MFA-Profil konnte nicht aktualisiert werden')
-  e.status = 500
-  e.code = 'MFA_PROFILE_UPDATE_FAILED'
-  throw e
 }
 
 async function enroll({ user_id, email }) {
@@ -188,13 +179,16 @@ async function activate({ user_id, email, code, ip_address, user_agent }) {
   const now = new Date().toISOString()
   const backupCodes = generateBackupCodes(10)
   const hashed = backupCodes.map((c) => hashCode(c))
-  await updateMfaProfile(supabase, profile, {
-    mfa_enabled: true,
-    mfa_enrolled_at: now,
-    mfa_last_used_at: now,
-    mfa_verified_until: verifiedUntil(),
-    mfa_backup_codes_hash: hashed
-  })
+  await supabase
+    .from('user_profiles')
+    .update({
+      mfa_enabled: true,
+      mfa_enrolled_at: now,
+      mfa_last_used_at: now,
+      mfa_verified_until: verifiedUntil(),
+      mfa_backup_codes_hash: hashed
+    })
+    .eq('id', profile.id)
   await logMfaEvent({ user_id, event_type: 'enrolled', ip_address, user_agent })
   return { backupCodes }
 }
@@ -212,16 +206,19 @@ async function verify({ user_id, email, code, ip_address, user_agent }) {
 
   const totpResult = verifyTotpCode(code, profile.mfa_secret)
   if (totpResult.ok) {
-    await updateMfaProfile(supabase, profile, { mfa_last_used_at: now, mfa_verified_until: until })
+    await supabase.from('user_profiles').update({ mfa_last_used_at: now, mfa_verified_until: until }).eq('id', profile.id)
     await logMfaEvent({ user_id, event_type: 'verified', ip_address, user_agent, metadata: { verified_until: until, delta: totpResult.delta } })
     return { ok: true, via: 'totp', verified_until: until, delta: totpResult.delta }
   }
 
-  const hashes = profile.mfa_backup_codes_hash || []
+  const hashes = normalizeBackupHashes(profile.mfa_backup_codes_hash)
   for (let i = 0; i < hashes.length; i++) {
     if (verifyCodeHash(codeStr, hashes[i])) {
       const remaining = hashes.slice(0, i).concat(hashes.slice(i + 1))
-      await updateMfaProfile(supabase, profile, { mfa_backup_codes_hash: remaining, mfa_last_used_at: now, mfa_verified_until: until })
+      await supabase
+        .from('user_profiles')
+        .update({ mfa_backup_codes_hash: remaining, mfa_last_used_at: now, mfa_verified_until: until })
+        .eq('id', profile.id)
       await logMfaEvent({ user_id, event_type: 'backup_used', ip_address, user_agent, metadata: { remaining: remaining.length, verified_until: until } })
       return { ok: true, via: 'backup', remaining: remaining.length, verified_until: until }
     }
@@ -253,5 +250,6 @@ module.exports = {
   _hashCode: hashCode,
   _findProfileForMfa: findProfileForMfa,
   _normalizeMfaCode: normalizeMfaCode,
-  _verifyTotpCode: verifyTotpCode
+  _verifyTotpCode: verifyTotpCode,
+  _normalizeBackupHashes: normalizeBackupHashes
 }

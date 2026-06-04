@@ -1,5 +1,5 @@
--- MMOS V103.2 MFA schema rescue / idempotent check
--- Run this in Supabase SQL editor if 2FA verify returns MFA_VERIFY_INTERNAL.
+-- MMOS V103.3 MFA schema rescue / idempotent
+-- Run this once in the Supabase SQL editor if /api/security/mfa/verify returns MFA_SCHEMA_MISSING.
 
 alter table if exists public.user_profiles
   add column if not exists mfa_enabled boolean not null default false,
@@ -32,7 +32,10 @@ alter table public.mfa_events enable row level security;
 
 do $$
 begin
-  if not exists (select 1 from pg_policies where schemaname='public' and tablename='mfa_events' and policyname='authenticated_mfa_events') then
+  if not exists (
+    select 1 from pg_policies
+    where schemaname='public' and tablename='mfa_events' and policyname='authenticated_mfa_events'
+  ) then
     create policy authenticated_mfa_events on public.mfa_events
       for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
   end if;

@@ -61,14 +61,14 @@ function securityRoutes() {
       if (!r.ok) return res.status(401).json({ ok: false, code: 'MFA_INVALID', ...r, error: '2FA-Code ungueltig' })
       res.json({ ok: true, ...r })
     } catch (e) {
-      console.error('[MFA_VERIFY_ERROR]', e?.message || e)
-      const status = e?.status && e.status < 500 ? e.status : 500
-      res.status(status).json({
+      console.error('[MFA_VERIFY_ROUTE_ERROR]', e?.code || '', e?.message || e)
+      const missingSchema = /column .* does not exist|relation .* does not exist|schema|mfa_/i.test(String(e?.message || ''))
+      res.status(e?.status && e.status < 500 ? e.status : 500).json({
         ok: false,
-        code: e?.code || 'MFA_VERIFY_INTERNAL',
-        error: status >= 500
-          ? '2FA konnte serverseitig nicht geprüft werden. Prüfe Railway-Logs und ob die MFA-Supabase-Migration ausgeführt wurde.'
-          : (e?.message || '2FA-Code ungueltig')
+        code: e?.code || (missingSchema ? 'MFA_SCHEMA_MISSING' : 'MFA_VERIFY_INTERNAL'),
+        error: missingSchema
+          ? '2FA-Schema fehlt oder ist unvollständig. Bitte die Migration supabase/migrations/0103_3_mfa_schema.sql in Supabase ausführen.'
+          : '2FA konnte serverseitig nicht geprüft werden. Railway-Logs nach [MFA_VERIFY_ROUTE_ERROR] prüfen.'
       })
     }
   })

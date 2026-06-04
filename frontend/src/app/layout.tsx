@@ -4,8 +4,8 @@ import type { ReactNode } from 'react'
 import LegalFooter from '@/components/legal/LegalFooter'
 import FieldHelpEnhancer from '@/components/FieldHelpEnhancer'
 import ConsentBanner from '@/components/ConsentBanner'
-import MmosScrollRescue from '@/components/MmosScrollRescue'
 import ClientErrorReporter from '@/components/ClientErrorReporter'
+import MmosScrollRescue from '@/components/MmosScrollRescue'
 
 export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 5, viewportFit: 'cover', themeColor: '#070b12' }
 
