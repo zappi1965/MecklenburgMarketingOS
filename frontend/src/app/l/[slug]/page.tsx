@@ -158,12 +158,14 @@ function PublicLoyaltyPageContent() {
   const quickRedemption = result?.quick_redemption || null
 
   const stampSettings = {
-    loyalty_display_mode: settings?.loyalty_display_mode || settings?.metadata?.loyalty_display_mode || status?.program?.metadata?.loyalty_display_mode || campaignTexts.loyalty_display_mode || 'classic',
-    stamp_card_slots: settings?.stamp_card_slots || settings?.metadata?.stamp_card_slots || status?.program?.metadata?.stamp_card_slots || campaignTexts.stamp_card_slots || 10,
-    stamp_card_reward_text: settings?.stamp_card_reward_text || settings?.metadata?.stamp_card_reward_text || status?.program?.metadata?.stamp_card_reward_text || campaignTexts.stamp_card_reward_text || 'Volle Karte = Prämie sichern',
-    stamp_card_stamp_style: settings?.stamp_card_stamp_style || settings?.metadata?.stamp_card_stamp_style || status?.program?.metadata?.stamp_card_stamp_style || campaignTexts.stamp_card_stamp_style || 'logo',
-    stamp_card_show_logo: settings?.stamp_card_show_logo ?? settings?.metadata?.stamp_card_show_logo ?? status?.program?.metadata?.stamp_card_show_logo ?? campaignTexts.stamp_card_show_logo ?? true,
-    logo_url: settings?.stamp_card_background || settings?.logo_url || settings?.brand_logo_url || settings?.metadata?.stamp_card_logo_url || settings?.metadata?.brand_logo_url || status?.qr_campaign?.metadata?.stamp_card_logo_url || status?.qr_campaign?.metadata?.brand_logo_url || status?.program?.metadata?.stamp_card_logo_url || status?.program?.metadata?.brand_logo_url || null
+    // QR-Kampagnen-Metadaten sind die finale Quelle für /l/[slug].
+    // Ältere Loyalty-/Branding-Defaults dürfen eine konkrete QR-Zielseiten-Auswahl nicht überschreiben.
+    loyalty_display_mode: campaignTexts.loyalty_display_mode || settings?.loyalty_display_mode || settings?.metadata?.loyalty_display_mode || status?.program?.metadata?.loyalty_display_mode || 'classic',
+    stamp_card_slots: campaignTexts.stamp_card_slots || settings?.stamp_card_slots || settings?.metadata?.stamp_card_slots || status?.program?.metadata?.stamp_card_slots || 10,
+    stamp_card_reward_text: campaignTexts.stamp_card_reward_text || settings?.stamp_card_reward_text || settings?.metadata?.stamp_card_reward_text || status?.program?.metadata?.stamp_card_reward_text || 'Volle Karte = Prämie sichern',
+    stamp_card_stamp_style: campaignTexts.stamp_card_stamp_style || settings?.stamp_card_stamp_style || settings?.metadata?.stamp_card_stamp_style || status?.program?.metadata?.stamp_card_stamp_style || 'logo',
+    stamp_card_show_logo: campaignTexts.stamp_card_show_logo ?? settings?.stamp_card_show_logo ?? settings?.metadata?.stamp_card_show_logo ?? status?.program?.metadata?.stamp_card_show_logo ?? true,
+    logo_url: campaignTexts.stamp_card_logo_url || campaignTexts.stamp_card_background || campaignTexts.brand_logo_url || settings?.stamp_card_background || settings?.logo_url || settings?.brand_logo_url || settings?.metadata?.stamp_card_logo_url || settings?.metadata?.brand_logo_url || status?.program?.metadata?.stamp_card_logo_url || status?.program?.metadata?.brand_logo_url || null
   }
   const loyaltyDisplayMode = ['classic', 'stamp_card', 'hybrid'].includes(String(stampSettings.loyalty_display_mode)) ? String(stampSettings.loyalty_display_mode) : 'classic'
   const stampSlotsRaw = Number(stampSettings.stamp_card_slots || 10)
@@ -175,7 +177,7 @@ function PublicLoyaltyPageContent() {
   // V103.8: Stempelkarte zeigt Besuche/Stempel, nicht rohe Punkte.
   // Bevorzugt total_scans aus loyalty_customers; fallback auf Punkte / pointsPerStamp.
   const stampCount = Math.max(0, Math.floor(totalScans > 0 ? totalScans : points / pointsPerStamp))
-  const showStampCard = showLoyalty && (loyaltyDisplayMode === 'stamp_card' || loyaltyDisplayMode === 'hybrid')
+  const showStampCard = (showLoyalty || loyaltyDisplayMode === 'stamp_card' || loyaltyDisplayMode === 'hybrid') && (loyaltyDisplayMode === 'stamp_card' || loyaltyDisplayMode === 'hybrid')
   const showClassicLoyaltyStats = showLoyalty && loyaltyDisplayMode !== 'stamp_card'
 
   const publicUrl = useMemo(() => {
@@ -382,8 +384,8 @@ function PublicLoyaltyPageContent() {
             />
           )}
 
-          {showLoyalty && loyaltyDisplayMode === 'stamp_card' && (
-            <p className="publicStampCompactPoints">Aktueller Punktestand: {points} Punkte · {pointsAdded || 10} pro Scan · {stampCount} Stempel · Level {result?.loyalty_level?.tier || result?.member?.tier || 'Basic'}</p>
+          {loyaltyDisplayMode === 'stamp_card' && (
+            <p className="publicStampCompactPoints">{result ? <>Aktueller Punktestand: {points} Punkte · {pointsAdded || 10} pro Scan · {stampCount} Stempel · Level {result?.loyalty_level?.tier || result?.member?.tier || 'Basic'}</> : <>Melde dich an oder scanne beim Kauf, damit deine gesammelten Stempel hier erscheinen.</>}</p>
           )}
 
           {showClassicLoyaltyStats && (
@@ -550,12 +552,12 @@ function PublicLoyaltyPageContent() {
                 </div>
               )}
 
-              {quickRedemption?.code && (
+              {quickRedemption?.code && redemptionMode === 'counter_customer_code' && (
                 <div className="publicReviewSavedBox">
-                  <b>{redemptionMode === 'counter_customer_code' ? 'Dein Einlösecode für den Tresen' : 'Einlösecode / Tresen-Backup'}</b>
+                  <b>Dein Einlösecode für den Tresen</b>
                   <span style={{fontSize:'32px',fontWeight:900,letterSpacing:'0.12em',display:'block',marginTop:8}}>{quickRedemption.code}</span>
-                  <span>{redemptionMode === 'counter_customer_code' ? 'Zeige diesen Code dem Team. Der Mitarbeiter löst deine verfügbare Prämie im Tresenmodus ein.' : 'Standard: Das Team tippt die Mitarbeiter-PIN direkt hier auf deinem Handy ein. Der Code ist als Backup für den Tresenmodus nutzbar.'}</span>
-                  <span style={{display:'block',marginTop:8,color:'#6b7280'}}>Der Tresenmodus ist nur für das Team im Kundendashboard verfügbar.</span>
+                  <span>Zeige diesen Code dem Team. Der Mitarbeiter löst deine verfügbare Prämie im Tresenmodus ein.</span>
+                  <span style={{display:'block',marginTop:8,color:'#6b7280'}}>Dieser Code erscheint nur, wenn der Tresenmodus für diese QR-Zielseite aktiviert ist.</span>
                 </div>
               )}
 

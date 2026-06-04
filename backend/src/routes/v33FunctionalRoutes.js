@@ -2086,14 +2086,14 @@ function v33FunctionalRoutes(supabase) {
       if (!(await requireCustomerAccessForCounter(req, res, c.customerId))) return
       const current = await resolveCurrentQrDisplayContext(slug)
       const metadata = c.qrCampaign?.metadata || {}
-      const pins = metadata.show_staff_pin_on_counter === false ? [] : await loadCounterStaffPins(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null)
+      const pins = metadata.show_staff_pin_on_counter === true ? await loadCounterStaffPins(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null) : []
       const kpis = await loadDailyQrKpis(c.customerId, c.qrCampaign?.id || c.program?.qr_campaign_id || null, slug)
       res.json({
         ok:true,
         slug,
         customer_id: c.customerId,
         customer_name: c.qrCampaign?.metadata?.customer_name || c.program?.metadata?.customer_name || c.program?.name || c.program?.title || 'Betrieb',
-        qr_campaign: c.qrCampaign ? { id:c.qrCampaign.id, slug:c.qrCampaign.slug, title:c.qrCampaign.title || c.qrCampaign.name, metadata: { redemption_mode: metadata.redemption_mode || 'customer_phone_staff_pin', show_staff_pin_on_counter: metadata.show_staff_pin_on_counter !== false, rotate_qr_after_scan: metadata.rotate_qr_after_scan === true } } : null,
+        qr_campaign: c.qrCampaign ? { id:c.qrCampaign.id, slug:c.qrCampaign.slug, title:c.qrCampaign.title || c.qrCampaign.name, metadata: { redemption_mode: metadata.redemption_mode || 'customer_phone_staff_pin', show_staff_pin_on_counter: metadata.show_staff_pin_on_counter === true, rotate_qr_after_scan: metadata.rotate_qr_after_scan === true } } : null,
         current_qr: current.ok ? current : null,
         scan_path: current.ok ? current.scan_path : `/q/${slug}`,
         display_path: current.ok ? current.display_path : `/qr-display/${slug}`,
@@ -3711,7 +3711,7 @@ function v33FunctionalRoutes(supabase) {
         require_rescan_for_points: body.require_rescan_for_points === undefined ? (current.metadata?.require_rescan_for_points !== false && toInt(body.points_per_scan ?? current.points_per_scan ?? current.metadata?.points_per_scan ?? 10) > 0 && mode !== 'review') : body.require_rescan_for_points !== false,
         rotate_qr_after_scan: body.rotate_qr_after_scan === undefined ? current.metadata?.rotate_qr_after_scan === true : body.rotate_qr_after_scan === true,
         redemption_mode: ['customer_phone_staff_pin','counter_customer_code'].includes(String(body.redemption_mode || current.metadata?.redemption_mode || '')) ? String(body.redemption_mode || current.metadata?.redemption_mode) : 'customer_phone_staff_pin',
-        show_staff_pin_on_counter: body.show_staff_pin_on_counter === undefined ? current.metadata?.show_staff_pin_on_counter !== false : body.show_staff_pin_on_counter !== false,
+        show_staff_pin_on_counter: body.show_staff_pin_on_counter === undefined ? current.metadata?.show_staff_pin_on_counter === true : body.show_staff_pin_on_counter === true,
         redemption_code_ttl_minutes: toInt(body.redemption_code_ttl_minutes ?? current.metadata?.redemption_code_ttl_minutes ?? 240, 240),
         loyalty_display_mode: ['classic','stamp_card','hybrid'].includes(String(body.loyalty_display_mode || current.metadata?.loyalty_display_mode || '')) ? String(body.loyalty_display_mode || current.metadata?.loyalty_display_mode) : 'classic',
         stamp_card_slots: [6,8,10,12].includes(toInt(body.stamp_card_slots ?? current.metadata?.stamp_card_slots ?? 10, 10)) ? toInt(body.stamp_card_slots ?? current.metadata?.stamp_card_slots ?? 10, 10) : 10,
