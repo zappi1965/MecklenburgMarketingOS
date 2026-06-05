@@ -1,6 +1,7 @@
 
 const express = require('express')
 const crypto = require('crypto')
+const multer = require('multer')
 const { V35BusinessEngine, sentimentFromRating } = require('../services/v35BusinessEngine')
 const { inspectPublicAction, recordPublicShieldEvent } = require('../services/publicEndpointShieldService')
 const { writeCriticalAudit } = require('../services/criticalAuditService')
@@ -10,6 +11,60 @@ const MailService = require('../services/mailService')
 const safeToken = (prefix = 'tok') => `${prefix}_${crypto.randomBytes(12).toString('hex')}`
 const clean = (v) => v === undefined || v === null ? null : String(v).trim() || null
 const num = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback
+
+const STAMP_LOGO_BUCKET = process.env.MMOS_STAMP_LOGO_BUCKET || 'stamp-logos'
+const STAMP_LOGO_MAX_BYTES = Number(process.env.MMOS_STAMP_LOGO_MAX_BYTES || 3 * 1024 * 1024)
+const STAMP_LOGO_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp'])
+
+function safeUploadName(name = 'stamp-logo') {
+  return String(name || 'stamp-logo').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'stamp-logo'
+}
+function stampLogoExtension(file = {}) {
+  const mime = String(file.mimetype || '').toLowerCase()
+  if (mime === 'image/png') return 'png'
+  if (mime === 'image/webp') return 'webp'
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg'
+  const n = safeUploadName(file.originalname || '')
+  const ext = n.split('.').pop()
+  return ['png', 'jpg', 'jpeg', 'webp'].includes(ext) ? (ext === 'jpeg' ? 'jpg' : ext) : 'png'
+}
+function validImageMagic(file = {}) {
+  const buf = file.buffer || Buffer.alloc(0)
+  const mime = String(file.mimetype || '').toLowerCase()
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return false
+  if (mime === 'image/png') return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
+  if (mime === 'image/webp') return buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP'
+  return false
+}
+function isLikelyInternalOrSafeImageUrl(url = '') {
+  const value = String(url || '').trim()
+  if (!value) return true
+  if (value.startsWith('/')) return true
+  try {
+    const parsed = new URL(value)
+    const allowed = [process.env.SUPABASE_URL, process.env.PUBLIC_APP_URL, process.env.FRONTEND_URL, process.env.NEXT_PUBLIC_APP_URL]
+      .filter(Boolean)
+      .map((u) => {
+        try { return new URL(u).hostname } catch (_) { return null }
+      })
+      .filter(Boolean)
+    if (allowed.includes(parsed.hostname)) return true
+    if (parsed.pathname.includes('/storage/v1/object/public/stamp-logos/')) return true
+  } catch (_) {}
+  return false
+}
+function normalizeStampLogoUrlForActor(req, url = '', currentUrl = '') {
+  const value = clean(url || '') || ''
+  if (!value) return ''
+  if (value === currentUrl) return value
+  if (req?.userRole === 'admin') return value
+  if (isLikelyInternalOrSafeImageUrl(value)) return value
+  const e = new Error('Externe Stempel-Logo-URLs sind für Kunden deaktiviert. Bitte Logo hochladen oder Admin-Freigabe nutzen.')
+  e.status = 400
+  e.code = 'EXTERNAL_STAMP_LOGO_URL_BLOCKED'
+  throw e
+}
 
 const PUBLIC_PASSWORD_MIN_LENGTH = 8
 const publicAuthAttempts = new Map()
@@ -152,6 +207,53 @@ function slugify(input, fallback = 'kunde') {
 function v33FunctionalRoutes(supabase) {
   const router = express.Router()
   const engine = new V35BusinessEngine(supabase)
+
+  const stampLogoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: STAMP_LOGO_MAX_BYTES, files: 1 },
+    fileFilter: (_req, file, cb) => {
+      const mime = String(file.mimetype || '').toLowerCase()
+      if (!STAMP_LOGO_MIME_TYPES.has(mime)) return cb(new Error('Nur PNG, JPG oder WEBP sind als Stempel-Logo erlaubt.'))
+      cb(null, true)
+    }
+  })
+
+  function stampLogoUploadMiddleware(req, res, next) {
+    return stampLogoUpload.single('file')(req, res, (err) => {
+      if (!err) return next()
+      const isSize = err.code === 'LIMIT_FILE_SIZE'
+      return res.status(isSize ? 413 : 400).json({ ok: false, code: isSize ? 'FILE_TOO_LARGE' : 'INVALID_FILE_TYPE', error: isSize ? 'Das Logo ist zu groß.' : (err.message || 'Nur PNG, JPG oder WEBP sind erlaubt.') })
+    })
+  }
+
+  async function requireCustomerAccessForId(req, res, customerId) {
+    if (req.userRole === 'admin') return true
+    if (!req.user?.id) {
+      res.status(401).json({ ok: false, code: 'AUTH_REQUIRED', error: 'Nicht authentifiziert.' })
+      return false
+    }
+    const normalizedCustomerId = String(customerId || '').trim()
+    if (!normalizedCustomerId) {
+      res.status(400).json({ ok: false, code: 'CUSTOMER_ID_MISSING', error: 'customer_id fehlt.' })
+      return false
+    }
+    const profileCustomerId = req.userProfile?.customer_id ? String(req.userProfile.customer_id) : ''
+    if (profileCustomerId && profileCustomerId === normalizedCustomerId && String(req.userStatus || 'active').toLowerCase() === 'active') return true
+    const { data, error } = await supabase
+      .from('customer_users')
+      .select('id, role, status')
+      .eq('auth_user_id', req.user.id)
+      .eq('customer_id', normalizedCustomerId)
+      .eq('status', 'active')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) {
+      res.status(403).json({ ok: false, code: 'CUSTOMER_ACCESS_DENIED', error: 'Kein Zugriff auf diesen Kunden.' })
+      return false
+    }
+    req.customerAccess = data
+    return true
+  }
 
   router.param('customer_id', async (req, res, next, customerId) => {
     try {
@@ -2160,6 +2262,9 @@ function v33FunctionalRoutes(supabase) {
       }
       if (!reward) return res.status(404).json({ ok:false, code:'REWARD_NOT_FOUND', error:'Keine einlösbare Prämie für diesen Code gefunden.' })
       const requiredPoints = rewardRequiredPoints(reward)
+      const pointsPerStampRaw = num(c.qrCampaign?.metadata?.points_per_stamp || c.program?.metadata?.points_per_stamp || c.qrCampaign?.metadata?.points_per_scan || c.qrCampaign?.points_per_scan || 1, 1)
+      const pointsPerStamp = pointsPerStampRaw > 0 ? pointsPerStampRaw : 1
+      const stampsSpent = Math.max(0, Math.floor(requiredPoints / pointsPerStamp))
       const balance = num(member.points_balance, 0)
       if (balance < requiredPoints) return res.status(400).json({ ok:false, code:'NOT_ENOUGH_POINTS', error:`Für diese Prämie fehlen noch ${Math.max(0, requiredPoints - balance)} Punkte.`, points_balance: balance, required_points: requiredPoints })
       const existingRedemptions = await getPublicRewardRedemptions(c.customerId, member.id, reward.id)
@@ -2167,13 +2272,13 @@ function v33FunctionalRoutes(supabase) {
       if (!allowMultiple && existingRedemptions.length > 0) return res.status(409).json({ ok:false, code:'REWARD_ALREADY_REDEEMED', error:'Diese Prämie wurde bereits eingelöst.' })
       const now = new Date().toISOString()
       const nextBalance = Math.max(0, balance - requiredPoints)
-      const updated = await updateLoyaltyCustomerSafe(member.id, { points_balance: nextBalance, last_activity_at: now, last_seen_at: now, metadata: { ...(member.metadata || {}), last_counter_redemption: { reward_id: reward.id, code, redeemed_at: now } } })
+      const updated = await updateLoyaltyCustomerSafe(member.id, { points_balance: nextBalance, last_activity_at: now, last_seen_at: now, metadata: { ...(member.metadata || {}), last_counter_redemption: { reward_id: reward.id, code, redeemed_at: now, points_spent: requiredPoints, stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp } } })
       if (updated.error) throw updated.error
-      const redemptionPayload = { customer_id: c.customerId, loyalty_program_id: c.program.id, loyalty_customer_id: member.id, qr_campaign_id: c.qrCampaign?.id || c.program?.qr_campaign_id || null, reward_id: reward.id, reward_title: rewardDisplayTitle(reward), points_spent: requiredPoints, staff_code_used: true, status: 'redeemed', redeemed_at: now, metadata: { source: 'counter_code', slug, code, staff_code_label: staff.staff_code?.label || null }, created_at: now, updated_at: now }
+      const redemptionPayload = { customer_id: c.customerId, loyalty_program_id: c.program.id, loyalty_customer_id: member.id, qr_campaign_id: c.qrCampaign?.id || c.program?.qr_campaign_id || null, reward_id: reward.id, reward_title: rewardDisplayTitle(reward), points_spent: requiredPoints, staff_code_used: true, status: 'redeemed', redeemed_at: now, metadata: { source: 'counter_code', slug, code, staff_code_label: staff.staff_code?.label || null, stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp, stamp_card_mode: 'points_deducted_variant_a' }, created_at: now, updated_at: now }
       const redemption = await savePublicRewardRedemption(redemptionPayload)
-      await insertLoyaltyTransactionSafe({ customer_id: c.customerId, loyalty_program_id: c.program.id, loyalty_customer_id: member.id, qr_campaign_id: c.qrCampaign?.id || c.program?.qr_campaign_id || null, action: 'reward_redemption', points: -requiredPoints, source: 'counter_code', description: `Tresen-Einlösung: ${rewardDisplayTitle(reward)}`, metadata: { slug, code, reward_id: reward.id, staff_code_used: true } })
+      await insertLoyaltyTransactionSafe({ customer_id: c.customerId, loyalty_program_id: c.program.id, loyalty_customer_id: member.id, qr_campaign_id: c.qrCampaign?.id || c.program?.qr_campaign_id || null, action: 'reward_redemption', points: -requiredPoints, source: 'counter_code', description: `Tresen-Einlösung: ${rewardDisplayTitle(reward)}`, metadata: { slug, code, reward_id: reward.id, staff_code_used: true, stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp, stamp_card_mode: 'points_deducted_variant_a' } })
       try { await supabase.from('v33_functional_records').update({ status: 'redeemed', payload: { ...payload, status:'redeemed', reward_id: reward.id, reward_title: rewardDisplayTitle(reward), redeemed_at: now, staff_code_used: true }, updated_at: now }).eq('id', row.id) } catch (_) {}
-      res.json({ ok:true, status:'redeemed', reward: { id: reward.id, title: rewardDisplayTitle(reward), points_required: requiredPoints }, redemption: redemption.data, member: updated.data || member, points_balance: nextBalance })
+      res.json({ ok:true, status:'redeemed', reward: { id: reward.id, title: rewardDisplayTitle(reward), points_required: requiredPoints }, redemption: redemption.data, member: updated.data || member, points_balance: nextBalance, points_spent: requiredPoints, stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp })
     } catch (e) { next(e) }
   })
 
@@ -2645,6 +2750,9 @@ function v33FunctionalRoutes(supabase) {
       if (!reward) return res.status(404).json({ ok: false, error: 'Reward nicht gefunden oder nicht aktiv.' })
 
       const requiredPoints = rewardRequiredPoints(reward)
+      const pointsPerStampRaw = num(ctx.qrCampaign?.metadata?.points_per_stamp || program.metadata?.points_per_stamp || ctx.qrCampaign?.metadata?.points_per_scan || ctx.qrCampaign?.points_per_scan || 1, 1)
+      const pointsPerStamp = pointsPerStampRaw > 0 ? pointsPerStampRaw : 1
+      const stampsSpent = Math.max(0, Math.floor(requiredPoints / pointsPerStamp))
       const balance = num(member.points_balance, 0)
       if (balance < requiredPoints) return res.status(400).json({ ok: false, error: `Für diese Prämie fehlen noch ${Math.max(0, requiredPoints - balance)} Punkte.`, required_points: requiredPoints, points_balance: balance })
 
@@ -2670,7 +2778,7 @@ function v33FunctionalRoutes(supabase) {
         last_seen_at: now,
         metadata: {
           ...(member.metadata || {}),
-          last_reward_redemption: { reward_id: reward.id, title: reward.title, redeemed_at: now, points_spent: requiredPoints }
+          last_reward_redemption: { reward_id: reward.id, title: reward.title, redeemed_at: now, points_spent: requiredPoints, stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp }
         }
       }).eq('id', member.id).select('*').single()
       if (updateMember.error) throw updateMember.error
@@ -2687,7 +2795,7 @@ function v33FunctionalRoutes(supabase) {
         status: 'redeemed',
         redeemed_at: now,
         allow_multiple_redemptions: allowMultiple,
-        metadata: { slug, email, reward, auth_method: 'email_password' },
+        metadata: { slug, email, reward, auth_method: 'email_password', stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp, stamp_card_mode: 'points_deducted_variant_a' },
         created_at: now,
         updated_at: now
       }
@@ -2702,7 +2810,7 @@ function v33FunctionalRoutes(supabase) {
           action: 'reward_redemption',
           points: -requiredPoints,
           description: `Reward eingelöst: ${reward.title}`,
-          metadata: { public: true, slug, reward_id: reward.id, staff_code_used: Boolean(staffCode) }
+          metadata: { public: true, slug, reward_id: reward.id, staff_code_used: Boolean(staffCode), stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp, stamp_card_mode: 'points_deducted_variant_a' }
         })
       } catch (_) {}
 
@@ -2720,7 +2828,7 @@ function v33FunctionalRoutes(supabase) {
 
       resetPublicAuthRateLimit(`${slug}:redeem`, email, req.ip || req.get('x-forwarded-for'))
       const redemptions = await getPublicRewardRedemptions(customerId, member.id)
-      return res.json({ ok: true, reward, redemption: redemption.data, member: updateMember.data, points_balance: nextBalance, points_spent: requiredPoints, redemptions })
+      return res.json({ ok: true, reward, redemption: redemption.data, member: updateMember.data, points_balance: nextBalance, points_spent: requiredPoints, stamps_spent: stampsSpent, points_per_stamp: pointsPerStamp, redemptions })
     } catch (e) { next(e) }
   })
 
@@ -3116,6 +3224,7 @@ function v33FunctionalRoutes(supabase) {
       await v37GetOrCreateLoyaltySettings(customerId)
 
       const body = req.body || {}
+      const stampLogoUrl = normalizeStampLogoUrlForActor(req, body.stamp_card_logo_url || body.metadata?.stamp_card_logo_url || body.stamp_card_background || body.metadata?.stamp_card_background || '', '')
       const patch = {
         brand_name: body.brand_name,
         brand_font: body.brand_font,
@@ -3137,6 +3246,7 @@ function v33FunctionalRoutes(supabase) {
         stamp_card_stamp_style: normalizeStampCardStyle(body.stamp_card_stamp_style || body.metadata?.stamp_card_stamp_style),
         stamp_card_show_logo: body.stamp_card_show_logo !== false,
         stamp_card_background: body.stamp_card_background || body.metadata?.stamp_card_background || null,
+        stamp_card_logo_url: stampLogoUrl || null,
         points_per_stamp: Math.max(1, Math.floor(num(body.points_per_stamp, body.metadata?.points_per_stamp || 10))),
         metadata: {
           ...(body.metadata || {}),
@@ -3150,6 +3260,7 @@ function v33FunctionalRoutes(supabase) {
           stamp_card_stamp_style: normalizeStampCardStyle(body.stamp_card_stamp_style || body.metadata?.stamp_card_stamp_style),
           stamp_card_show_logo: body.stamp_card_show_logo !== false,
           stamp_card_background: body.stamp_card_background || body.metadata?.stamp_card_background || null,
+          stamp_card_logo_url: stampLogoUrl || null,
           points_per_stamp: Math.max(1, Math.floor(num(body.points_per_stamp, body.metadata?.points_per_stamp || 10)))
         },
         birthday_bonus_points: body.birthday_bonus_points,
@@ -3672,6 +3783,61 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
+
+  router.post('/qr-campaigns/:id/stamp-logo', stampLogoUploadMiddleware, async (req, res, next) => {
+    try {
+      const id = String(req.params.id || '').trim()
+      if (!id) return res.status(400).json({ ok: false, code: 'QR_CAMPAIGN_ID_MISSING', error: 'QR-Kampagnen-ID fehlt.' })
+      const found = await supabase.from('qr_campaigns').select('*').eq('id', id).maybeSingle()
+      if (found.error) throw found.error
+      const campaign = found.data
+      if (!campaign) return res.status(404).json({ ok: false, code: 'QR_CAMPAIGN_NOT_FOUND', error: 'QR-Kampagne wurde nicht gefunden.' })
+      if (!await requireCustomerAccessForId(req, res, campaign.customer_id)) return
+      const file = req.file
+      if (!file) return res.status(400).json({ ok: false, code: 'FILE_MISSING', error: 'Datei fehlt.' })
+      const mime = String(file.mimetype || '').toLowerCase()
+      if (!STAMP_LOGO_MIME_TYPES.has(mime)) return res.status(400).json({ ok: false, code: 'INVALID_FILE_TYPE', error: 'Nur PNG, JPG oder WEBP sind erlaubt.' })
+      if (file.size > STAMP_LOGO_MAX_BYTES) return res.status(413).json({ ok: false, code: 'FILE_TOO_LARGE', error: 'Das Logo ist zu groß.' })
+      if (!validImageMagic(file)) return res.status(400).json({ ok: false, code: 'INVALID_IMAGE_CONTENT', error: 'Die Datei ist kein gültiges PNG/JPG/WEBP-Bild.' })
+
+      const ext = stampLogoExtension(file)
+      const now = new Date().toISOString()
+      const storagePath = `${campaign.customer_id}/${campaign.id}/${Date.now()}_${crypto.randomBytes(6).toString('hex')}_${safeUploadName(file.originalname || 'stamp-logo')}.${ext}`
+      const upload = await supabase.storage.from(STAMP_LOGO_BUCKET).upload(storagePath, file.buffer, { contentType: mime === 'image/jpg' ? 'image/jpeg' : mime, upsert: false })
+      if (upload.error) throw upload.error
+      const { data: pub } = supabase.storage.from(STAMP_LOGO_BUCKET).getPublicUrl(storagePath)
+      const publicUrl = pub?.publicUrl || null
+      if (!publicUrl) return res.status(500).json({ ok: false, code: 'STAMP_LOGO_PUBLIC_URL_MISSING', error: 'Upload erfolgreich, aber öffentliche URL fehlt.' })
+
+      const metadata = {
+        ...(campaign.metadata || {}),
+        stamp_card_logo_url: publicUrl,
+        stamp_card_show_logo: true,
+        stamp_card_logo_storage_path: storagePath,
+        stamp_card_logo_mime_type: mime,
+        stamp_card_logo_updated_at: now,
+        stamp_card_logo_uploaded_by: req.user?.email || req.user?.id || null
+      }
+      const updated = await supabase.from('qr_campaigns').update({ metadata, updated_at: now }).eq('id', campaign.id).select('*').maybeSingle()
+      if (updated.error) throw updated.error
+      try {
+        await supabase.from('activity_logs').insert({
+          type: 'qr_stamp_logo_uploaded',
+          title: 'Stempel-Logo hochgeladen',
+          message: `Stempel-Logo für ${campaign.slug || campaign.id} wurde aktualisiert.`,
+          customer_id: campaign.customer_id,
+          severity: 'info',
+          metadata: { qr_campaign_id: campaign.id, storage_path: storagePath, mime_type: mime, actor: req.user?.email || null },
+          created_at: now
+        })
+      } catch (_) {}
+      res.json({ ok: true, stamp_card_logo_url: publicUrl, storage_path: storagePath, qr_campaign: updated.data || { ...campaign, metadata } })
+    } catch (e) {
+      if (String(e?.message || '').includes('File too large')) return res.status(413).json({ ok: false, code: 'FILE_TOO_LARGE', error: 'Das Logo ist zu groß.' })
+      next(e)
+    }
+  })
+
   router.post('/v42/qr-campaigns/:id/final-slug-settings', async (req, res, next) => {
     try {
       const id = String(req.params.id || '').trim()
@@ -3682,6 +3848,7 @@ function v33FunctionalRoutes(supabase) {
       if (found.error) throw found.error
       const current = found.data
       if (!current) return res.status(404).json({ ok:false, error:'QR-Kampagne wurde nicht gefunden.' })
+      if (!await requireCustomerAccessForId(req, res, current.customer_id)) return
 
       const toInt = (value, fallback = 0, max = null) => {
         let n = Math.max(0, Math.floor(num(value, fallback)))
@@ -3718,8 +3885,8 @@ function v33FunctionalRoutes(supabase) {
         stamp_card_reward_text: clean(body.stamp_card_reward_text || current.metadata?.stamp_card_reward_text || 'Volle Karte = Prämie sichern'),
         stamp_card_stamp_style: ['logo','check','star'].includes(String(body.stamp_card_stamp_style || current.metadata?.stamp_card_stamp_style || '')) ? String(body.stamp_card_stamp_style || current.metadata?.stamp_card_stamp_style) : 'logo',
         stamp_card_show_logo: body.stamp_card_show_logo === undefined ? current.metadata?.stamp_card_show_logo !== false : body.stamp_card_show_logo !== false,
-        stamp_card_background: clean(body.stamp_card_background || current.metadata?.stamp_card_background || current.metadata?.stamp_card_logo_url || ''),
-        stamp_card_logo_url: clean(body.stamp_card_background || current.metadata?.stamp_card_background || current.metadata?.stamp_card_logo_url || ''),
+        stamp_card_background: clean(body.stamp_card_background || current.metadata?.stamp_card_background || ''),
+        stamp_card_logo_url: normalizeStampLogoUrlForActor(req, body.stamp_card_logo_url || current.metadata?.stamp_card_logo_url || body.stamp_card_background || current.metadata?.stamp_card_background || '', current.metadata?.stamp_card_logo_url || ''),
         points_per_stamp: Math.max(1, toInt(body.points_per_stamp ?? current.metadata?.points_per_stamp ?? current.metadata?.points_per_scan ?? current.points_per_scan ?? 10, 10)),
         qr_scan_url: slugValue ? `/q/${slugValue}` : current.metadata?.qr_scan_url,
         landing_url: slugValue ? `/l/${slugValue}` : current.metadata?.landing_url,
