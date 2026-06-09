@@ -142,6 +142,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 2400,
     stripePriceEnv: "STRIPE_PRICE_SMS",
   },
+  {
+    key: "automation",
+    name: "Automation (Flows)",
+    description:
+      "Wenn-Dann-Regeln: z. B. bei Punkte-Schwelle automatisch Bonus gutschreiben oder mailen.",
+    priceCents: 3400,
+    stripePriceEnv: "STRIPE_PRICE_AUTOMATION",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
@@ -164,6 +172,7 @@ export const TOOL_ROUTES: Record<string, string> = {
   crm: "/dashboard/crm",
   coupons: "/dashboard/coupons",
   sms: "/dashboard/sms",
+  automation: "/dashboard/automation",
 };
 
 export function getToolRoute(key: string): string {

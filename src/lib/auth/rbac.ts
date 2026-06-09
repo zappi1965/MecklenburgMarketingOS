@@ -73,6 +73,9 @@ export const PERMISSIONS = [
   // SMS marketing tool
   "sms:read",
   "sms:manage", // contacts + campaigns + sending
+  // Automation tool
+  "automation:read",
+  "automation:manage", // configure + run flows
   // Compliance
   "audit:read",
   "dsar:export",
@@ -126,6 +129,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "coupons:operate",
     "sms:read",
     "sms:manage",
+    "automation:read",
+    "automation:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -171,6 +176,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "coupons:operate",
     "sms:read",
     "sms:manage",
+    "automation:read",
+    "automation:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -203,6 +210,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "coupons:operate",
     "sms:read",
     "sms:manage",
+    "automation:read",
+    "automation:manage",
   ],
   viewer: [
     "tenant:read",
@@ -223,6 +232,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "crm:read",
     "coupons:read",
     "sms:read",
+    "automation:read",
   ],
 };
 

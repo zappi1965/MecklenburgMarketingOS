@@ -20,6 +20,7 @@ import {
   Contact,
   BadgePercent,
   MessageSquare,
+  Workflow,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -53,6 +54,7 @@ const ITEMS: NavItem[] = [
   { href: "/dashboard/social", label: "Social-Planer", icon: Megaphone, tool: "social" },
   { href: "/dashboard/crm", label: "CRM & Leads", icon: Contact, tool: "crm" },
   { href: "/dashboard/coupons", label: "Coupons", icon: BadgePercent, tool: "coupons" },
+  { href: "/dashboard/automation", label: "Automation", icon: Workflow, tool: "automation" },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];

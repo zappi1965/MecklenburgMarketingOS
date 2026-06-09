@@ -44,6 +44,7 @@ import { socialPosts } from "./social";
 import { crmContacts, crmDeals } from "./crm";
 import { couponRedemptions, coupons } from "./coupon";
 import { smsCampaigns, smsContacts, smsSends } from "./sms";
+import { automationFlows, automationRuns } from "./automation";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -63,6 +64,7 @@ export * from "./social";
 export * from "./crm";
 export * from "./coupon";
 export * from "./sms";
+export * from "./automation";
 
 // --- Relations -------------------------------------------------------------
 
@@ -648,3 +650,34 @@ export const smsSendsRelations = relations(smsSends, ({ one }) => ({
     references: [smsContacts.id],
   }),
 }));
+
+// --- Automation relations --------------------------------------------------
+
+export const automationFlowsRelations = relations(
+  automationFlows,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [automationFlows.tenantId],
+      references: [tenants.id],
+    }),
+    runs: many(automationRuns),
+  }),
+);
+
+export const automationRunsRelations = relations(
+  automationRuns,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [automationRuns.tenantId],
+      references: [tenants.id],
+    }),
+    flow: one(automationFlows, {
+      fields: [automationRuns.flowId],
+      references: [automationFlows.id],
+    }),
+    member: one(loyaltyMembers, {
+      fields: [automationRuns.memberId],
+      references: [loyaltyMembers.id],
+    }),
+  }),
+);
