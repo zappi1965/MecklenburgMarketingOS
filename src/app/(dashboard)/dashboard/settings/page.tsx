@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { requireSession } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { can } from "@/lib/auth/rbac";
 import { MfaSetup } from "@/components/auth/mfa-setup";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -41,6 +44,24 @@ export default async function SettingsPage() {
           />
         </CardContent>
       </Card>
+
+      {ctx.tenant && can(ctx, "members:read") && (
+        <Card className="max-w-xl">
+          <CardHeader>
+            <CardTitle className="text-base">Team</CardTitle>
+            <CardDescription>
+              Mitglieder und Rollen deines Stores verwalten.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/settings/team">
+              <Button variant="outline" size="sm">
+                Team verwalten
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

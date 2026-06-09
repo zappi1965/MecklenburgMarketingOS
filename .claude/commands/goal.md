@@ -58,7 +58,7 @@ Nie ohne Drizzle-Migration direkt in der DB editieren.
 
 - [x] Multi-Tenant: `tenant_id` auf allen Tabellen, RLS erzwingt Isolation
 - [x] Auth: Supabase Auth, MFA (TOTP), Session-Management
-- [ ] RBAC: Rollen superadmin / admin / staff / customer
+- [x] RBAC: Rollen superadmin / admin / staff / customer (Policy-Matrix)
 - [ ] DSGVO-Grundlage: EU-Hosting, Double-Opt-In, Consent-Logging (Timestamp +
   IP-Hash), DSAR-Export (JSON), Löschroutine (Soft- + Hard-Delete)
 - [ ] Audit-Log: jede Mutation über zentralen Writer, unveränderlich
