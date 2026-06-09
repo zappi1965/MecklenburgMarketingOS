@@ -39,6 +39,7 @@ import {
 import { giftCards, giftCardTransactions } from "./giftcard";
 import { shortLinkClicks, shortLinks } from "./shortlink";
 import { retentionCampaigns, retentionTargets } from "./retention";
+import { bioLinks, bioPages } from "./bio";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -53,6 +54,7 @@ export * from "./survey";
 export * from "./giftcard";
 export * from "./shortlink";
 export * from "./retention";
+export * from "./bio";
 
 // --- Relations -------------------------------------------------------------
 
@@ -528,3 +530,24 @@ export const retentionTargetsRelations = relations(
     }),
   }),
 );
+
+// --- Bio relations ---------------------------------------------------------
+
+export const bioPagesRelations = relations(bioPages, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [bioPages.tenantId],
+    references: [tenants.id],
+  }),
+  links: many(bioLinks),
+}));
+
+export const bioLinksRelations = relations(bioLinks, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [bioLinks.tenantId],
+    references: [tenants.id],
+  }),
+  page: one(bioPages, {
+    fields: [bioLinks.bioPageId],
+    references: [bioPages.id],
+  }),
+}));

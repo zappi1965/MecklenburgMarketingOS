@@ -102,6 +102,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 3400,
     stripePriceEnv: "STRIPE_PRICE_RETENTION",
   },
+  {
+    key: "bio",
+    name: "Link-in-Bio",
+    description:
+      "Eine öffentliche Link-Seite (Linktree-Stil) für Social-Bios mit Klick-Tracking.",
+    priceCents: 900,
+    stripePriceEnv: "STRIPE_PRICE_BIO",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
@@ -119,6 +127,7 @@ export const TOOL_ROUTES: Record<string, string> = {
   giftcards: "/dashboard/giftcards",
   links: "/dashboard/links",
   retention: "/dashboard/retention",
+  bio: "/dashboard/bio",
 };
 
 export function getToolRoute(key: string): string {

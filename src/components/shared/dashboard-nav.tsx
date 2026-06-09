@@ -15,6 +15,7 @@ import {
   Ticket,
   Link2,
   Undo2,
+  AtSign,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const ITEMS: NavItem[] = [
   { href: "/dashboard/surveys", label: "Umfragen", icon: ClipboardList, tool: "surveys" },
   { href: "/dashboard/giftcards", label: "Gutscheine", icon: Ticket, tool: "giftcards" },
   { href: "/dashboard/links", label: "Links", icon: Link2, tool: "links" },
+  { href: "/dashboard/bio", label: "Link-in-Bio", icon: AtSign, tool: "bio" },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];

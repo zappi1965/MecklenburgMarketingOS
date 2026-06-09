@@ -57,6 +57,9 @@ export const PERMISSIONS = [
   // Retention / win-back tool
   "retention:read",
   "retention:manage", // configure + run win-back campaigns
+  // Link-in-Bio tool
+  "bio:read",
+  "bio:manage", // edit bio page + links
   // Compliance
   "audit:read",
   "dsar:export",
@@ -99,6 +102,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "links:manage",
     "retention:read",
     "retention:manage",
+    "bio:read",
+    "bio:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -133,6 +138,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "links:manage",
     "retention:read",
     "retention:manage",
+    "bio:read",
+    "bio:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -155,6 +162,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "links:read",
     "links:manage",
     "retention:read",
+    "bio:read",
+    "bio:manage",
   ],
   viewer: [
     "tenant:read",
@@ -170,6 +179,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "giftcards:read",
     "links:read",
     "retention:read",
+    "bio:read",
   ],
 };
 
