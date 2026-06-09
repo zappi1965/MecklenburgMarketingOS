@@ -62,6 +62,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 2400,
     stripePriceEnv: "STRIPE_PRICE_REFERRAL",
   },
+  {
+    key: "seo",
+    name: "SEO & Local Listings",
+    description:
+      "NAP-Konsistenz, LocalBusiness-Schema (JSON-LD) und Keyword-Ranking-Tracker.",
+    priceCents: 3400,
+    stripePriceEnv: "STRIPE_PRICE_SEO",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);

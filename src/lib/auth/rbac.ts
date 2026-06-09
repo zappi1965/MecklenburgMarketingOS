@@ -41,6 +41,9 @@ export const PERMISSIONS = [
   // Referral tool
   "referral:read",
   "referral:manage", // configure program
+  // SEO & Local Listings tool
+  "seo:read",
+  "seo:manage", // profile, keywords, rank logging
   // Compliance
   "audit:read",
   "dsar:export",
@@ -72,6 +75,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "newsletter:manage",
     "referral:read",
     "referral:manage",
+    "seo:read",
+    "seo:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -95,6 +100,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "newsletter:manage",
     "referral:read",
     "referral:manage",
+    "seo:read",
+    "seo:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -109,6 +116,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "booking:operate",
     "newsletter:read",
     "referral:read",
+    "seo:read",
   ],
   viewer: [
     "tenant:read",
@@ -119,6 +127,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "booking:read",
     "newsletter:read",
     "referral:read",
+    "seo:read",
   ],
 };
 

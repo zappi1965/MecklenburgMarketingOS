@@ -29,6 +29,7 @@ import {
   newsletterSends,
 } from "./newsletter";
 import { referralCodes, referralPrograms, referrals } from "./referral";
+import { seoKeywords, seoProfiles, seoRankSnapshots } from "./seo";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -38,6 +39,7 @@ export * from "./reviews";
 export * from "./booking";
 export * from "./newsletter";
 export * from "./referral";
+export * from "./seo";
 
 // --- Relations -------------------------------------------------------------
 
@@ -359,3 +361,34 @@ export const referralsRelations = relations(referrals, ({ one }) => ({
     references: [loyaltyMembers.id],
   }),
 }));
+
+// --- SEO relations ---------------------------------------------------------
+
+export const seoProfilesRelations = relations(seoProfiles, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [seoProfiles.tenantId],
+    references: [tenants.id],
+  }),
+}));
+
+export const seoKeywordsRelations = relations(seoKeywords, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [seoKeywords.tenantId],
+    references: [tenants.id],
+  }),
+  snapshots: many(seoRankSnapshots),
+}));
+
+export const seoRankSnapshotsRelations = relations(
+  seoRankSnapshots,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [seoRankSnapshots.tenantId],
+      references: [tenants.id],
+    }),
+    keyword: one(seoKeywords, {
+      fields: [seoRankSnapshots.keywordId],
+      references: [seoKeywords.id],
+    }),
+  }),
+);
