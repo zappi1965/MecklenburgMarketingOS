@@ -39,3 +39,36 @@ jobs:
 
       - name: Production Build
         run: yarn --cwd frontend build
+
+      - name: Backend Unit Tests
+        run: yarn --cwd backend test
+
+      - name: Install Playwright (chromium)
+        run: yarn --cwd frontend exec playwright install --with-deps chromium
+
+      - name: E2E Smoke (chromium, hermetic)
+        run: yarn --cwd frontend e2e:ci --project=chromium ci-smoke
+
+  security-audit:
+    name: Dependency Security Audit (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Yarn Audit (informational)
+        run: yarn audit --groups dependencies --level moderate || true

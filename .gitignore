@@ -6,3 +6,8 @@ frontend/.next/
 out/
 *.tsbuildinfo
 .DS_Store
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
