@@ -61,8 +61,9 @@ export function PrivacyTools({ isSuperadmin }: PrivacyToolsProps) {
         setError(result.error);
         return;
       }
+      const d = result.data;
       setMessage(
-        `Soft-Delete: ${result.data.members} Mitglied(er), ${result.data.reviews} Bewertung(en) markiert.`,
+        `Soft-Delete markiert: ${d.members} Mitglied(er), ${d.reviews} Bewertung(en), ${d.contacts} Newsletter-Kontakt(e), ${d.bookings} Buchung(en), ${d.giftCards} Gutschein(e).`,
       );
     });
   }
@@ -82,8 +83,9 @@ export function PrivacyTools({ isSuperadmin }: PrivacyToolsProps) {
         setError(result.error);
         return;
       }
+      const d = result.data;
       setMessage(
-        `Endgültig gelöscht: ${result.data.members} Mitglied(er), ${result.data.reviews} Bewertung(en).`,
+        `Endgültig gelöscht: ${d.members} Mitglied(er), ${d.reviews} Bewertung(en), ${d.contacts} Newsletter-Kontakt(e), ${d.bookings} Buchung(en), ${d.giftCards} Gutschein(e).`,
       );
     });
   }

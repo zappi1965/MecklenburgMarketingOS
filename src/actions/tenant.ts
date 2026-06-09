@@ -6,10 +6,13 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
   auditLog,
+  bookings,
   consentRecords,
+  giftCards,
   loyaltyMembers,
   loyaltyRedemptions,
   loyaltyTransactions,
+  newsletterContacts,
   qrScans,
   reviews,
   tenants,
@@ -403,6 +406,9 @@ export interface DsarExport {
   loyaltyRedemptions: unknown[];
   reviews: unknown[];
   consentRecords: unknown[];
+  newsletterContacts: unknown[];
+  bookings: unknown[];
+  giftCards: unknown[];
 }
 
 /**
@@ -430,47 +436,79 @@ export async function dsarExport(
     );
   const memberIds = members.map((m) => m.id);
 
-  const [scans, txns, redemptions, subjectReviews, consents] =
-    await Promise.all([
-      memberIds.length
-        ? db
-            .select()
-            .from(qrScans)
-            .where(eq(qrScans.tenantId, tenantId))
-            .then((rows) =>
-              rows.filter((r) => r.memberId && memberIds.includes(r.memberId)),
-            )
-        : Promise.resolve([]),
-      memberIds.length
-        ? db
-            .select()
-            .from(loyaltyTransactions)
-            .where(eq(loyaltyTransactions.tenantId, tenantId))
-            .then((rows) => rows.filter((r) => memberIds.includes(r.memberId)))
-        : Promise.resolve([]),
-      memberIds.length
-        ? db
-            .select()
-            .from(loyaltyRedemptions)
-            .where(eq(loyaltyRedemptions.tenantId, tenantId))
-            .then((rows) => rows.filter((r) => memberIds.includes(r.memberId)))
-        : Promise.resolve([]),
-      db
-        .select()
-        .from(reviews)
-        .where(
-          and(eq(reviews.tenantId, tenantId), eq(reviews.authorEmail, email)),
+  const [
+    scans,
+    txns,
+    redemptions,
+    subjectReviews,
+    consents,
+    contacts,
+    subjectBookings,
+    cards,
+  ] = await Promise.all([
+    memberIds.length
+      ? db
+          .select()
+          .from(qrScans)
+          .where(eq(qrScans.tenantId, tenantId))
+          .then((rows) =>
+            rows.filter((r) => r.memberId && memberIds.includes(r.memberId)),
+          )
+      : Promise.resolve([]),
+    memberIds.length
+      ? db
+          .select()
+          .from(loyaltyTransactions)
+          .where(eq(loyaltyTransactions.tenantId, tenantId))
+          .then((rows) => rows.filter((r) => memberIds.includes(r.memberId)))
+      : Promise.resolve([]),
+    memberIds.length
+      ? db
+          .select()
+          .from(loyaltyRedemptions)
+          .where(eq(loyaltyRedemptions.tenantId, tenantId))
+          .then((rows) => rows.filter((r) => memberIds.includes(r.memberId)))
+      : Promise.resolve([]),
+    db
+      .select()
+      .from(reviews)
+      .where(
+        and(eq(reviews.tenantId, tenantId), eq(reviews.authorEmail, email)),
+      ),
+    db
+      .select()
+      .from(consentRecords)
+      .where(
+        and(
+          eq(consentRecords.tenantId, tenantId),
+          eq(consentRecords.subjectEmail, email),
         ),
-      db
-        .select()
-        .from(consentRecords)
-        .where(
-          and(
-            eq(consentRecords.tenantId, tenantId),
-            eq(consentRecords.subjectEmail, email),
-          ),
+      ),
+    db
+      .select()
+      .from(newsletterContacts)
+      .where(
+        and(
+          eq(newsletterContacts.tenantId, tenantId),
+          eq(newsletterContacts.email, email),
         ),
-    ]);
+      ),
+    db
+      .select()
+      .from(bookings)
+      .where(
+        and(eq(bookings.tenantId, tenantId), eq(bookings.customerEmail, email)),
+      ),
+    db
+      .select()
+      .from(giftCards)
+      .where(
+        and(
+          eq(giftCards.tenantId, tenantId),
+          eq(giftCards.recipientEmail, email),
+        ),
+      ),
+  ]);
 
   await writeAuditLog({
     tenantId,
@@ -491,6 +529,9 @@ export async function dsarExport(
     loyaltyRedemptions: redemptions,
     reviews: subjectReviews,
     consentRecords: consents,
+    newsletterContacts: contacts,
+    bookings: subjectBookings,
+    giftCards: cards,
   });
 }
 
@@ -500,7 +541,15 @@ export async function dsarExport(
  */
 export async function softDeleteSubject(
   input: z.input<typeof subjectSchema>,
-): Promise<ActionResult<{ members: number; reviews: number }>> {
+): Promise<
+  ActionResult<{
+    members: number;
+    reviews: number;
+    contacts: number;
+    bookings: number;
+    giftCards: number;
+  }>
+> {
   const ctx = await requireSession();
   if (!ctx.tenant) return err("Kein aktiver Store.");
   const guard = checkPermission(ctx, "dsar:export");
@@ -536,17 +585,61 @@ export async function softDeleteSubject(
     )
     .returning({ id: reviews.id });
 
+  const updatedContacts = await db
+    .update(newsletterContacts)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        eq(newsletterContacts.tenantId, tenantId),
+        eq(newsletterContacts.email, email),
+        isNull(newsletterContacts.deletedAt),
+      ),
+    )
+    .returning({ id: newsletterContacts.id });
+
+  const updatedBookings = await db
+    .update(bookings)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        eq(bookings.tenantId, tenantId),
+        eq(bookings.customerEmail, email),
+        isNull(bookings.deletedAt),
+      ),
+    )
+    .returning({ id: bookings.id });
+
+  const updatedCards = await db
+    .update(giftCards)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        eq(giftCards.tenantId, tenantId),
+        eq(giftCards.recipientEmail, email),
+        isNull(giftCards.deletedAt),
+      ),
+    )
+    .returning({ id: giftCards.id });
+
+  const counts = {
+    members: updatedMembers.length,
+    reviews: updatedReviews.length,
+    contacts: updatedContacts.length,
+    bookings: updatedBookings.length,
+    giftCards: updatedCards.length,
+  };
+
   await writeAuditLog({
     tenantId,
     actorId: ctx.userId,
     action: "update",
     entityTable: "dsar_soft_delete",
     entityId: email,
-    diff: { members: updatedMembers.length, reviews: updatedReviews.length },
+    diff: counts,
   });
 
   revalidatePath("/dashboard/settings/privacy");
-  return ok({ members: updatedMembers.length, reviews: updatedReviews.length });
+  return ok(counts);
 }
 
 /**
@@ -555,7 +648,15 @@ export async function softDeleteSubject(
  */
 export async function hardDeleteSubject(
   input: z.input<typeof subjectSchema> & { tenantId?: string },
-): Promise<ActionResult<{ members: number; reviews: number }>> {
+): Promise<
+  ActionResult<{
+    members: number;
+    reviews: number;
+    contacts: number;
+    bookings: number;
+    giftCards: number;
+  }>
+> {
   const ctx = await requireSession();
   if (!ctx.isSuperadmin) {
     return err("Nur Superadmins dürfen Daten endgültig löschen.");
@@ -583,17 +684,52 @@ export async function hardDeleteSubject(
     )
     .returning({ id: loyaltyMembers.id });
 
+  const deletedContacts = await db
+    .delete(newsletterContacts)
+    .where(
+      and(
+        eq(newsletterContacts.tenantId, tenantId),
+        eq(newsletterContacts.email, email),
+      ),
+    )
+    .returning({ id: newsletterContacts.id });
+
+  const deletedBookings = await db
+    .delete(bookings)
+    .where(
+      and(eq(bookings.tenantId, tenantId), eq(bookings.customerEmail, email)),
+    )
+    .returning({ id: bookings.id });
+
+  const deletedCards = await db
+    .delete(giftCards)
+    .where(
+      and(
+        eq(giftCards.tenantId, tenantId),
+        eq(giftCards.recipientEmail, email),
+      ),
+    )
+    .returning({ id: giftCards.id });
+
+  const counts = {
+    members: deletedMembers.length,
+    reviews: deletedReviews.length,
+    contacts: deletedContacts.length,
+    bookings: deletedBookings.length,
+    giftCards: deletedCards.length,
+  };
+
   await writeAuditLog({
     tenantId,
     actorId: ctx.userId,
     action: "delete",
     entityTable: "dsar_hard_delete",
     entityId: email,
-    diff: { members: deletedMembers.length, reviews: deletedReviews.length },
+    diff: counts,
   });
 
   revalidatePath("/dashboard/settings/privacy");
-  return ok({ members: deletedMembers.length, reviews: deletedReviews.length });
+  return ok(counts);
 }
 
 // =============================================================================
