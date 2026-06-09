@@ -1,10 +1,19 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { tenantMemberships, userProfiles } from "@/db/schema";
+import {
+  consentRecords,
+  loyaltyMembers,
+  loyaltyRedemptions,
+  loyaltyTransactions,
+  qrScans,
+  reviews,
+  tenantMemberships,
+  userProfiles,
+} from "@/db/schema";
 import {
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
@@ -227,6 +236,217 @@ export async function removeMember(
 
   revalidatePath("/dashboard/settings/team");
   return ok(undefined);
+}
+
+// =============================================================================
+// DSGVO — DSAR export + deletion routines
+// =============================================================================
+
+const subjectSchema = z.object({
+  email: z.string().email("Bitte eine gültige E-Mail eingeben."),
+});
+
+export interface DsarExport {
+  exportedAt: string;
+  tenant: { id: string; name: string };
+  subjectEmail: string;
+  loyaltyMembers: unknown[];
+  qrScans: unknown[];
+  loyaltyTransactions: unknown[];
+  loyaltyRedemptions: unknown[];
+  reviews: unknown[];
+  consentRecords: unknown[];
+}
+
+/**
+ * DSGVO Art. 15 data subject access request: collects every record tied to a
+ * subject's email within the current tenant. RBAC-gated on `dsar:export`.
+ */
+export async function dsarExport(
+  input: z.input<typeof subjectSchema>,
+): Promise<ActionResult<DsarExport>> {
+  const ctx = await requireSession();
+  if (!ctx.tenant) return err("Kein aktiver Store.");
+  const guard = checkPermission(ctx, "dsar:export");
+  if (!guard.allowed) return err(guard.reason);
+
+  const parsed = subjectSchema.safeParse(input);
+  if (!parsed.success) return fromZodError(parsed.error);
+  const email = parsed.data.email.toLowerCase();
+  const tenantId = ctx.tenant.id;
+
+  const members = await db
+    .select()
+    .from(loyaltyMembers)
+    .where(
+      and(eq(loyaltyMembers.tenantId, tenantId), eq(loyaltyMembers.email, email)),
+    );
+  const memberIds = members.map((m) => m.id);
+
+  const [scans, txns, redemptions, subjectReviews, consents] =
+    await Promise.all([
+      memberIds.length
+        ? db
+            .select()
+            .from(qrScans)
+            .where(eq(qrScans.tenantId, tenantId))
+            .then((rows) =>
+              rows.filter((r) => r.memberId && memberIds.includes(r.memberId)),
+            )
+        : Promise.resolve([]),
+      memberIds.length
+        ? db
+            .select()
+            .from(loyaltyTransactions)
+            .where(eq(loyaltyTransactions.tenantId, tenantId))
+            .then((rows) => rows.filter((r) => memberIds.includes(r.memberId)))
+        : Promise.resolve([]),
+      memberIds.length
+        ? db
+            .select()
+            .from(loyaltyRedemptions)
+            .where(eq(loyaltyRedemptions.tenantId, tenantId))
+            .then((rows) => rows.filter((r) => memberIds.includes(r.memberId)))
+        : Promise.resolve([]),
+      db
+        .select()
+        .from(reviews)
+        .where(
+          and(eq(reviews.tenantId, tenantId), eq(reviews.authorEmail, email)),
+        ),
+      db
+        .select()
+        .from(consentRecords)
+        .where(
+          and(
+            eq(consentRecords.tenantId, tenantId),
+            eq(consentRecords.subjectEmail, email),
+          ),
+        ),
+    ]);
+
+  await writeAuditLog({
+    tenantId,
+    actorId: ctx.userId,
+    action: "insert",
+    entityTable: "dsar_export",
+    entityId: email,
+    diff: { memberCount: members.length },
+  });
+
+  return ok({
+    exportedAt: new Date().toISOString(),
+    tenant: { id: tenantId, name: ctx.tenant.name },
+    subjectEmail: email,
+    loyaltyMembers: members,
+    qrScans: scans,
+    loyaltyTransactions: txns,
+    loyaltyRedemptions: redemptions,
+    reviews: subjectReviews,
+    consentRecords: consents,
+  });
+}
+
+/**
+ * Soft-delete (DSGVO): flags a subject's loyalty members and reviews as deleted
+ * without removing the immutable ledger. RBAC-gated on `dsar:export` (admins).
+ */
+export async function softDeleteSubject(
+  input: z.input<typeof subjectSchema>,
+): Promise<ActionResult<{ members: number; reviews: number }>> {
+  const ctx = await requireSession();
+  if (!ctx.tenant) return err("Kein aktiver Store.");
+  const guard = checkPermission(ctx, "dsar:export");
+  if (!guard.allowed) return err(guard.reason);
+
+  const parsed = subjectSchema.safeParse(input);
+  if (!parsed.success) return fromZodError(parsed.error);
+  const email = parsed.data.email.toLowerCase();
+  const tenantId = ctx.tenant.id;
+  const now = new Date();
+
+  const updatedMembers = await db
+    .update(loyaltyMembers)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        eq(loyaltyMembers.tenantId, tenantId),
+        eq(loyaltyMembers.email, email),
+        isNull(loyaltyMembers.deletedAt),
+      ),
+    )
+    .returning({ id: loyaltyMembers.id });
+
+  const updatedReviews = await db
+    .update(reviews)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        eq(reviews.tenantId, tenantId),
+        eq(reviews.authorEmail, email),
+        isNull(reviews.deletedAt),
+      ),
+    )
+    .returning({ id: reviews.id });
+
+  await writeAuditLog({
+    tenantId,
+    actorId: ctx.userId,
+    action: "update",
+    entityTable: "dsar_soft_delete",
+    entityId: email,
+    diff: { members: updatedMembers.length, reviews: updatedReviews.length },
+  });
+
+  revalidatePath("/dashboard/settings/privacy");
+  return ok({ members: updatedMembers.length, reviews: updatedReviews.length });
+}
+
+/**
+ * Hard-delete (DSGVO Art. 17): permanently removes a subject's personal rows.
+ * Superadmin only — mirrors the RLS DELETE policy. Uses the privileged client.
+ */
+export async function hardDeleteSubject(
+  input: z.input<typeof subjectSchema> & { tenantId?: string },
+): Promise<ActionResult<{ members: number; reviews: number }>> {
+  const ctx = await requireSession();
+  if (!ctx.isSuperadmin) {
+    return err("Nur Superadmins dürfen Daten endgültig löschen.");
+  }
+  const tenantId = input.tenantId ?? ctx.tenant?.id;
+  if (!tenantId) return err("Kein Store-Kontext.");
+
+  const parsed = subjectSchema.safeParse(input);
+  if (!parsed.success) return fromZodError(parsed.error);
+  const email = parsed.data.email.toLowerCase();
+
+  const deletedReviews = await db
+    .delete(reviews)
+    .where(and(eq(reviews.tenantId, tenantId), eq(reviews.authorEmail, email)))
+    .returning({ id: reviews.id });
+
+  // Deleting members cascades to scans / transactions / redemptions via FKs.
+  const deletedMembers = await db
+    .delete(loyaltyMembers)
+    .where(
+      and(
+        eq(loyaltyMembers.tenantId, tenantId),
+        eq(loyaltyMembers.email, email),
+      ),
+    )
+    .returning({ id: loyaltyMembers.id });
+
+  await writeAuditLog({
+    tenantId,
+    actorId: ctx.userId,
+    action: "delete",
+    entityTable: "dsar_hard_delete",
+    entityId: email,
+    diff: { members: deletedMembers.length, reviews: deletedReviews.length },
+  });
+
+  revalidatePath("/dashboard/settings/privacy");
+  return ok({ members: deletedMembers.length, reviews: deletedReviews.length });
 }
 
 export { ASSIGNABLE_ROLES };

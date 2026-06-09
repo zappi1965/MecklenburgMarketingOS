@@ -62,6 +62,24 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {ctx.tenant && can(ctx, "dsar:export") && (
+        <Card className="max-w-xl">
+          <CardHeader>
+            <CardTitle className="text-base">Datenschutz</CardTitle>
+            <CardDescription>
+              DSAR-Export und Löschroutinen (DSGVO).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/settings/privacy">
+              <Button variant="outline" size="sm">
+                Datenschutz öffnen
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
