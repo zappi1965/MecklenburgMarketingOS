@@ -118,6 +118,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 2900,
     stripePriceEnv: "STRIPE_PRICE_SOCIAL",
   },
+  {
+    key: "crm",
+    name: "CRM & Leads",
+    description:
+      "Kontakte und Deals in einer Pipeline (neu → qualifiziert → gewonnen) verwalten.",
+    priceCents: 3900,
+    stripePriceEnv: "STRIPE_PRICE_CRM",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
@@ -137,6 +145,7 @@ export const TOOL_ROUTES: Record<string, string> = {
   retention: "/dashboard/retention",
   bio: "/dashboard/bio",
   social: "/dashboard/social",
+  crm: "/dashboard/crm",
 };
 
 export function getToolRoute(key: string): string {

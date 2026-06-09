@@ -41,6 +41,7 @@ import { shortLinkClicks, shortLinks } from "./shortlink";
 import { retentionCampaigns, retentionTargets } from "./retention";
 import { bioLinks, bioPages } from "./bio";
 import { socialPosts } from "./social";
+import { crmContacts, crmDeals } from "./crm";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -57,6 +58,7 @@ export * from "./shortlink";
 export * from "./retention";
 export * from "./bio";
 export * from "./social";
+export * from "./crm";
 
 // --- Relations -------------------------------------------------------------
 
@@ -560,5 +562,26 @@ export const socialPostsRelations = relations(socialPosts, ({ one }) => ({
   tenant: one(tenants, {
     fields: [socialPosts.tenantId],
     references: [tenants.id],
+  }),
+}));
+
+// --- CRM relations ---------------------------------------------------------
+
+export const crmContactsRelations = relations(crmContacts, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [crmContacts.tenantId],
+    references: [tenants.id],
+  }),
+  deals: many(crmDeals),
+}));
+
+export const crmDealsRelations = relations(crmDeals, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [crmDeals.tenantId],
+    references: [tenants.id],
+  }),
+  contact: one(crmContacts, {
+    fields: [crmDeals.contactId],
+    references: [crmContacts.id],
   }),
 }));

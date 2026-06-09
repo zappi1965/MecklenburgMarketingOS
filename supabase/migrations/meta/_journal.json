@@ -85,6 +85,13 @@
       "when": 1781002129319,
       "tag": "0011_social_tool",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781003123338,
+      "tag": "0012_crm_tool",
+      "breakpoints": true
     }
   ]
 }

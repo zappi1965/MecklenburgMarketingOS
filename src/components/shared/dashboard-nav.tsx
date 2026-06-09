@@ -17,6 +17,7 @@ import {
   Undo2,
   AtSign,
   Megaphone,
+  Contact,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -47,6 +48,7 @@ const ITEMS: NavItem[] = [
   { href: "/dashboard/links", label: "Links", icon: Link2, tool: "links" },
   { href: "/dashboard/bio", label: "Link-in-Bio", icon: AtSign, tool: "bio" },
   { href: "/dashboard/social", label: "Social-Planer", icon: Megaphone, tool: "social" },
+  { href: "/dashboard/crm", label: "CRM & Leads", icon: Contact, tool: "crm" },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];

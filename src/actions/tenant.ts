@@ -8,6 +8,7 @@ import {
   auditLog,
   bookings,
   consentRecords,
+  crmContacts,
   giftCards,
   loyaltyMembers,
   loyaltyRedemptions,
@@ -409,6 +410,7 @@ export interface DsarExport {
   newsletterContacts: unknown[];
   bookings: unknown[];
   giftCards: unknown[];
+  crmContacts: unknown[];
 }
 
 /**
@@ -445,6 +447,7 @@ export async function dsarExport(
     contacts,
     subjectBookings,
     cards,
+    crmRows,
   ] = await Promise.all([
     memberIds.length
       ? db
@@ -508,6 +511,12 @@ export async function dsarExport(
           eq(giftCards.recipientEmail, email),
         ),
       ),
+    db
+      .select()
+      .from(crmContacts)
+      .where(
+        and(eq(crmContacts.tenantId, tenantId), eq(crmContacts.email, email)),
+      ),
   ]);
 
   await writeAuditLog({
@@ -532,6 +541,7 @@ export async function dsarExport(
     newsletterContacts: contacts,
     bookings: subjectBookings,
     giftCards: cards,
+    crmContacts: crmRows,
   });
 }
 
@@ -548,6 +558,7 @@ export async function softDeleteSubject(
     contacts: number;
     bookings: number;
     giftCards: number;
+    crmContacts: number;
   }>
 > {
   const ctx = await requireSession();
@@ -621,12 +632,25 @@ export async function softDeleteSubject(
     )
     .returning({ id: giftCards.id });
 
+  const updatedCrm = await db
+    .update(crmContacts)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        eq(crmContacts.tenantId, tenantId),
+        eq(crmContacts.email, email),
+        isNull(crmContacts.deletedAt),
+      ),
+    )
+    .returning({ id: crmContacts.id });
+
   const counts = {
     members: updatedMembers.length,
     reviews: updatedReviews.length,
     contacts: updatedContacts.length,
     bookings: updatedBookings.length,
     giftCards: updatedCards.length,
+    crmContacts: updatedCrm.length,
   };
 
   await writeAuditLog({
@@ -655,6 +679,7 @@ export async function hardDeleteSubject(
     contacts: number;
     bookings: number;
     giftCards: number;
+    crmContacts: number;
   }>
 > {
   const ctx = await requireSession();
@@ -711,12 +736,20 @@ export async function hardDeleteSubject(
     )
     .returning({ id: giftCards.id });
 
+  const deletedCrm = await db
+    .delete(crmContacts)
+    .where(
+      and(eq(crmContacts.tenantId, tenantId), eq(crmContacts.email, email)),
+    )
+    .returning({ id: crmContacts.id });
+
   const counts = {
     members: deletedMembers.length,
     reviews: deletedReviews.length,
     contacts: deletedContacts.length,
     bookings: deletedBookings.length,
     giftCards: deletedCards.length,
+    crmContacts: deletedCrm.length,
   };
 
   await writeAuditLog({

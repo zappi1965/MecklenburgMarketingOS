@@ -63,6 +63,9 @@ export const PERMISSIONS = [
   // Social media planner tool
   "social:read",
   "social:manage", // plan + schedule posts
+  // CRM & Leads tool
+  "crm:read",
+  "crm:manage", // contacts + deals
   // Compliance
   "audit:read",
   "dsar:export",
@@ -109,6 +112,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "bio:manage",
     "social:read",
     "social:manage",
+    "crm:read",
+    "crm:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -147,6 +152,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "bio:manage",
     "social:read",
     "social:manage",
+    "crm:read",
+    "crm:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -173,6 +180,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "bio:manage",
     "social:read",
     "social:manage",
+    "crm:read",
+    "crm:manage",
   ],
   viewer: [
     "tenant:read",
@@ -190,6 +199,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "retention:read",
     "bio:read",
     "social:read",
+    "crm:read",
   ],
 };
 
