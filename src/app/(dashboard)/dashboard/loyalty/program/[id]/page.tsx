@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { loyaltyPrograms, qrCodes } from "@/db/schema";
+import { loyaltyCampaigns, loyaltyPrograms, qrCodes } from "@/db/schema";
 import { requireSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/rbac";
 import { qrDataUrl, scanUrl } from "@/lib/qr";
 import { QrManager, type QrItem } from "@/components/loyalty/qr-manager";
+import { CampaignManager } from "@/components/loyalty/campaign-manager";
 
 export default async function ProgramDetailPage({
   params,
@@ -31,10 +32,13 @@ export default async function ProgramDetailPage({
   const program = programRows[0];
   if (!program) notFound();
 
-  const codes = await db
-    .select()
-    .from(qrCodes)
-    .where(eq(qrCodes.programId, program.id));
+  const [codes, campaigns] = await Promise.all([
+    db.select().from(qrCodes).where(eq(qrCodes.programId, program.id)),
+    db
+      .select()
+      .from(loyaltyCampaigns)
+      .where(eq(loyaltyCampaigns.programId, program.id)),
+  ]);
 
   const qrs: QrItem[] = await Promise.all(
     codes.map(async (c) => ({
@@ -74,6 +78,15 @@ export default async function ProgramDetailPage({
         <QrManager
           programId={program.id}
           qrs={qrs}
+          canManage={can(ctx, "loyalty:manage")}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Kampagnen</h2>
+        <CampaignManager
+          programId={program.id}
+          campaigns={campaigns}
           canManage={can(ctx, "loyalty:manage")}
         />
       </section>

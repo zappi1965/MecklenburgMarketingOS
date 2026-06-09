@@ -8,6 +8,7 @@ import {
   userProfiles,
 } from "./platform";
 import {
+  loyaltyCampaigns,
   loyaltyMembers,
   loyaltyPrograms,
   loyaltyRedemptions,
@@ -88,6 +89,21 @@ export const loyaltyProgramsRelations = relations(
     qrCodes: many(qrCodes),
     members: many(loyaltyMembers),
     rewards: many(loyaltyRewards),
+    campaigns: many(loyaltyCampaigns),
+  }),
+);
+
+export const loyaltyCampaignsRelations = relations(
+  loyaltyCampaigns,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [loyaltyCampaigns.tenantId],
+      references: [tenants.id],
+    }),
+    program: one(loyaltyPrograms, {
+      fields: [loyaltyCampaigns.programId],
+      references: [loyaltyPrograms.id],
+    }),
   }),
 );
 

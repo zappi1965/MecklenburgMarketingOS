@@ -244,6 +244,44 @@ export const loyaltyRewards = pgTable(
 );
 
 /**
+ * loyalty_campaigns — time-boxed bonus multipliers with an optional scan cap.
+ * While an active campaign covers `now`, scans earn `pointsPerScan * multiplier`.
+ */
+export const loyaltyCampaigns = pgTable(
+  "loyalty_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    programId: uuid("program_id")
+      .notNull()
+      .references(() => loyaltyPrograms.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Points multiplier applied to earning scans (2 = double points).
+    multiplier: integer("multiplier").notNull().default(2),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    // Optional cap on the number of bonus scans; null = unlimited.
+    maxScans: integer("max_scans"),
+    // Running count of bonus scans applied (against maxScans).
+    scanCount: integer("scan_count").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    programIdx: index("loyalty_campaigns_program_idx").on(t.programId),
+    windowIdx: index("loyalty_campaigns_window_idx").on(
+      t.tenantId,
+      t.startsAt,
+      t.endsAt,
+    ),
+  }),
+);
+
+/**
  * loyalty_redemptions — state machine: pending → confirmed / cancelled / expired.
  * `code` is the short token the customer presents at the counter (/redeem/{code}).
  */

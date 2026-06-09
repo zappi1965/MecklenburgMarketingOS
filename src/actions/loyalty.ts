@@ -1,11 +1,12 @@
 "use server";
 
 import { z } from "zod";
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
+  loyaltyCampaigns,
   loyaltyMembers,
   loyaltyPrograms,
   loyaltyRedemptions,
@@ -198,6 +199,82 @@ export async function setRewardActive(
   return ok(undefined);
 }
 
+const campaignSchema = z
+  .object({
+    programId: z.string().uuid(),
+    name: z.string().min(2).max(80),
+    multiplier: z.coerce.number().int().min(2).max(10),
+    startsAt: z.string().min(1),
+    endsAt: z.string().min(1),
+    maxScans: z.coerce.number().int().min(1).max(1000000).optional(),
+  })
+  .refine((d) => new Date(d.endsAt) > new Date(d.startsAt), {
+    message: "Das Ende muss nach dem Start liegen.",
+    path: ["endsAt"],
+  });
+
+export async function createCampaign(
+  input: z.input<typeof campaignSchema>,
+): Promise<ActionResult<{ id: string }>> {
+  const ctx = await requireSession();
+  if (!ctx.tenant) return err("Kein aktiver Store.");
+  const guard = checkPermission(ctx, "loyalty:manage");
+  if (!guard.allowed) return err(guard.reason);
+
+  const parsed = campaignSchema.safeParse(input);
+  if (!parsed.success) return fromZodError(parsed.error);
+
+  const program = await db
+    .select({ id: loyaltyPrograms.id })
+    .from(loyaltyPrograms)
+    .where(
+      and(
+        eq(loyaltyPrograms.id, parsed.data.programId),
+        eq(loyaltyPrograms.tenantId, ctx.tenant.id),
+      ),
+    )
+    .limit(1);
+  if (!program[0]) return err("Programm nicht gefunden.");
+
+  const [campaign] = await db
+    .insert(loyaltyCampaigns)
+    .values({
+      tenantId: ctx.tenant.id,
+      programId: parsed.data.programId,
+      name: parsed.data.name,
+      multiplier: parsed.data.multiplier,
+      startsAt: new Date(parsed.data.startsAt),
+      endsAt: new Date(parsed.data.endsAt),
+      maxScans: parsed.data.maxScans ?? null,
+    })
+    .returning({ id: loyaltyCampaigns.id });
+
+  revalidatePath(`/dashboard/loyalty/program/${parsed.data.programId}`);
+  return ok({ id: campaign.id });
+}
+
+export async function setCampaignActive(
+  campaignId: string,
+  isActive: boolean,
+): Promise<ActionResult<void>> {
+  const ctx = await requireSession();
+  if (!ctx.tenant) return err("Kein aktiver Store.");
+  const guard = checkPermission(ctx, "loyalty:manage");
+  if (!guard.allowed) return err(guard.reason);
+
+  await db
+    .update(loyaltyCampaigns)
+    .set({ isActive })
+    .where(
+      and(
+        eq(loyaltyCampaigns.id, campaignId),
+        eq(loyaltyCampaigns.tenantId, ctx.tenant.id),
+      ),
+    );
+  revalidatePath("/dashboard/loyalty");
+  return ok(undefined);
+}
+
 // =============================================================================
 // Public customer flow (no session — token / id validated, privileged client)
 // =============================================================================
@@ -304,7 +381,35 @@ export async function processScan(
     throttled = recent.length > 0;
   }
 
-  const points = throttled ? 0 : code.pointsOverride ?? program.pointsPerScan;
+  let points = throttled ? 0 : code.pointsOverride ?? program.pointsPerScan;
+
+  // Apply an active bonus campaign (highest multiplier with remaining capacity).
+  let appliedCampaignId: string | null = null;
+  if (points > 0) {
+    const now = new Date();
+    const campaigns = await db
+      .select()
+      .from(loyaltyCampaigns)
+      .where(
+        and(
+          eq(loyaltyCampaigns.programId, code.programId),
+          eq(loyaltyCampaigns.isActive, true),
+          lte(loyaltyCampaigns.startsAt, now),
+          gte(loyaltyCampaigns.endsAt, now),
+          or(
+            isNull(loyaltyCampaigns.maxScans),
+            sql`${loyaltyCampaigns.scanCount} < ${loyaltyCampaigns.maxScans}`,
+          ),
+        ),
+      )
+      .orderBy(desc(loyaltyCampaigns.multiplier))
+      .limit(1);
+    const campaign = campaigns[0];
+    if (campaign && campaign.multiplier > 1) {
+      points = points * campaign.multiplier;
+      appliedCampaignId = campaign.id;
+    }
+  }
 
   await db.insert(qrScans).values({
     tenantId: code.tenantId,
@@ -331,6 +436,13 @@ export async function processScan(
       .where(eq(loyaltyMembers.id, memberId))
       .returning({ balance: loyaltyMembers.pointsBalance });
     balance = updated.balance;
+
+    if (appliedCampaignId) {
+      await db
+        .update(loyaltyCampaigns)
+        .set({ scanCount: sql`${loyaltyCampaigns.scanCount} + 1` })
+        .where(eq(loyaltyCampaigns.id, appliedCampaignId));
+    }
   } else {
     const row = await db
       .select({ balance: loyaltyMembers.pointsBalance })

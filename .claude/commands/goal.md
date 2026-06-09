@@ -67,13 +67,13 @@ Nie ohne Drizzle-Migration direkt in der DB editieren.
 
 ### Tool 1: Loyalty & QR-Kampagnen (Hero)
 
-- [ ] Kundenprofil mit Punktekonto (UUID-basiert)
-- [ ] QR-Code-Generierung pro Store (unique, idempotent)
-- [ ] QR-Scan → Punkte-Gutschrift (mobil, < 2 Sek.)
-- [ ] Reward-Katalog
-- [ ] Punkte einlösen (Reward-Claim-Flow mit Bestätigung)
-- [ ] Kampagnen (Bonus-Multiplikatoren, Zeitfenster, Limits)
-- [ ] Dashboard: Scan-Counter, aktive Kunden, Top-Rewards, Trend
+- [x] Kundenprofil mit Punktekonto (UUID-basiert)
+- [x] QR-Code-Generierung pro Store (unique, idempotent)
+- [x] QR-Scan → Punkte-Gutschrift (mobil, < 2 Sek.)
+- [x] Reward-Katalog
+- [x] Punkte einlösen (Reward-Claim-Flow mit Bestätigung)
+- [x] Kampagnen (Bonus-Multiplikatoren, Zeitfenster, Limits)
+- [x] Dashboard: Scan-Counter, aktive Kunden, Top-Rewards, Trend
 
 ### Tool 2: Reviews & Reputation
 

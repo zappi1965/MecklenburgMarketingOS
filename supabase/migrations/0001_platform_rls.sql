@@ -168,6 +168,7 @@ alter table public.qr_scans             enable row level security;
 alter table public.loyalty_transactions enable row level security;
 alter table public.loyalty_rewards      enable row level security;
 alter table public.loyalty_redemptions  enable row level security;
+alter table public.loyalty_campaigns    enable row level security;
 
 alter table public.review_sources       enable row level security;
 alter table public.review_invitations   enable row level security;
@@ -390,6 +391,24 @@ create policy "loyalty: redemptions superadmin delete"
   on public.loyalty_redemptions for delete
   using (public.is_superadmin());
 
+-- --- loyalty_campaigns ------------------------------------------------------
+-- Public read of active campaigns (scan flow applies the multiplier); members
+-- see all. Writes restricted to admins; scan_count bumps run via service role.
+create policy "loyalty: campaigns public read"
+  on public.loyalty_campaigns for select
+  using (is_active = true or public.is_tenant_member(tenant_id));
+
+create policy "loyalty: campaigns admin write"
+  on public.loyalty_campaigns for all
+  using (public.is_tenant_admin(tenant_id)
+     and public.tool_active(tenant_id, 'loyalty'))
+  with check (public.is_tenant_admin(tenant_id)
+          and public.tool_active(tenant_id, 'loyalty'));
+
+create policy "loyalty: campaigns superadmin delete"
+  on public.loyalty_campaigns for delete
+  using (public.is_superadmin());
+
 -- =============================================================================
 -- TOOL 2: REVIEWS  (gated by tool_active(tenant_id, 'reviews'))
 -- =============================================================================
@@ -474,4 +493,8 @@ create trigger audit_reviews
 
 create trigger audit_tenant_tools
   after insert or update or delete on public.tenant_tools
+  for each row execute function public.audit_log_trigger();
+
+create trigger audit_loyalty_campaigns
+  after insert or update or delete on public.loyalty_campaigns
   for each row execute function public.audit_log_trigger();
