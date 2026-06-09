@@ -42,6 +42,7 @@ import { retentionCampaigns, retentionTargets } from "./retention";
 import { bioLinks, bioPages } from "./bio";
 import { socialPosts } from "./social";
 import { crmContacts, crmDeals } from "./crm";
+import { couponRedemptions, coupons } from "./coupon";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -59,6 +60,7 @@ export * from "./retention";
 export * from "./bio";
 export * from "./social";
 export * from "./crm";
+export * from "./coupon";
 
 // --- Relations -------------------------------------------------------------
 
@@ -585,3 +587,27 @@ export const crmDealsRelations = relations(crmDeals, ({ one }) => ({
     references: [crmContacts.id],
   }),
 }));
+
+// --- Coupon relations ------------------------------------------------------
+
+export const couponsRelations = relations(coupons, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [coupons.tenantId],
+    references: [tenants.id],
+  }),
+  redemptions: many(couponRedemptions),
+}));
+
+export const couponRedemptionsRelations = relations(
+  couponRedemptions,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [couponRedemptions.tenantId],
+      references: [tenants.id],
+    }),
+    coupon: one(coupons, {
+      fields: [couponRedemptions.couponId],
+      references: [coupons.id],
+    }),
+  }),
+);

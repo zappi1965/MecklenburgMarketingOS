@@ -126,6 +126,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 3900,
     stripePriceEnv: "STRIPE_PRICE_CRM",
   },
+  {
+    key: "coupons",
+    name: "Coupons & Promo-Codes",
+    description:
+      "Rabattcodes (prozentual/fix) mit Gültigkeit und Limit, Einlösung an der Kasse.",
+    priceCents: 1400,
+    stripePriceEnv: "STRIPE_PRICE_COUPONS",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
@@ -146,6 +154,7 @@ export const TOOL_ROUTES: Record<string, string> = {
   bio: "/dashboard/bio",
   social: "/dashboard/social",
   crm: "/dashboard/crm",
+  coupons: "/dashboard/coupons",
 };
 
 export function getToolRoute(key: string): string {

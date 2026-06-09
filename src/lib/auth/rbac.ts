@@ -66,6 +66,10 @@ export const PERMISSIONS = [
   // CRM & Leads tool
   "crm:read",
   "crm:manage", // contacts + deals
+  // Coupons tool
+  "coupons:read",
+  "coupons:manage", // create / edit codes
+  "coupons:operate", // redeem at the counter
   // Compliance
   "audit:read",
   "dsar:export",
@@ -114,6 +118,9 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "social:manage",
     "crm:read",
     "crm:manage",
+    "coupons:read",
+    "coupons:manage",
+    "coupons:operate",
     "audit:read",
     "dsar:export",
   ],
@@ -154,6 +161,9 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "social:manage",
     "crm:read",
     "crm:manage",
+    "coupons:read",
+    "coupons:manage",
+    "coupons:operate",
     "audit:read",
     "dsar:export",
   ],
@@ -182,6 +192,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "social:manage",
     "crm:read",
     "crm:manage",
+    "coupons:read",
+    "coupons:operate",
   ],
   viewer: [
     "tenant:read",
@@ -200,6 +212,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "bio:read",
     "social:read",
     "crm:read",
+    "coupons:read",
   ],
 };
 
