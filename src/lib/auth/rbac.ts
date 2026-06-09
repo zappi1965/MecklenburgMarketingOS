@@ -76,6 +76,9 @@ export const PERMISSIONS = [
   // Automation tool
   "automation:read",
   "automation:manage", // configure + run flows
+  // SumUp tool
+  "sumup:read",
+  "sumup:manage", // record revenue + create payment links
   // Compliance
   "audit:read",
   "dsar:export",
@@ -131,6 +134,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "sms:manage",
     "automation:read",
     "automation:manage",
+    "sumup:read",
+    "sumup:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -178,6 +183,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "sms:manage",
     "automation:read",
     "automation:manage",
+    "sumup:read",
+    "sumup:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -212,6 +219,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "sms:manage",
     "automation:read",
     "automation:manage",
+    "sumup:read",
+    "sumup:manage",
   ],
   viewer: [
     "tenant:read",
@@ -233,6 +242,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "coupons:read",
     "sms:read",
     "automation:read",
+    "sumup:read",
   ],
 };
 

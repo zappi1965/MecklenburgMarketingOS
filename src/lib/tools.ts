@@ -150,6 +150,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 3400,
     stripePriceEnv: "STRIPE_PRICE_AUTOMATION",
   },
+  {
+    key: "sumup",
+    name: "SumUp — Umsatz & Payments",
+    description:
+      "Umsätze tracken und SumUp-Payment-Links für Kartenzahlung erstellen.",
+    priceCents: 1900,
+    stripePriceEnv: "STRIPE_PRICE_SUMUP",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
@@ -173,6 +181,7 @@ export const TOOL_ROUTES: Record<string, string> = {
   coupons: "/dashboard/coupons",
   sms: "/dashboard/sms",
   automation: "/dashboard/automation",
+  sumup: "/dashboard/sumup",
 };
 
 export function getToolRoute(key: string): string {

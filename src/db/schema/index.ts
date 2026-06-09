@@ -45,6 +45,7 @@ import { crmContacts, crmDeals } from "./crm";
 import { couponRedemptions, coupons } from "./coupon";
 import { smsCampaigns, smsContacts, smsSends } from "./sms";
 import { automationFlows, automationRuns } from "./automation";
+import { sumupTransactions } from "./sumup";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -65,6 +66,7 @@ export * from "./crm";
 export * from "./coupon";
 export * from "./sms";
 export * from "./automation";
+export * from "./sumup";
 
 // --- Relations -------------------------------------------------------------
 
@@ -678,6 +680,18 @@ export const automationRunsRelations = relations(
     member: one(loyaltyMembers, {
       fields: [automationRuns.memberId],
       references: [loyaltyMembers.id],
+    }),
+  }),
+);
+
+// --- SumUp relations -------------------------------------------------------
+
+export const sumupTransactionsRelations = relations(
+  sumupTransactions,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [sumupTransactions.tenantId],
+      references: [tenants.id],
     }),
   }),
 );

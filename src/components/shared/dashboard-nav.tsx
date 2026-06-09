@@ -21,6 +21,7 @@ import {
   BadgePercent,
   MessageSquare,
   Workflow,
+  Euro,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -55,6 +56,7 @@ const ITEMS: NavItem[] = [
   { href: "/dashboard/crm", label: "CRM & Leads", icon: Contact, tool: "crm" },
   { href: "/dashboard/coupons", label: "Coupons", icon: BadgePercent, tool: "coupons" },
   { href: "/dashboard/automation", label: "Automation", icon: Workflow, tool: "automation" },
+  { href: "/dashboard/sumup", label: "SumUp", icon: Euro, tool: "sumup" },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];
