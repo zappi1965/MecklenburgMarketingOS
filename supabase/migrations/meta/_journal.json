@@ -78,6 +78,13 @@
       "when": 1781001866798,
       "tag": "0010_bio_tool",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781002129319,
+      "tag": "0011_social_tool",
+      "breakpoints": true
     }
   ]
 }

@@ -60,6 +60,9 @@ export const PERMISSIONS = [
   // Link-in-Bio tool
   "bio:read",
   "bio:manage", // edit bio page + links
+  // Social media planner tool
+  "social:read",
+  "social:manage", // plan + schedule posts
   // Compliance
   "audit:read",
   "dsar:export",
@@ -104,6 +107,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "retention:manage",
     "bio:read",
     "bio:manage",
+    "social:read",
+    "social:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -140,6 +145,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "retention:manage",
     "bio:read",
     "bio:manage",
+    "social:read",
+    "social:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -164,6 +171,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "retention:read",
     "bio:read",
     "bio:manage",
+    "social:read",
+    "social:manage",
   ],
   viewer: [
     "tenant:read",
@@ -180,6 +189,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "links:read",
     "retention:read",
     "bio:read",
+    "social:read",
   ],
 };
 

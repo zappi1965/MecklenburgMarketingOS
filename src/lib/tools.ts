@@ -110,6 +110,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 900,
     stripePriceEnv: "STRIPE_PRICE_BIO",
   },
+  {
+    key: "social",
+    name: "Social-Media-Planer",
+    description:
+      "Redaktionskalender: Posts pro Kanal planen, terminieren und den Status verfolgen.",
+    priceCents: 2900,
+    stripePriceEnv: "STRIPE_PRICE_SOCIAL",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
@@ -128,6 +136,7 @@ export const TOOL_ROUTES: Record<string, string> = {
   links: "/dashboard/links",
   retention: "/dashboard/retention",
   bio: "/dashboard/bio",
+  social: "/dashboard/social",
 };
 
 export function getToolRoute(key: string): string {
