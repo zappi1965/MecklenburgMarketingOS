@@ -11,6 +11,7 @@ import {
   Mail,
   Gift,
   Search,
+  ClipboardList,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const ITEMS = [
   { href: "/dashboard/newsletter", label: "Newsletter", icon: Mail },
   { href: "/dashboard/referral", label: "Empfehlungen", icon: Gift },
   { href: "/dashboard/seo", label: "SEO", icon: Search },
+  { href: "/dashboard/surveys", label: "Umfragen", icon: ClipboardList },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];

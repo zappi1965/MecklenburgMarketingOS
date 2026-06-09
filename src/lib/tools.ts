@@ -70,6 +70,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 3400,
     stripePriceEnv: "STRIPE_PRICE_SEO",
   },
+  {
+    key: "surveys",
+    name: "Feedback & Umfragen",
+    description:
+      "Umfragen per Link erstellen, Antworten sammeln und auswerten.",
+    priceCents: 1900,
+    stripePriceEnv: "STRIPE_PRICE_SURVEYS",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);

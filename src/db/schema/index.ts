@@ -30,6 +30,12 @@ import {
 } from "./newsletter";
 import { referralCodes, referralPrograms, referrals } from "./referral";
 import { seoKeywords, seoProfiles, seoRankSnapshots } from "./seo";
+import {
+  surveyAnswers,
+  surveyQuestions,
+  surveyResponses,
+  surveys,
+} from "./survey";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -40,6 +46,7 @@ export * from "./booking";
 export * from "./newsletter";
 export * from "./referral";
 export * from "./seo";
+export * from "./survey";
 
 // --- Relations -------------------------------------------------------------
 
@@ -392,3 +399,47 @@ export const seoRankSnapshotsRelations = relations(
     }),
   }),
 );
+
+// --- Survey relations ------------------------------------------------------
+
+export const surveysRelations = relations(surveys, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [surveys.tenantId],
+    references: [tenants.id],
+  }),
+  questions: many(surveyQuestions),
+  responses: many(surveyResponses),
+}));
+
+export const surveyQuestionsRelations = relations(
+  surveyQuestions,
+  ({ one, many }) => ({
+    survey: one(surveys, {
+      fields: [surveyQuestions.surveyId],
+      references: [surveys.id],
+    }),
+    answers: many(surveyAnswers),
+  }),
+);
+
+export const surveyResponsesRelations = relations(
+  surveyResponses,
+  ({ one, many }) => ({
+    survey: one(surveys, {
+      fields: [surveyResponses.surveyId],
+      references: [surveys.id],
+    }),
+    answers: many(surveyAnswers),
+  }),
+);
+
+export const surveyAnswersRelations = relations(surveyAnswers, ({ one }) => ({
+  response: one(surveyResponses, {
+    fields: [surveyAnswers.responseId],
+    references: [surveyResponses.id],
+  }),
+  question: one(surveyQuestions, {
+    fields: [surveyAnswers.questionId],
+    references: [surveyQuestions.id],
+  }),
+}));

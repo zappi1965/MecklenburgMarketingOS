@@ -44,6 +44,9 @@ export const PERMISSIONS = [
   // SEO & Local Listings tool
   "seo:read",
   "seo:manage", // profile, keywords, rank logging
+  // Feedback & Surveys tool
+  "surveys:read",
+  "surveys:manage", // build surveys, view responses
   // Compliance
   "audit:read",
   "dsar:export",
@@ -77,6 +80,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "referral:manage",
     "seo:read",
     "seo:manage",
+    "surveys:read",
+    "surveys:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -102,6 +107,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "referral:manage",
     "seo:read",
     "seo:manage",
+    "surveys:read",
+    "surveys:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -117,6 +124,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "newsletter:read",
     "referral:read",
     "seo:read",
+    "surveys:read",
+    "surveys:manage",
   ],
   viewer: [
     "tenant:read",
@@ -128,6 +137,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "newsletter:read",
     "referral:read",
     "seo:read",
+    "surveys:read",
   ],
 };
 
