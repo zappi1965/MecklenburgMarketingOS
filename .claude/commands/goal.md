@@ -77,11 +77,11 @@ Nie ohne Drizzle-Migration direkt in der DB editieren.
 
 ### Tool 2: Reviews & Reputation
 
-- [ ] Review-Einladung via QR / personalisierten Link
-- [ ] Bewertungsformular (Sterne + Freitext, mobil)
-- [ ] Consent vor Speicherung (DSGVO)
-- [ ] Review-Dashboard pro Store
-- [ ] Google My Business: Weiterleitung (optional)
+- [x] Review-Einladung via QR / personalisierten Link
+- [x] Bewertungsformular (Sterne + Freitext, mobil)
+- [x] Consent vor Speicherung (DSGVO)
+- [x] Review-Dashboard pro Store
+- [x] Google My Business: Weiterleitung (optional)
 
 ### Tool 3: Payments & Billing
 
