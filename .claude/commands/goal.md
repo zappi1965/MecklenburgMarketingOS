@@ -85,10 +85,10 @@ Nie ohne Drizzle-Migration direkt in der DB editieren.
 
 ### Tool 3: Payments & Billing
 
-- [ ] Stripe-Subscription: Tool-Pakete → Checkout
-- [ ] Feature-Flags in DB
-- [ ] Rechnungsversand (PDF)
-- [ ] Billing-Dashboard für Store-Admin
+- [x] Stripe-Subscription: Tool-Pakete → Checkout
+- [x] Feature-Flags in DB
+- [x] Rechnungsversand (PDF)
+- [x] Billing-Dashboard für Store-Admin
 
 ## Neues Tool — Standard-Reihenfolge
 

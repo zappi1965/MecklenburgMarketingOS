@@ -124,6 +124,59 @@ export async function createBillingPortalSession(): Promise<
   return ok({ url: session.url });
 }
 
+export interface InvoiceSummary {
+  id: string;
+  number: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  created: number;
+  pdfUrl: string | null;
+  hostedUrl: string | null;
+}
+
+/**
+ * Lists the tenant's Stripe invoices (PDFs are served by Stripe — no extra
+ * rendering service). RBAC-gated on `billing:read`.
+ */
+export async function listInvoices(): Promise<
+  ActionResult<InvoiceSummary[]>
+> {
+  const ctx = await requireSession();
+  if (!ctx.tenant) return err("Kein aktiver Store.");
+  const guard = checkPermission(ctx, "billing:read");
+  if (!guard.allowed) return err(guard.reason);
+
+  const tenantRows = await db
+    .select({ stripeCustomerId: tenants.stripeCustomerId })
+    .from(tenants)
+    .where(eq(tenants.id, ctx.tenant.id))
+    .limit(1);
+  const customerId = tenantRows[0]?.stripeCustomerId;
+  if (!customerId) return ok([]);
+
+  if (!process.env.STRIPE_SECRET_KEY) return ok([]);
+
+  const stripe = getStripe();
+  const invoices = await stripe.invoices.list({
+    customer: customerId,
+    limit: 12,
+  });
+
+  return ok(
+    invoices.data.map((inv) => ({
+      id: inv.id ?? "",
+      number: inv.number ?? null,
+      amount: inv.amount_paid ?? inv.amount_due ?? 0,
+      currency: (inv.currency ?? "eur").toUpperCase(),
+      status: inv.status ?? "draft",
+      created: inv.created,
+      pdfUrl: inv.invoice_pdf ?? null,
+      hostedUrl: inv.hosted_invoice_url ?? null,
+    })),
+  );
+}
+
 /** Internal: applies a tool status change coming from a Stripe webhook. */
 export async function applyToolStatus(params: {
   tenantId: string;
