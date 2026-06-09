@@ -47,6 +47,10 @@ export const PERMISSIONS = [
   // Feedback & Surveys tool
   "surveys:read",
   "surveys:manage", // build surveys, view responses
+  // Gift Cards tool
+  "giftcards:read",
+  "giftcards:manage", // issue / cancel cards
+  "giftcards:operate", // redeem at the counter
   // Compliance
   "audit:read",
   "dsar:export",
@@ -82,6 +86,9 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "seo:manage",
     "surveys:read",
     "surveys:manage",
+    "giftcards:read",
+    "giftcards:manage",
+    "giftcards:operate",
     "audit:read",
     "dsar:export",
   ],
@@ -109,6 +116,9 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "seo:manage",
     "surveys:read",
     "surveys:manage",
+    "giftcards:read",
+    "giftcards:manage",
+    "giftcards:operate",
     "audit:read",
     "dsar:export",
   ],
@@ -126,6 +136,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "seo:read",
     "surveys:read",
     "surveys:manage",
+    "giftcards:read",
+    "giftcards:operate",
   ],
   viewer: [
     "tenant:read",
@@ -138,6 +150,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "referral:read",
     "seo:read",
     "surveys:read",
+    "giftcards:read",
   ],
 };
 

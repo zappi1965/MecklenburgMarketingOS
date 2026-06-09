@@ -78,6 +78,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 1900,
     stripePriceEnv: "STRIPE_PRICE_SURVEYS",
   },
+  {
+    key: "giftcards",
+    name: "Gutscheine & Gift Cards",
+    description:
+      "Wertgutscheine ausgeben, an der Kasse einlösen und Guthaben prüfen.",
+    priceCents: 2900,
+    stripePriceEnv: "STRIPE_PRICE_GIFTCARDS",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);

@@ -36,6 +36,7 @@ import {
   surveyResponses,
   surveys,
 } from "./survey";
+import { giftCards, giftCardTransactions } from "./giftcard";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -47,6 +48,7 @@ export * from "./newsletter";
 export * from "./referral";
 export * from "./seo";
 export * from "./survey";
+export * from "./giftcard";
 
 // --- Relations -------------------------------------------------------------
 
@@ -443,3 +445,27 @@ export const surveyAnswersRelations = relations(surveyAnswers, ({ one }) => ({
     references: [surveyQuestions.id],
   }),
 }));
+
+// --- Gift card relations ---------------------------------------------------
+
+export const giftCardsRelations = relations(giftCards, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [giftCards.tenantId],
+    references: [tenants.id],
+  }),
+  transactions: many(giftCardTransactions),
+}));
+
+export const giftCardTransactionsRelations = relations(
+  giftCardTransactions,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [giftCardTransactions.tenantId],
+      references: [tenants.id],
+    }),
+    giftCard: one(giftCards, {
+      fields: [giftCardTransactions.giftCardId],
+      references: [giftCards.id],
+    }),
+  }),
+);
