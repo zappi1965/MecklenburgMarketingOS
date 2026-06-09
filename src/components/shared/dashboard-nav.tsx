@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Ticket,
   Link2,
+  Undo2,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const ITEMS = [
   { href: "/dashboard/booking", label: "Booking", icon: CalendarClock },
   { href: "/dashboard/pos", label: "Kasse", icon: ScanLine },
   { href: "/dashboard/newsletter", label: "Newsletter", icon: Mail },
+  { href: "/dashboard/retention", label: "Rückholaktionen", icon: Undo2 },
   { href: "/dashboard/referral", label: "Empfehlungen", icon: Gift },
   { href: "/dashboard/seo", label: "SEO", icon: Search },
   { href: "/dashboard/surveys", label: "Umfragen", icon: ClipboardList },

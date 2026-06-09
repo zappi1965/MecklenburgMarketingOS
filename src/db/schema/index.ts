@@ -38,6 +38,7 @@ import {
 } from "./survey";
 import { giftCards, giftCardTransactions } from "./giftcard";
 import { shortLinkClicks, shortLinks } from "./shortlink";
+import { retentionCampaigns, retentionTargets } from "./retention";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -51,6 +52,7 @@ export * from "./seo";
 export * from "./survey";
 export * from "./giftcard";
 export * from "./shortlink";
+export * from "./retention";
 
 // --- Relations -------------------------------------------------------------
 
@@ -492,6 +494,37 @@ export const shortLinkClicksRelations = relations(
     link: one(shortLinks, {
       fields: [shortLinkClicks.shortLinkId],
       references: [shortLinks.id],
+    }),
+  }),
+);
+
+// --- Retention relations ---------------------------------------------------
+
+export const retentionCampaignsRelations = relations(
+  retentionCampaigns,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [retentionCampaigns.tenantId],
+      references: [tenants.id],
+    }),
+    targets: many(retentionTargets),
+  }),
+);
+
+export const retentionTargetsRelations = relations(
+  retentionTargets,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [retentionTargets.tenantId],
+      references: [tenants.id],
+    }),
+    campaign: one(retentionCampaigns, {
+      fields: [retentionTargets.campaignId],
+      references: [retentionCampaigns.id],
+    }),
+    member: one(loyaltyMembers, {
+      fields: [retentionTargets.memberId],
+      references: [loyaltyMembers.id],
     }),
   }),
 );

@@ -94,6 +94,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 1400,
     stripePriceEnv: "STRIPE_PRICE_LINKS",
   },
+  {
+    key: "retention",
+    name: "Rückholaktionen",
+    description:
+      "Inaktive Kunden automatisch erkennen und mit Bonus-Punkten + E-Mail zurückgewinnen.",
+    priceCents: 3400,
+    stripePriceEnv: "STRIPE_PRICE_RETENTION",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);

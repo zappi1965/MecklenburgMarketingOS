@@ -54,6 +54,9 @@ export const PERMISSIONS = [
   // Link shortener tool
   "links:read",
   "links:manage", // create / edit short links
+  // Retention / win-back tool
+  "retention:read",
+  "retention:manage", // configure + run win-back campaigns
   // Compliance
   "audit:read",
   "dsar:export",
@@ -94,6 +97,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "giftcards:operate",
     "links:read",
     "links:manage",
+    "retention:read",
+    "retention:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -126,6 +131,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "giftcards:operate",
     "links:read",
     "links:manage",
+    "retention:read",
+    "retention:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -147,6 +154,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "giftcards:operate",
     "links:read",
     "links:manage",
+    "retention:read",
   ],
   viewer: [
     "tenant:read",
@@ -161,6 +169,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "surveys:read",
     "giftcards:read",
     "links:read",
+    "retention:read",
   ],
 };
 
