@@ -106,6 +106,25 @@ export const TOOLS: ToolDefinition[] = [
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
 
+/** Dashboard route for each tool (payments maps to the billing dashboard). */
+export const TOOL_ROUTES: Record<string, string> = {
+  loyalty: "/dashboard/loyalty",
+  reviews: "/dashboard/reviews",
+  payments: "/dashboard/billing",
+  booking: "/dashboard/booking",
+  newsletter: "/dashboard/newsletter",
+  referral: "/dashboard/referral",
+  seo: "/dashboard/seo",
+  surveys: "/dashboard/surveys",
+  giftcards: "/dashboard/giftcards",
+  links: "/dashboard/links",
+  retention: "/dashboard/retention",
+};
+
+export function getToolRoute(key: string): string {
+  return TOOL_ROUTES[key] ?? "/dashboard";
+}
+
 export function getTool(key: string): ToolDefinition | undefined {
   return TOOLS.find((t) => t.key === key);
 }
