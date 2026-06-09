@@ -23,6 +23,11 @@ import {
   reviewSources,
 } from "./reviews";
 import { bookings, bookingServices, bookingSlots } from "./booking";
+import {
+  newsletterCampaigns,
+  newsletterContacts,
+  newsletterSends,
+} from "./newsletter";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -30,6 +35,7 @@ export * from "./platform";
 export * from "./loyalty";
 export * from "./reviews";
 export * from "./booking";
+export * from "./newsletter";
 
 // --- Relations -------------------------------------------------------------
 
@@ -272,3 +278,44 @@ export const bookingsRelations = relations(bookings, ({ one }) => ({
     references: [bookingServices.id],
   }),
 }));
+
+// --- Newsletter relations --------------------------------------------------
+
+export const newsletterContactsRelations = relations(
+  newsletterContacts,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [newsletterContacts.tenantId],
+      references: [tenants.id],
+    }),
+  }),
+);
+
+export const newsletterCampaignsRelations = relations(
+  newsletterCampaigns,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [newsletterCampaigns.tenantId],
+      references: [tenants.id],
+    }),
+    sends: many(newsletterSends),
+  }),
+);
+
+export const newsletterSendsRelations = relations(
+  newsletterSends,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [newsletterSends.tenantId],
+      references: [tenants.id],
+    }),
+    campaign: one(newsletterCampaigns, {
+      fields: [newsletterSends.campaignId],
+      references: [newsletterCampaigns.id],
+    }),
+    contact: one(newsletterContacts, {
+      fields: [newsletterSends.contactId],
+      references: [newsletterContacts.id],
+    }),
+  }),
+);

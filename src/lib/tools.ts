@@ -46,6 +46,22 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 3900,
     stripePriceEnv: "STRIPE_PRICE_BOOKING",
   },
+  {
+    key: "newsletter",
+    name: "Newsletter & CRM-Mail",
+    description:
+      "Kontakte sammeln (Double-Opt-In) und DSGVO-konforme E-Mail-Kampagnen versenden.",
+    priceCents: 2900,
+    stripePriceEnv: "STRIPE_PRICE_NEWSLETTER",
+  },
+  {
+    key: "referral",
+    name: "Empfehlungsprogramm",
+    description:
+      "Kunden werben Kunden — Empfehlungslinks mit Bonus-Punkten für beide Seiten.",
+    priceCents: 2400,
+    stripePriceEnv: "STRIPE_PRICE_REFERRAL",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);

@@ -35,6 +35,12 @@ export const PERMISSIONS = [
   "booking:read",
   "booking:manage", // services + slots
   "booking:operate", // confirm/cancel bookings, POS point credit
+  // Newsletter / CRM-Mail tool
+  "newsletter:read",
+  "newsletter:manage", // contacts + campaigns + sending
+  // Referral tool
+  "referral:read",
+  "referral:manage", // configure program
   // Compliance
   "audit:read",
   "dsar:export",
@@ -62,6 +68,10 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "booking:read",
     "booking:manage",
     "booking:operate",
+    "newsletter:read",
+    "newsletter:manage",
+    "referral:read",
+    "referral:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -81,6 +91,10 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "booking:read",
     "booking:manage",
     "booking:operate",
+    "newsletter:read",
+    "newsletter:manage",
+    "referral:read",
+    "referral:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -93,6 +107,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "reviews:manage",
     "booking:read",
     "booking:operate",
+    "newsletter:read",
+    "referral:read",
   ],
   viewer: [
     "tenant:read",
@@ -101,6 +117,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "reviews:read",
     "billing:read",
     "booking:read",
+    "newsletter:read",
+    "referral:read",
   ],
 };
 

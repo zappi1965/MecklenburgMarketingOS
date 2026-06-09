@@ -8,6 +8,8 @@ import {
   Star,
   CalendarClock,
   ScanLine,
+  Mail,
+  Gift,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -19,6 +21,8 @@ const ITEMS = [
   { href: "/dashboard/reviews", label: "Reviews", icon: Star },
   { href: "/dashboard/booking", label: "Booking", icon: CalendarClock },
   { href: "/dashboard/pos", label: "Kasse", icon: ScanLine },
+  { href: "/dashboard/newsletter", label: "Newsletter", icon: Mail },
+  { href: "/dashboard/referral", label: "Empfehlungen", icon: Gift },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];
