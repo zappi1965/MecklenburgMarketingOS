@@ -80,6 +80,24 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {ctx.tenant && can(ctx, "audit:read") && (
+        <Card className="max-w-xl">
+          <CardHeader>
+            <CardTitle className="text-base">Audit-Log</CardTitle>
+            <CardDescription>
+              Unveränderlicher Änderungsverlauf, exportierbar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/settings/audit">
+              <Button variant="outline" size="sm">
+                Audit-Log öffnen
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

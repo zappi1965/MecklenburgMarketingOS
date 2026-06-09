@@ -1,10 +1,11 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
+  auditLog,
   consentRecords,
   loyaltyMembers,
   loyaltyRedemptions,
@@ -447,6 +448,36 @@ export async function hardDeleteSubject(
 
   revalidatePath("/dashboard/settings/privacy");
   return ok({ members: deletedMembers.length, reviews: deletedReviews.length });
+}
+
+// =============================================================================
+// Audit log — read-only export
+// =============================================================================
+
+/**
+ * Exports the tenant's full audit trail as JSON. The log is immutable (RLS has
+ * no UPDATE/DELETE policy); this is read + download only. RBAC-gated on
+ * `audit:read`.
+ */
+export async function exportAuditLog(): Promise<
+  ActionResult<{ tenant: string; exportedAt: string; entries: unknown[] }>
+> {
+  const ctx = await requireSession();
+  if (!ctx.tenant) return err("Kein aktiver Store.");
+  const guard = checkPermission(ctx, "audit:read");
+  if (!guard.allowed) return err(guard.reason);
+
+  const entries = await db
+    .select()
+    .from(auditLog)
+    .where(eq(auditLog.tenantId, ctx.tenant.id))
+    .orderBy(desc(auditLog.createdAt));
+
+  return ok({
+    tenant: ctx.tenant.name,
+    exportedAt: new Date().toISOString(),
+    entries,
+  });
 }
 
 export { ASSIGNABLE_ROLES };
