@@ -111,7 +111,7 @@ export function AutomationAdmin({
       {canManage && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Flows werden im MVP manuell ausgeführt (später per Zeitplan).
+            Flows laufen stündlich automatisch — oder hier sofort.
           </p>
           <Button onClick={runAll} disabled={isPending}>
             Jetzt ausführen

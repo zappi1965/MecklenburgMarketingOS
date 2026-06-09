@@ -29,27 +29,43 @@ cp .env.example .env   # Werte aus Supabase + Stripe eintragen
 ## Datenbank
 
 ```bash
-# Schema ändern → Migration generieren
+# Schema ändern → Tabellen-Migration generieren
 npm run db:generate
 
-# RLS in supabase/migrations/0001_platform_rls.sql prüfen/ergänzen
+# RLS für die neue Tabelle als eigene Migration anlegen (000X_<tool>_rls.sql),
+# damit sie NACH der Tabellen-Migration sortiert.
 
-# Migrationen auf Supabase anwenden (Tabellen, dann RLS)
-npx supabase db push
+# Alle Migrationen in Reihenfolge auf die DB (DATABASE_URL) anwenden – idempotent
+npm run db:migrate
 
-# Demo-Tenant seeden (einmalig)
-npm run db:seed
+# Komplett-Setup (Migrationen + Demo-Tenant-Seed)
+npm run db:setup
+
+# Schema + RLS + Trigger lokal verifizieren (in-process Postgres, keine Creds)
+npm run db:verify
 ```
 
-`0000_*.sql` enthält die von Drizzle generierte Tabellen-DDL.
-`0001_platform_rls.sql` ist handgepflegt: RLS-Helper, Policies und
-Audit-Trigger. Jede neue Tabelle wird dort registriert.
+`0000_*.sql` enthält die von Drizzle generierte Tabellen-DDL. Tool-RLS liegt in
+nachgelagerten Dateien (`000X_<tool>_rls.sql`) und wird durch die
+Datei-Sortierung nach den Tabellen angewandt. `db:migrate` trackt bereits
+angewandte Dateien in `_mmos_migrations` und ist re-runnbar.
+
+## Stripe & Cron
+
+```bash
+# Produkte + monatliche Preise für alle Tools anlegen, Env-Zeilen ausgeben
+npm run stripe:setup
+```
+
+`vercel.json` registriert einen stündlichen Cron auf `/api/cron`, der die
+Automation-Flows aller aktiven Tenants ausführt (geschützt via `CRON_SECRET`).
 
 ## Entwicklung
 
 ```bash
 npm run dev        # http://localhost:3000
 npm run typecheck
+npm run test       # Vitest (inkl. Migrations-Verifikation via PGlite)
 npm run build
 ```
 

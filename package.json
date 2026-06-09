@@ -13,6 +13,10 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx --env-file=.env src/db/seed/init.ts",
+    "db:verify": "tsx scripts/verify-migrations.ts",
+    "db:migrate": "tsx --env-file=.env scripts/apply-migrations.ts",
+    "db:setup": "npm run db:migrate && npm run db:seed",
+    "stripe:setup": "tsx --env-file=.env scripts/setup-stripe.ts",
     "test": "vitest run"
   },
   "dependencies": {
@@ -34,6 +38,7 @@
     "zod": "3.24.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
     "@types/node": "22.10.5",
     "@types/qrcode": "1.5.5",
     "@types/react": "19.0.2",
