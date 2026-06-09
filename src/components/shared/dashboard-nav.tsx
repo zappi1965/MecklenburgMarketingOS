@@ -13,6 +13,7 @@ import {
   Search,
   ClipboardList,
   Ticket,
+  Link2,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const ITEMS = [
   { href: "/dashboard/seo", label: "SEO", icon: Search },
   { href: "/dashboard/surveys", label: "Umfragen", icon: ClipboardList },
   { href: "/dashboard/giftcards", label: "Gutscheine", icon: Ticket },
+  { href: "/dashboard/links", label: "Links", icon: Link2 },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];

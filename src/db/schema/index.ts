@@ -37,6 +37,7 @@ import {
   surveys,
 } from "./survey";
 import { giftCards, giftCardTransactions } from "./giftcard";
+import { shortLinkClicks, shortLinks } from "./shortlink";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -49,6 +50,7 @@ export * from "./referral";
 export * from "./seo";
 export * from "./survey";
 export * from "./giftcard";
+export * from "./shortlink";
 
 // --- Relations -------------------------------------------------------------
 
@@ -466,6 +468,30 @@ export const giftCardTransactionsRelations = relations(
     giftCard: one(giftCards, {
       fields: [giftCardTransactions.giftCardId],
       references: [giftCards.id],
+    }),
+  }),
+);
+
+// --- Short link relations --------------------------------------------------
+
+export const shortLinksRelations = relations(shortLinks, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [shortLinks.tenantId],
+    references: [tenants.id],
+  }),
+  clicks: many(shortLinkClicks),
+}));
+
+export const shortLinkClicksRelations = relations(
+  shortLinkClicks,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [shortLinkClicks.tenantId],
+      references: [tenants.id],
+    }),
+    link: one(shortLinks, {
+      fields: [shortLinkClicks.shortLinkId],
+      references: [shortLinks.id],
     }),
   }),
 );

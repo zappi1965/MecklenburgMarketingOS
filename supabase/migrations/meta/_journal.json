@@ -57,6 +57,13 @@
       "when": 1780984937565,
       "tag": "0007_giftcards_tool",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780985424666,
+      "tag": "0008_shortlinks_tool",
+      "breakpoints": true
     }
   ]
 }

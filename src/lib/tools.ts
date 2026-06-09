@@ -86,6 +86,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 2900,
     stripePriceEnv: "STRIPE_PRICE_GIFTCARDS",
   },
+  {
+    key: "links",
+    name: "Link-Shortener & UTM",
+    description:
+      "Kurze, trackbare Kampagnen-Links mit UTM-Parametern und Klick-Statistik.",
+    priceCents: 1400,
+    stripePriceEnv: "STRIPE_PRICE_LINKS",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);

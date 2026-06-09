@@ -51,6 +51,9 @@ export const PERMISSIONS = [
   "giftcards:read",
   "giftcards:manage", // issue / cancel cards
   "giftcards:operate", // redeem at the counter
+  // Link shortener tool
+  "links:read",
+  "links:manage", // create / edit short links
   // Compliance
   "audit:read",
   "dsar:export",
@@ -89,6 +92,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "giftcards:read",
     "giftcards:manage",
     "giftcards:operate",
+    "links:read",
+    "links:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -119,6 +124,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "giftcards:read",
     "giftcards:manage",
     "giftcards:operate",
+    "links:read",
+    "links:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -138,6 +145,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "surveys:manage",
     "giftcards:read",
     "giftcards:operate",
+    "links:read",
+    "links:manage",
   ],
   viewer: [
     "tenant:read",
@@ -151,6 +160,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "seo:read",
     "surveys:read",
     "giftcards:read",
+    "links:read",
   ],
 };
 
