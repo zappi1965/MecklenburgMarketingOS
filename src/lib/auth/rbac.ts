@@ -70,6 +70,9 @@ export const PERMISSIONS = [
   "coupons:read",
   "coupons:manage", // create / edit codes
   "coupons:operate", // redeem at the counter
+  // SMS marketing tool
+  "sms:read",
+  "sms:manage", // contacts + campaigns + sending
   // Compliance
   "audit:read",
   "dsar:export",
@@ -121,6 +124,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "coupons:read",
     "coupons:manage",
     "coupons:operate",
+    "sms:read",
+    "sms:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -164,6 +169,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "coupons:read",
     "coupons:manage",
     "coupons:operate",
+    "sms:read",
+    "sms:manage",
     "audit:read",
     "dsar:export",
   ],
@@ -194,6 +201,8 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "crm:manage",
     "coupons:read",
     "coupons:operate",
+    "sms:read",
+    "sms:manage",
   ],
   viewer: [
     "tenant:read",
@@ -213,6 +222,7 @@ const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
     "social:read",
     "crm:read",
     "coupons:read",
+    "sms:read",
   ],
 };
 

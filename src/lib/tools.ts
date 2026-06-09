@@ -134,6 +134,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 1400,
     stripePriceEnv: "STRIPE_PRICE_COUPONS",
   },
+  {
+    key: "sms",
+    name: "SMS-Marketing",
+    description:
+      "Opt-in-Telefonkontakte sammeln und SMS-Kampagnen versenden (DSGVO-konform).",
+    priceCents: 2400,
+    stripePriceEnv: "STRIPE_PRICE_SMS",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);
@@ -155,6 +163,7 @@ export const TOOL_ROUTES: Record<string, string> = {
   social: "/dashboard/social",
   crm: "/dashboard/crm",
   coupons: "/dashboard/coupons",
+  sms: "/dashboard/sms",
 };
 
 export function getToolRoute(key: string): string {

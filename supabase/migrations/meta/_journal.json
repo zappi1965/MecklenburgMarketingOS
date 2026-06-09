@@ -99,6 +99,13 @@
       "when": 1781003452599,
       "tag": "0013_coupons_tool",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781003938416,
+      "tag": "0014_sms_tool",
+      "breakpoints": true
     }
   ]
 }

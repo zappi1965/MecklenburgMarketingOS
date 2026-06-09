@@ -43,6 +43,7 @@ import { bioLinks, bioPages } from "./bio";
 import { socialPosts } from "./social";
 import { crmContacts, crmDeals } from "./crm";
 import { couponRedemptions, coupons } from "./coupon";
+import { smsCampaigns, smsContacts, smsSends } from "./sms";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -61,6 +62,7 @@ export * from "./bio";
 export * from "./social";
 export * from "./crm";
 export * from "./coupon";
+export * from "./sms";
 
 // --- Relations -------------------------------------------------------------
 
@@ -611,3 +613,38 @@ export const couponRedemptionsRelations = relations(
     }),
   }),
 );
+
+// --- SMS relations ---------------------------------------------------------
+
+export const smsContactsRelations = relations(smsContacts, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [smsContacts.tenantId],
+    references: [tenants.id],
+  }),
+}));
+
+export const smsCampaignsRelations = relations(
+  smsCampaigns,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [smsCampaigns.tenantId],
+      references: [tenants.id],
+    }),
+    sends: many(smsSends),
+  }),
+);
+
+export const smsSendsRelations = relations(smsSends, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [smsSends.tenantId],
+    references: [tenants.id],
+  }),
+  campaign: one(smsCampaigns, {
+    fields: [smsSends.campaignId],
+    references: [smsCampaigns.id],
+  }),
+  contact: one(smsContacts, {
+    fields: [smsSends.contactId],
+    references: [smsContacts.id],
+  }),
+}));

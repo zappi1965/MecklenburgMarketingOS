@@ -19,6 +19,7 @@ import {
   Megaphone,
   Contact,
   BadgePercent,
+  MessageSquare,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -41,6 +42,7 @@ const ITEMS: NavItem[] = [
   { href: "/dashboard/booking", label: "Booking", icon: CalendarClock, tool: "booking" },
   { href: "/dashboard/pos", label: "Kasse", icon: ScanLine, tool: "loyalty" },
   { href: "/dashboard/newsletter", label: "Newsletter", icon: Mail, tool: "newsletter" },
+  { href: "/dashboard/sms", label: "SMS", icon: MessageSquare, tool: "sms" },
   { href: "/dashboard/retention", label: "Rückholaktionen", icon: Undo2, tool: "retention" },
   { href: "/dashboard/referral", label: "Empfehlungen", icon: Gift, tool: "referral" },
   { href: "/dashboard/seo", label: "SEO", icon: Search, tool: "seo" },
