@@ -12,9 +12,12 @@ import {
   loyaltyTransactions,
   qrScans,
   reviews,
+  tenants,
   tenantMemberships,
+  tenantTools,
   userProfiles,
 } from "@/db/schema";
+import { TOOL_KEYS } from "@/lib/tools";
 import {
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
@@ -24,6 +27,149 @@ import { writeAuditLog } from "@/lib/audit";
 import { type ActionResult, ok, err, fromZodError } from "@/lib/result";
 
 const roleEnum = z.enum(["owner", "admin", "staff", "viewer"]);
+
+// =============================================================================
+// Onboarding — create a store, pick tools, optionally invite an admin
+// =============================================================================
+
+/** Converts a free-text store name into a URL-safe slug. */
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+const createTenantSchema = z.object({
+  name: z.string().min(2, "Bitte einen Store-Namen eingeben.").max(80),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9-]*$/, "Nur Kleinbuchstaben, Zahlen und Bindestriche.")
+    .optional(),
+  tools: z.array(z.enum(TOOL_KEYS as [string, ...string[]])).default([]),
+  inviteEmail: z.string().email().optional().or(z.literal("")),
+});
+
+const TRIAL_MS = 1000 * 60 * 60 * 24 * 30;
+
+/**
+ * Creates a store (tenant) owned by the current user, activates the chosen
+ * tools as trials, and optionally invites an admin. Runs via the privileged DB
+ * client (tenant INSERT is superadmin-only in RLS; first-store creation is a
+ * trusted server flow).
+ */
+export async function createTenant(
+  input: z.input<typeof createTenantSchema>,
+): Promise<ActionResult<{ tenantId: string; slug: string }>> {
+  const ctx = await requireSession();
+
+  const parsed = createTenantSchema.safeParse(input);
+  if (!parsed.success) return fromZodError(parsed.error);
+
+  // Ensure the profile row exists (id === auth.uid()).
+  await db
+    .insert(userProfiles)
+    .values({ id: ctx.userId, email: ctx.email })
+    .onConflictDoNothing({ target: userProfiles.id });
+
+  // Resolve a unique slug.
+  const base = parsed.data.slug?.length
+    ? slugify(parsed.data.slug)
+    : slugify(parsed.data.name);
+  let slug = base || `store-${Date.now()}`;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const clash = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.slug, slug))
+      .limit(1);
+    if (!clash[0]) break;
+    slug = `${base}-${Math.floor(Math.random() * 9000) + 1000}`;
+  }
+
+  const [tenant] = await db
+    .insert(tenants)
+    .values({ name: parsed.data.name, slug, contactEmail: ctx.email })
+    .returning({ id: tenants.id, slug: tenants.slug });
+
+  // Creator becomes owner.
+  await db.insert(tenantMemberships).values({
+    tenantId: tenant.id,
+    userId: ctx.userId,
+    role: "owner",
+    isActive: true,
+  });
+
+  // Activate selected tools as 30-day trials.
+  const trialEndsAt = new Date(Date.now() + TRIAL_MS);
+  const uniqueTools = Array.from(new Set(parsed.data.tools));
+  if (uniqueTools.length) {
+    await db
+      .insert(tenantTools)
+      .values(
+        uniqueTools.map((toolKey) => ({
+          tenantId: tenant.id,
+          toolKey,
+          status: "trial" as const,
+          trialEndsAt,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [tenantTools.tenantId, tenantTools.toolKey],
+      });
+  }
+
+  // Optional admin invite during onboarding.
+  const inviteEmail = parsed.data.inviteEmail?.trim().toLowerCase();
+  if (inviteEmail) {
+    const service = createSupabaseServiceClient();
+    const existing = await db
+      .select({ id: userProfiles.id })
+      .from(userProfiles)
+      .where(eq(userProfiles.email, inviteEmail))
+      .limit(1);
+    let inviteeId = existing[0]?.id;
+    if (!inviteeId) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? undefined;
+      const { data } = await service.auth.admin.inviteUserByEmail(inviteEmail, {
+        redirectTo: appUrl ? `${appUrl}/login` : undefined,
+      });
+      if (data?.user) {
+        inviteeId = data.user.id;
+        await service
+          .from("user_profiles")
+          .upsert({ id: inviteeId, email: inviteEmail }, { onConflict: "id" });
+      }
+    }
+    if (inviteeId && inviteeId !== ctx.userId) {
+      await db
+        .insert(tenantMemberships)
+        .values({
+          tenantId: tenant.id,
+          userId: inviteeId,
+          role: "admin",
+          isActive: true,
+        })
+        .onConflictDoNothing();
+    }
+  }
+
+  await writeAuditLog({
+    tenantId: tenant.id,
+    actorId: ctx.userId,
+    action: "insert",
+    entityTable: "tenants",
+    entityId: tenant.id,
+    diff: { name: parsed.data.name, slug, tools: uniqueTools },
+  });
+
+  revalidatePath("/dashboard");
+  return ok({ tenantId: tenant.id, slug: tenant.slug });
+}
+
 
 const inviteSchema = z.object({
   email: z.string().email("Bitte eine gültige E-Mail eingeben."),
