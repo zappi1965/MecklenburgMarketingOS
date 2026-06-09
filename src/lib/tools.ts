@@ -38,6 +38,14 @@ export const TOOLS: ToolDefinition[] = [
     priceCents: 1900,
     stripePriceEnv: "STRIPE_PRICE_PAYMENTS",
   },
+  {
+    key: "booking",
+    name: "Booking & POS",
+    description:
+      "Termin-Slots buchen lassen und Loyalty-Punkte an der Kasse gutschreiben.",
+    priceCents: 3900,
+    stripePriceEnv: "STRIPE_PRICE_BOOKING",
+  },
 ];
 
 export const TOOL_KEYS = TOOLS.map((t) => t.key);

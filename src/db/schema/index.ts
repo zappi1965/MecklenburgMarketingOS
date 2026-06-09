@@ -22,12 +22,14 @@ import {
   reviews,
   reviewSources,
 } from "./reviews";
+import { bookings, bookingServices, bookingSlots } from "./booking";
 
 // --- Re-exports ------------------------------------------------------------
 
 export * from "./platform";
 export * from "./loyalty";
 export * from "./reviews";
+export * from "./booking";
 
 // --- Relations -------------------------------------------------------------
 
@@ -225,5 +227,48 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   invitation: one(reviewInvitations, {
     fields: [reviews.invitationId],
     references: [reviewInvitations.id],
+  }),
+}));
+
+// --- Booking relations -----------------------------------------------------
+
+export const bookingServicesRelations = relations(
+  bookingServices,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [bookingServices.tenantId],
+      references: [tenants.id],
+    }),
+    slots: many(bookingSlots),
+  }),
+);
+
+export const bookingSlotsRelations = relations(
+  bookingSlots,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [bookingSlots.tenantId],
+      references: [tenants.id],
+    }),
+    service: one(bookingServices, {
+      fields: [bookingSlots.serviceId],
+      references: [bookingServices.id],
+    }),
+    bookings: many(bookings),
+  }),
+);
+
+export const bookingsRelations = relations(bookings, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [bookings.tenantId],
+    references: [tenants.id],
+  }),
+  slot: one(bookingSlots, {
+    fields: [bookings.slotId],
+    references: [bookingSlots.id],
+  }),
+  service: one(bookingServices, {
+    fields: [bookings.serviceId],
+    references: [bookingServices.id],
   }),
 }));

@@ -6,6 +6,8 @@ import {
   LayoutDashboard,
   Stamp,
   Star,
+  CalendarClock,
+  ScanLine,
   CreditCard,
   Settings,
 } from "lucide-react";
@@ -15,6 +17,8 @@ const ITEMS = [
   { href: "/dashboard", label: "Übersicht", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/loyalty", label: "Loyalty", icon: Stamp },
   { href: "/dashboard/reviews", label: "Reviews", icon: Star },
+  { href: "/dashboard/booking", label: "Booking", icon: CalendarClock },
+  { href: "/dashboard/pos", label: "Kasse", icon: ScanLine },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];

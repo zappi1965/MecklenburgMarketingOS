@@ -174,6 +174,9 @@ alter table public.review_sources       enable row level security;
 alter table public.review_invitations   enable row level security;
 alter table public.reviews              enable row level security;
 
+-- booking_* tables are created in 0002_booking_tool.sql; their RLS lives in
+-- 0003_booking_rls.sql so it applies after the tables exist.
+
 -- =============================================================================
 -- PLATFORM POLICIES
 -- =============================================================================
