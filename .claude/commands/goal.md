@@ -63,7 +63,7 @@ Nie ohne Drizzle-Migration direkt in der DB editieren.
   IP-Hash), DSAR-Export (JSON), Löschroutine (Soft- + Hard-Delete)
 - [x] Audit-Log: jede Mutation über zentralen Writer, unveränderlich
 - [x] Tenant-Onboarding: Store anlegen → Admin einladen → Tool auswählen
-- [ ] Billing-Kern: Stripe Checkout, Subscription je Tool, Webhook-Handler
+- [x] Billing-Kern: Stripe Checkout, Subscription je Tool, Webhook-Handler
 
 ### Tool 1: Loyalty & QR-Kampagnen (Hero)
 
