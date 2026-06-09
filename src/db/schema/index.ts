@@ -28,6 +28,7 @@ import {
   newsletterContacts,
   newsletterSends,
 } from "./newsletter";
+import { referralCodes, referralPrograms, referrals } from "./referral";
 
 // --- Re-exports ------------------------------------------------------------
 
@@ -36,6 +37,7 @@ export * from "./loyalty";
 export * from "./reviews";
 export * from "./booking";
 export * from "./newsletter";
+export * from "./referral";
 
 // --- Relations -------------------------------------------------------------
 
@@ -319,3 +321,41 @@ export const newsletterSendsRelations = relations(
     }),
   }),
 );
+
+// --- Referral relations ----------------------------------------------------
+
+export const referralProgramsRelations = relations(
+  referralPrograms,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [referralPrograms.tenantId],
+      references: [tenants.id],
+    }),
+  }),
+);
+
+export const referralCodesRelations = relations(referralCodes, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [referralCodes.tenantId],
+    references: [tenants.id],
+  }),
+  member: one(loyaltyMembers, {
+    fields: [referralCodes.memberId],
+    references: [loyaltyMembers.id],
+  }),
+}));
+
+export const referralsRelations = relations(referrals, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [referrals.tenantId],
+    references: [tenants.id],
+  }),
+  referrer: one(loyaltyMembers, {
+    fields: [referrals.referrerMemberId],
+    references: [loyaltyMembers.id],
+  }),
+  referee: one(loyaltyMembers, {
+    fields: [referrals.refereeMemberId],
+    references: [loyaltyMembers.id],
+  }),
+}));

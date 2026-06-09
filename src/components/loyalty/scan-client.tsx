@@ -8,6 +8,7 @@ import {
   type ScanResult,
   type PublicReward,
 } from "@/actions/loyalty";
+import { getOrCreateReferralCode } from "@/actions/referral";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +29,16 @@ export function ScanClient({ token }: { token: string }) {
     null,
   );
   const [pending, setPending] = useState(false);
+  const [referralUrl, setReferralUrl] = useState<string | null>(null);
+  const [referralBusy, setReferralBusy] = useState(false);
+
+  async function inviteFriends() {
+    if (!result) return;
+    setReferralBusy(true);
+    const res = await getOrCreateReferralCode(result.memberId);
+    setReferralBusy(false);
+    if (res.ok) setReferralUrl(res.data.url);
+  }
 
   useEffect(() => {
     let active = true;
@@ -180,6 +191,32 @@ export function ScanClient({ token }: { token: string }) {
             })}
           </div>
         )}
+
+        <div className="border-t pt-4">
+          {referralUrl ? (
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Dein Empfehlungslink</p>
+              <input
+                readOnly
+                value={referralUrl}
+                onFocus={(e) => e.target.select()}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Teile ihn — ihr beide bekommt Bonus-Punkte.
+              </p>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={inviteFriends}
+              disabled={referralBusy}
+            >
+              {referralBusy ? "…" : "Freunde werben"}
+            </Button>
+          )}
+        </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
       </CardContent>

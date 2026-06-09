@@ -29,6 +29,13 @@
       "when": 1780983584313,
       "tag": "0003_newsletter_tool",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780983894229,
+      "tag": "0004_referral_tool",
+      "breakpoints": true
     }
   ]
 }
