@@ -18,30 +18,42 @@ import {
   CreditCard,
   Settings,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ITEMS = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  exact?: boolean;
+  /** Gates the item behind an active tenant tool; core items omit it. */
+  tool?: string;
+}
+
+const ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Übersicht", icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/loyalty", label: "Loyalty", icon: Stamp },
-  { href: "/dashboard/reviews", label: "Reviews", icon: Star },
-  { href: "/dashboard/booking", label: "Booking", icon: CalendarClock },
-  { href: "/dashboard/pos", label: "Kasse", icon: ScanLine },
-  { href: "/dashboard/newsletter", label: "Newsletter", icon: Mail },
-  { href: "/dashboard/retention", label: "Rückholaktionen", icon: Undo2 },
-  { href: "/dashboard/referral", label: "Empfehlungen", icon: Gift },
-  { href: "/dashboard/seo", label: "SEO", icon: Search },
-  { href: "/dashboard/surveys", label: "Umfragen", icon: ClipboardList },
-  { href: "/dashboard/giftcards", label: "Gutscheine", icon: Ticket },
-  { href: "/dashboard/links", label: "Links", icon: Link2 },
+  { href: "/dashboard/loyalty", label: "Loyalty", icon: Stamp, tool: "loyalty" },
+  { href: "/dashboard/reviews", label: "Reviews", icon: Star, tool: "reviews" },
+  { href: "/dashboard/booking", label: "Booking", icon: CalendarClock, tool: "booking" },
+  { href: "/dashboard/pos", label: "Kasse", icon: ScanLine, tool: "loyalty" },
+  { href: "/dashboard/newsletter", label: "Newsletter", icon: Mail, tool: "newsletter" },
+  { href: "/dashboard/retention", label: "Rückholaktionen", icon: Undo2, tool: "retention" },
+  { href: "/dashboard/referral", label: "Empfehlungen", icon: Gift, tool: "referral" },
+  { href: "/dashboard/seo", label: "SEO", icon: Search, tool: "seo" },
+  { href: "/dashboard/surveys", label: "Umfragen", icon: ClipboardList, tool: "surveys" },
+  { href: "/dashboard/giftcards", label: "Gutscheine", icon: Ticket, tool: "giftcards" },
+  { href: "/dashboard/links", label: "Links", icon: Link2, tool: "links" },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
   { href: "/dashboard/settings", label: "Einstellungen", icon: Settings },
 ];
 
-export function DashboardNav() {
+export function DashboardNav({ activeTools }: { activeTools: string[] }) {
   const pathname = usePathname();
+  const activeSet = new Set(activeTools);
+  const items = ITEMS.filter((i) => !i.tool || activeSet.has(i.tool));
   return (
     <nav className="flex gap-1 overflow-x-auto md:flex-col md:gap-0.5">
-      {ITEMS.map(({ href, label, icon: Icon, exact }) => {
+      {items.map(({ href, label, icon: Icon, exact }) => {
         const active = exact ? pathname === href : pathname.startsWith(href);
         return (
           <Link
