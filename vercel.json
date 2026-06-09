@@ -1,6 +1,9 @@
 {
-  "framework": "nextjs",
-  "installCommand": "corepack enable && yarn install --production=false",
-  "buildCommand": "yarn --cwd frontend build",
-  "outputDirectory": "frontend/.next"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "0 * * * *"
+    }
+  ]
 }

@@ -1,0 +1,39 @@
+{
+  "name": "mecklenburg-marketing-os",
+  "private": true,
+  "packageManager": "yarn@1.22.19",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "yarn --cwd frontend dev",
+    "build": "yarn --cwd frontend build",
+    "start": "yarn --cwd frontend start",
+    "typecheck": "yarn --cwd frontend typecheck",
+    "backend:start": "yarn --cwd backend start",
+    "stability:check": "yarn quality:guard && yarn --cwd frontend typecheck && yarn --cwd frontend build",
+    "quality:guard": "node scripts/quality-guard.mjs",
+    "fullbuild:check": "node scripts/v061-fullbuild-check.mjs",
+    "production:check": "yarn quality:guard && yarn fullbuild:check && yarn --cwd frontend typecheck",
+    "production:final-check": "yarn quality:guard && yarn fullbuild:check && yarn --cwd frontend typecheck && yarn --cwd frontend build",
+    "tenant:isolation:smoke": "node scripts/v1038-tenant-isolation-smoke.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.106.2",
+    "lucide-react": "1.16.0",
+    "next": "16.2.6",
+    "qr-scanner": "1.4.2",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-is": "18.3.1",
+    "recharts": "3.8.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0",
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
+  }
+}

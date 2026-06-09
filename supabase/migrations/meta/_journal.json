@@ -1,0 +1,125 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1780936776715,
+      "tag": "0000_core_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780982360219,
+      "tag": "0001_loyalty_campaigns",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780983036170,
+      "tag": "0002_booking_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780983584313,
+      "tag": "0003_newsletter_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780983894229,
+      "tag": "0004_referral_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780984352854,
+      "tag": "0005_seo_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780984629234,
+      "tag": "0006_surveys_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780984937565,
+      "tag": "0007_giftcards_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780985424666,
+      "tag": "0008_shortlinks_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781001051377,
+      "tag": "0009_retention_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781001866798,
+      "tag": "0010_bio_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781002129319,
+      "tag": "0011_social_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781003123338,
+      "tag": "0012_crm_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781003452599,
+      "tag": "0013_coupons_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781003938416,
+      "tag": "0014_sms_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1781004239588,
+      "tag": "0015_automation_tool",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1781004529946,
+      "tag": "0016_sumup_tool",
+      "breakpoints": true
+    }
+  ]
+}

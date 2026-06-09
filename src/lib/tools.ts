@@ -1,0 +1,200 @@
+/**
+ * Catalogue of sellable tool modules. The `key` matches `tenant_tools.tool_key`
+ * and the `tool_active(tenant_id, key)` RLS gate. Stripe price ids are resolved
+ * from env at checkout time (see actions/billing.ts).
+ */
+
+export interface ToolDefinition {
+  key: string;
+  name: string;
+  description: string;
+  /** Monthly price in EUR cents, for display on the landing / checkout. */
+  priceCents: number;
+  /** Env var holding the Stripe price id for this tool. */
+  stripePriceEnv: string;
+}
+
+export const TOOLS: ToolDefinition[] = [
+  {
+    key: "loyalty",
+    name: "Loyalty & QR-Kampagnen",
+    description:
+      "Stempelkarten, Punkte und Rewards. QR-Codes scannen, Kunden binden.",
+    priceCents: 4900,
+    stripePriceEnv: "STRIPE_PRICE_LOYALTY",
+  },
+  {
+    key: "reviews",
+    name: "Reviews & Reputation",
+    description:
+      "Bewertungen einsammeln, beantworten und auf Google weiterleiten.",
+    priceCents: 2900,
+    stripePriceEnv: "STRIPE_PRICE_REVIEWS",
+  },
+  {
+    key: "payments",
+    name: "Payments & Billing",
+    description: "Pakete abonnieren, Rechnungen verwalten.",
+    priceCents: 1900,
+    stripePriceEnv: "STRIPE_PRICE_PAYMENTS",
+  },
+  {
+    key: "booking",
+    name: "Booking & POS",
+    description:
+      "Termin-Slots buchen lassen und Loyalty-Punkte an der Kasse gutschreiben.",
+    priceCents: 3900,
+    stripePriceEnv: "STRIPE_PRICE_BOOKING",
+  },
+  {
+    key: "newsletter",
+    name: "Newsletter & CRM-Mail",
+    description:
+      "Kontakte sammeln (Double-Opt-In) und DSGVO-konforme E-Mail-Kampagnen versenden.",
+    priceCents: 2900,
+    stripePriceEnv: "STRIPE_PRICE_NEWSLETTER",
+  },
+  {
+    key: "referral",
+    name: "Empfehlungsprogramm",
+    description:
+      "Kunden werben Kunden — Empfehlungslinks mit Bonus-Punkten für beide Seiten.",
+    priceCents: 2400,
+    stripePriceEnv: "STRIPE_PRICE_REFERRAL",
+  },
+  {
+    key: "seo",
+    name: "SEO & Local Listings",
+    description:
+      "NAP-Konsistenz, LocalBusiness-Schema (JSON-LD) und Keyword-Ranking-Tracker.",
+    priceCents: 3400,
+    stripePriceEnv: "STRIPE_PRICE_SEO",
+  },
+  {
+    key: "surveys",
+    name: "Feedback & Umfragen",
+    description:
+      "Umfragen per Link erstellen, Antworten sammeln und auswerten.",
+    priceCents: 1900,
+    stripePriceEnv: "STRIPE_PRICE_SURVEYS",
+  },
+  {
+    key: "giftcards",
+    name: "Gutscheine & Gift Cards",
+    description:
+      "Wertgutscheine ausgeben, an der Kasse einlösen und Guthaben prüfen.",
+    priceCents: 2900,
+    stripePriceEnv: "STRIPE_PRICE_GIFTCARDS",
+  },
+  {
+    key: "links",
+    name: "Link-Shortener & UTM",
+    description:
+      "Kurze, trackbare Kampagnen-Links mit UTM-Parametern und Klick-Statistik.",
+    priceCents: 1400,
+    stripePriceEnv: "STRIPE_PRICE_LINKS",
+  },
+  {
+    key: "retention",
+    name: "Rückholaktionen",
+    description:
+      "Inaktive Kunden automatisch erkennen und mit Bonus-Punkten + E-Mail zurückgewinnen.",
+    priceCents: 3400,
+    stripePriceEnv: "STRIPE_PRICE_RETENTION",
+  },
+  {
+    key: "bio",
+    name: "Link-in-Bio",
+    description:
+      "Eine öffentliche Link-Seite (Linktree-Stil) für Social-Bios mit Klick-Tracking.",
+    priceCents: 900,
+    stripePriceEnv: "STRIPE_PRICE_BIO",
+  },
+  {
+    key: "social",
+    name: "Social-Media-Planer",
+    description:
+      "Redaktionskalender: Posts pro Kanal planen, terminieren und den Status verfolgen.",
+    priceCents: 2900,
+    stripePriceEnv: "STRIPE_PRICE_SOCIAL",
+  },
+  {
+    key: "crm",
+    name: "CRM & Leads",
+    description:
+      "Kontakte und Deals in einer Pipeline (neu → qualifiziert → gewonnen) verwalten.",
+    priceCents: 3900,
+    stripePriceEnv: "STRIPE_PRICE_CRM",
+  },
+  {
+    key: "coupons",
+    name: "Coupons & Promo-Codes",
+    description:
+      "Rabattcodes (prozentual/fix) mit Gültigkeit und Limit, Einlösung an der Kasse.",
+    priceCents: 1400,
+    stripePriceEnv: "STRIPE_PRICE_COUPONS",
+  },
+  {
+    key: "sms",
+    name: "SMS-Marketing",
+    description:
+      "Opt-in-Telefonkontakte sammeln und SMS-Kampagnen versenden (DSGVO-konform).",
+    priceCents: 2400,
+    stripePriceEnv: "STRIPE_PRICE_SMS",
+  },
+  {
+    key: "automation",
+    name: "Automation (Flows)",
+    description:
+      "Wenn-Dann-Regeln: z. B. bei Punkte-Schwelle automatisch Bonus gutschreiben oder mailen.",
+    priceCents: 3400,
+    stripePriceEnv: "STRIPE_PRICE_AUTOMATION",
+  },
+  {
+    key: "sumup",
+    name: "SumUp — Umsatz & Payments",
+    description:
+      "Umsätze tracken und SumUp-Payment-Links für Kartenzahlung erstellen.",
+    priceCents: 1900,
+    stripePriceEnv: "STRIPE_PRICE_SUMUP",
+  },
+];
+
+export const TOOL_KEYS = TOOLS.map((t) => t.key);
+
+/** Dashboard route for each tool (payments maps to the billing dashboard). */
+export const TOOL_ROUTES: Record<string, string> = {
+  loyalty: "/dashboard/loyalty",
+  reviews: "/dashboard/reviews",
+  payments: "/dashboard/billing",
+  booking: "/dashboard/booking",
+  newsletter: "/dashboard/newsletter",
+  referral: "/dashboard/referral",
+  seo: "/dashboard/seo",
+  surveys: "/dashboard/surveys",
+  giftcards: "/dashboard/giftcards",
+  links: "/dashboard/links",
+  retention: "/dashboard/retention",
+  bio: "/dashboard/bio",
+  social: "/dashboard/social",
+  crm: "/dashboard/crm",
+  coupons: "/dashboard/coupons",
+  sms: "/dashboard/sms",
+  automation: "/dashboard/automation",
+  sumup: "/dashboard/sumup",
+};
+
+export function getToolRoute(key: string): string {
+  return TOOL_ROUTES[key] ?? "/dashboard";
+}
+
+export function getTool(key: string): ToolDefinition | undefined {
+  return TOOLS.find((t) => t.key === key);
+}
+
+export function formatPrice(cents: number): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+  }).format(cents / 100);
+}
