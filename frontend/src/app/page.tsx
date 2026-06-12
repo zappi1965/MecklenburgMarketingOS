@@ -743,12 +743,17 @@ function MainLandingPageEditor({store}:any){
  async function save(){
   const payload={...f,id:'main',scope:'public_home',updated_at:new Date().toISOString()}
   store.setData((d:any)=>{const existing=(d.landing_page_settings||[]).filter((x:any)=>!(x.id==='main'||x.scope==='public_home'));return {...d,landing_page_settings:[payload,...existing]}})
+  setMsg('Speichere …')
   try{
    const existing=(store.data.landing_page_settings||[]).find((x:any)=>x.id==='main'||x.scope==='public_home')
    if(existing) await store.update('landing_page_settings',existing.id||'main',payload)
    else await store.create('landing_page_settings',payload)
-   setMsg('Landingpage gespeichert.')
-  }catch(e:any){setMsg('Live-Speicherung fehlgeschlagen. Bitte Supabase-Schema und Verbindung prüfen.')}
+   setMsg('Landingpage gespeichert ✓')
+   store.notify('Landingpage gespeichert ✓')
+  }catch(e:any){
+   const m='Speichern fehlgeschlagen: '+(e?.message||'Bitte erneut anmelden und Verbindung pruefen.')
+   setMsg(m); store.notify(m)
+  }
  }
  function reset(){setF(defaultMainLandingSettings);setMsg('Standardtexte geladen – bitte speichern.')}
  return <><Head title="Haupt-Landingpage" sub="Texte der öffentlichen Startseite, Ablauf und FAQ bearbeiten" action={<button className="btn" onClick={save}>Landingpage speichern</button>}/><div className="grid2"><Card title="Logo, Hero & Navigation"><input className="input" value={f.nav_title||''} onChange={e=>setF({...f,nav_title:e.target.value})} placeholder="Text neben dem Logo, z. B. Mecklenburg Marketing"/><input className="input" value={f.logo_url||''} onChange={e=>setF({...f,logo_url:e.target.value})} placeholder="Logo-URL, z. B. /mecklenburg-marketing-logo.png oder Supabase-Storage-Link"/><div className="grid2"><input className="input" value={f.logo_alt||''} onChange={e=>setF({...f,logo_alt:e.target.value})} placeholder="Alternativtext für das Firmenlogo"/><input className="input" value={f.logo_mark_text||''} onChange={e=>setF({...f,logo_mark_text:e.target.value})} placeholder="Logo-Kürzel, wenn kein Logo hinterlegt ist"/></div><label className="checkline"><input type="checkbox" checked={f.logo_show_text!==false} onChange={e=>setF({...f,logo_show_text:e.target.checked})}/> Navigationstext neben dem Logo anzeigen</label><input className="input" value={f.hero_title||''} onChange={e=>setF({...f,hero_title:e.target.value})} placeholder="Große Überschrift der öffentlichen Startseite"/><textarea className="input textarea" value={f.hero_subline||''} onChange={e=>setF({...f,hero_subline:e.target.value})} placeholder="Erklärungstext unter der Überschrift"/><div className="grid2"><input className="input" value={f.primary_cta_label||''} onChange={e=>setF({...f,primary_cta_label:e.target.value})} placeholder="Text des Login-Buttons"/><input className="input" value={f.secondary_cta_label||''} onChange={e=>setF({...f,secondary_cta_label:e.target.value})} placeholder="Text des zweiten Buttons, z. B. Portal öffnen"/></div><label className="checkline"><input type="checkbox" checked={f.show_public_demo_button!==false} onChange={e=>setF({...f,show_public_demo_button:e.target.checked})}/> Zweiten öffentlichen Button auf der Landingpage anzeigen</label><textarea className="input textarea" value={f.footer_note||''} onChange={e=>setF({...f,footer_note:e.target.value})} placeholder="Hinweistext unten auf der Startseite"/>{msg&&<div className="sub">{msg}</div>}</Card><Card title="Live-Vorschau"><div className="landingMiniPreview"><div className={f.logo_url?'logo hasImage':'logo'}>{f.logo_url?<img className="brandLogoImg" src={f.logo_url} alt={f.logo_alt||f.nav_title||'Logo'}/>:<div className="mark">{f.logo_mark_text||'M'}</div>}{f.logo_show_text!==false&&<span className="brandLogoText">{f.nav_title}</span>}</div><h1>{f.hero_title}</h1><p className="sub">{f.hero_subline}</p><div className="toolbarActions"><button className="btn">{f.primary_cta_label}</button>{isDemoFeatureEnabled()&&f.show_public_demo_button!==false&&<button className="btn secondary">{f.secondary_cta_label}</button>}</div><div className="sub">Ablauf, Ergebnisvorschau und FAQ werden auf der Landingpage darunter angezeigt.</div></div></Card></div><Card title="Ablauf in 3 Schritten bearbeiten">{(f.steps||defaultMainLandingSettings.steps).slice(0,3).map((step:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={step.title||''} onChange={e=>patchStep(i,{title:e.target.value})} placeholder={`Titel Schritt ${i+1}`}/><textarea className="input textarea" value={step.description||''} onChange={e=>patchStep(i,{description:e.target.value})} placeholder={`Beschreibung Schritt ${i+1}`}/></div>)}<div className="sub">Beispiel-Ergebnisse werden im dritten Schritt angezeigt.</div><div className="grid3">{(f.example_metrics||defaultMainLandingSettings.example_metrics).map((m:any,i:number)=><Card key={i} title={`Beispielwert ${i+1}`}><input className="input" value={m.label||''} onChange={e=>patchMetric(i,{label:e.target.value})} placeholder="Kennzahl, z. B. neue Bewertungen"/><input className="input" value={m.value||''} onChange={e=>patchMetric(i,{value:e.target.value})} placeholder="Wert, z. B. +34"/></Card>)}</div></Card><Card title="FAQ bearbeiten">{(f.faq||defaultMainLandingSettings.faq).map((qa:any,i:number)=><div className="v42PackageEdit" key={i}><input className="input" value={qa.question||''} onChange={e=>patchFaq(i,{question:e.target.value})} placeholder="Frage"/><textarea className="input textarea" value={qa.answer||''} onChange={e=>patchFaq(i,{answer:e.target.value})} placeholder="Antwort"/><button className="btn secondary" onClick={()=>setF({...f,faq:(f.faq||[]).filter((_:any,idx:number)=>idx!==i)})}>FAQ entfernen</button></div>)}<button className="btn secondary" onClick={()=>setF({...f,faq:[...(f.faq||[]),{question:'Neue Frage',answer:'Antwort ergänzen.'}]})}>FAQ hinzufügen</button></Card><Card title="Paketauflistung bearbeiten"><input className="input" value={f.package_headline||''} onChange={e=>setF({...f,package_headline:e.target.value})} placeholder="Überschrift über der Paketauflistung"/><textarea className="input textarea" value={f.package_subline||''} onChange={e=>setF({...f,package_subline:e.target.value})} placeholder="Kurzbeschreibung oberhalb der Pakete"/><div className="grid3">{Object.keys(packageDefs).map(pkg=>{const p=(f.packages||{})[pkg]||{};return <Card key={pkg} title={pkg}><input className="input" value={p.headline||pkg} onChange={e=>setPackage(pkg,{headline:e.target.value})} placeholder={`Anzeigename für ${pkg}`}/><textarea className="input textarea" value={p.description||''} onChange={e=>setPackage(pkg,{description:e.target.value})} placeholder={`Beschreibung für ${pkg} auf der Landingpage`}/><div className="sub">Preis und Featureliste kommen weiterhin aus der zentralen Paketlogik.</div></Card>})}</div><div className="toolbarActions"><button className="btn" onClick={save}>Änderungen speichern</button><button className="btn secondary" onClick={reset}>Standardtexte laden</button><button className="btn secondary" onClick={()=>{setF(mainLandingSettings(store.data));window.open('/', '_blank')}}>Öffentliche Seite öffnen</button></div></Card></>
@@ -1144,19 +1149,19 @@ export default function App(){
    package_matrix:'Paket-Matrix',
    timeline_events:'Timeline Events',
    seo:'SEO Dashboard',review:'Review Funnel',customer_automations:'Automationen',customer_workflows:'Workflow Center',roles:'Rechte',kpi:'KPI Analytics',heatmap:'SEO Heatmap',success:'Client Success Score',advanced_reports:'Advanced Reports',
-   knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Health Center',security_center:'Security Center'
+   knowledge:'Wissenscenter',competitors:'Wettbewerber Vergleich',onboarding:'Onboarding',reports:'Reports',approvals:'Freigaben',output_engine:'Output Engine',monthly_reports:'Monatsreport Generator',business_audit:'Google Business Audit',mini_audit:'Mini-Audit Generator',lead_scraper:'Lead Scraper',acquisition_campaigns:'Akquise-Kampagnen',offer_generator:'Angebotsgenerator',contract_generator:'Vertragsgenerator',health_scores:'Kunden-Erfolgsampel',dunning:'Mahnwesen',health_center:'Health Center',security_center:'Security & Health'
  }
  const visibleNavKeys=role==='admin'?admin:customer
  const adminNavGroups=[
    {label:'Übersicht',hint:'Start, Landingpage & Revenue',tools:['dashboard','main_landing','demo_environment','revenue_forecasting','revenue_share']},
-   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins und Zugriff',tools:['admin_profiles','security_center','health_center']},
+   {label:'System & Zugänge',hint:'Live-Adminprofile, Logins, Security & Health',tools:['admin_profiles','security_center']},
    {label:'CRM & Betrieb',hint:'Kunden, Onboarding, Termine, Tickets',tools:['crm','onboarding','finance','tickets','booking','pipeline','media','timeline_events','health_scores']},
    {label:'QR & Loyalty',hint:'QR-Code, Endkundenseite, Punkte, Rewards',tools:['qr','public_landing','loyalty','loyalty_rewards','loyalty_rules','staff_codes','loyalty_segments','smart_loyalty']},
    {label:'Reviews',hint:'Feedback, KI-Auswertung, Vorlagen',tools:['reviews']},
    {label:'Akquise & Sales',hint:'Audit, Leads, Angebote, Verträge',tools:['business_audit','mini_audit','lead_scraper','acquisition_campaigns','offer_generator','contract_generator','output_engine']},
    {label:'Automation & Marketing',hint:'Kampagnen, Regeln, AI Assistant',tools:['automations','workflows','smart_automation','marketing_automation','ai_assistant']},
-   {label:'SEO & Analytics',hint:'Google/API, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']},
-   {label:'Reports & System',hint:'Reports, Output, Mahnwesen, Health',tools:['monthly_reports','approvals','dunning','security_center','health_center']}
+   {label:'SEO & Analytics',hint:'Google/API, SEO, KPI, Wettbewerber',tools:['integrations','seo','kpi','competitors','customer_health','customer_intelligence','dynamic_billing','revenue_forecasting','revenue_share','package_recommendations','package_matrix']},
+   {label:'Reports',hint:'Monatsreports, Freigaben, Mahnwesen',tools:['monthly_reports','approvals','dunning']}
  ]
  const customerNavGroups=[
    {label:'Übersicht',hint:'Portalstart',tools:['dashboard','onboarding','knowledge']},
@@ -1164,7 +1169,7 @@ export default function App(){
    {label:'Reviews',hint:'Bewertungen & Antworten',tools:['reviews']},
    {label:'Marketing & Automation',hint:'Workflows, Kampagnen & AI',tools:['customer_workflows','smart_automation','marketing_automation','ai_assistant']},
    {label:'Betrieb',hint:'Termine, Rechnungen, Tickets, Dateien',tools:['reports','approvals','booking','finance','tickets','media','packages']},
-   {label:'SEO & Analytics',hint:'Integrationen, SEO, Heatmap, KPI',tools:['integrations','seo','heatmap','kpi','competitors','customer_health','customer_intelligence']}
+   {label:'SEO & Analytics',hint:'Integrationen, SEO, KPI, Wettbewerber',tools:['integrations','seo','kpi','competitors','customer_health','customer_intelligence']}
  ]
  const navGroups=(role==='admin'?adminNavGroups:customerNavGroups)
    .map((g:any)=>({...g,tools:g.tools.filter((k:string)=>visibleNavKeys.includes(k)&&(k!=='demo_environment'||isDemoFeatureEnabled()))}))
@@ -2264,10 +2269,31 @@ function Booking({store,cid,role}:any){
  const iso=(day:number)=>`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
  const dayRows=(date:string)=>rows.filter((a:any)=>String(a.appointment_date).slice(0,10)===date)
  async function addClient(){if(!client)return;await store.create('customer_clients',{customer_id:target,name:client});setClient('')}
- async function create(){await store.create('appointments',{customer_id:target,...f,appointment_date:f.appointment_date||selectedDate,client_name:f.client_name||client||cname(store.data,target),status:'Geplant'});setSelectedDate(f.appointment_date||selectedDate)}
+ async function create(){
+  const date=f.appointment_date||selectedDate
+  if(!date||!f.start_time){store.notify('Datum und Startzeit erforderlich.');return}
+  const clash=rows.some((a:any)=>String(a.appointment_date).slice(0,10)===String(date).slice(0,10)&&a.start_time===f.start_time&&String(a.status||'').toLowerCase()!=='abgesagt')
+  if(clash){store.notify('Zu dieser Zeit existiert bereits ein Termin.');return}
+  try{
+   await store.create('appointments',{customer_id:target,...f,appointment_date:date,client_name:f.client_name||client||cname(store.data,target),status:'Geplant'})
+   setSelectedDate(date); store.notify('Termin angelegt ✓')
+  }catch(e:any){store.notify('Konnte Termin nicht anlegen: '+(e?.message||'Fehler'))}
+ }
  function startEdit(a:any){setActive(a);setEdit({...a})}
- async function saveEdit(){if(!edit)return;await store.update('appointments',edit.id,{customer_id:edit.customer_id,...edit});setActive(null);setEdit(null)}
- async function deleteEdit(){if(!edit)return;await store.remove('appointments',edit.id);setActive(null);setEdit(null)}
+ async function saveEdit(){
+  if(!edit)return
+  const clash=rows.some((a:any)=>a.id!==edit.id&&String(a.appointment_date).slice(0,10)===String(edit.appointment_date).slice(0,10)&&a.start_time===edit.start_time&&String(a.status||'').toLowerCase()!=='abgesagt')
+  if(clash){store.notify('Zu dieser Zeit ist bereits ein anderer Termin hinterlegt.');return}
+  try{
+   await store.update('appointments',edit.id,{customer_id:edit.customer_id,...edit})
+   store.notify('Termin gespeichert ✓'); setActive(null); setEdit(null)
+  }catch(e:any){store.notify('Konnte Termin nicht speichern: '+(e?.message||'Fehler'))}
+ }
+ async function deleteEdit(){
+  if(!edit)return
+  try{await store.remove('appointments',edit.id); store.notify('Termin geloescht'); setActive(null); setEdit(null)}
+  catch(e:any){store.notify('Konnte Termin nicht loeschen: '+(e?.message||'Fehler'))}
+ }
  return <><Head title="Booking" sub={role==='admin'?`Termine für ${cname(store.data,target)}`:'Deine Termine'} action={<button className="btn" onClick={create}>Termin anlegen</button>}/><div className="grid2"><Card title="Termin erstellen">{role==='admin'&&<Search items={allCustomers(store.data)} value={selectedCid} onChange={setSelectedCid} placeholder="Kunde für Termin suchen"/>}{role==='customer'&&<><input className="input" placeholder="Neuen Endkunden/Kontakt anlegen" value={client} onChange={e=>setClient(e.target.value)}/><button className="btn secondary" onClick={addClient}>Kunde speichern</button><input className="input" placeholder="Gespeicherten Endkunden suchen" value={q} onChange={e=>setQ(e.target.value)}/>{clients.map((c:any)=><button className="nav" key={c.id} onClick={()=>setF({...f,client_name:c.name})}>{c.name}</button>)}</>}<input className="input" placeholder="Terminname oder Name des Endkunden" value={f.client_name} onChange={e=>setF({...f,client_name:e.target.value})}/><input className="input" type="date" value={f.appointment_date} onChange={e=>{setF({...f,appointment_date:e.target.value});setSelectedDate(e.target.value)}}/><input className="input" placeholder="Startzeit, z. B. 10:00" value={f.start_time} onChange={e=>setF({...f,start_time:e.target.value})}/><input className="input" placeholder="Endzeit, z. B. 11:00" value={f.end_time} onChange={e=>setF({...f,end_time:e.target.value})}/><textarea className="input textarea" placeholder="Interner Text oder Hinweise zum Termin" value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/></Card><Card title={`Termine am ${new Date(selectedDate).toLocaleDateString('de-DE')}`}>{dayRows(selectedDate).length===0&&<div className="sub">Keine Termine für diesen Tag.</div>}{dayRows(selectedDate).map((a:any)=><div className="item" key={a.id}><div><b>{a.start_time} {a.client_name}</b><div className="sub">{a.end_time} · {a.notes||'Kein Text hinterlegt'}</div></div><button className="btn secondary" onClick={()=>startEdit(a)}>Bearbeiten</button></div>)}</Card></div><Card title="Kalender" action={<div className="row"><button className="btn secondary" onClick={()=>{setCurrentMonth(new Date(year,month-1,1));setActive(null)}}>←</button><b>{monthName}</b><button className="btn secondary" onClick={()=>{setCurrentMonth(new Date(year,month+1,1));setActive(null)}}>→</button></div>}><div className="weekHead"><b>Mo</b><b>Di</b><b>Mi</b><b>Do</b><b>Fr</b><b>Sa</b><b>So</b></div><div className="calendar">{days.map((d:any,i:number)=>d?<button className={`day ${selectedDate===iso(d)?'selectedDay':''}`} key={i} onClick={()=>{setSelectedDate(iso(d));setF({...f,appointment_date:iso(d)})}}><b>{d}</b>{dayRows(iso(d)).map((a:any)=><div className="event" key={a.id} onClick={(e)=>{e.stopPropagation();startEdit(a)}}>{a.start_time} {a.client_name}</div>)}</button>:<div className="day emptyDay" key={i}></div>)}</div></Card>{active&&edit&&<Card title={`Termin bearbeiten: ${active.client_name}`} action={<button className="btn secondary" onClick={()=>{setActive(null);setEdit(null)}}>Schließen</button>}><div className="grid2"><input className="input" value={edit.client_name||''} onChange={e=>setEdit({...edit,client_name:e.target.value})} placeholder="Terminname oder Endkunde"/><input className="input" type="date" value={String(edit.appointment_date||'').slice(0,10)} onChange={e=>setEdit({...edit,appointment_date:e.target.value})}/><input className="input" value={edit.start_time||''} onChange={e=>setEdit({...edit,start_time:e.target.value})} placeholder="Startzeit"/><input className="input" value={edit.end_time||''} onChange={e=>setEdit({...edit,end_time:e.target.value})} placeholder="Endzeit"/><select className="input" value={edit.status||'Geplant'} onChange={e=>setEdit({...edit,status:e.target.value})}><option>Geplant</option><option>Bestätigt</option><option>Abgeschlossen</option><option>Abgesagt</option></select></div><textarea className="input textarea" value={edit.notes||''} onChange={e=>setEdit({...edit,notes:e.target.value})} placeholder="Terminnotizen"/><div className="toolbarActions"><button className="btn" onClick={saveEdit}>Termin speichern</button><button className="btn secondary" onClick={deleteEdit}>Termin löschen</button></div></Card>}</>
 }
 
@@ -2355,7 +2381,13 @@ function GuidedOnboardingCenter({store,cid,role,setCid,setView}:any){
  const pct=Math.round((steps.filter((s:any)=>s.done).length/steps.length)*100)
  async function saveStep(key:string,done:boolean){
   const payload={customer_id:target,status:done?'In Arbeit':'In Arbeit',steps:{...(existing?.steps||{}),[key]:done},updated_at:new Date().toISOString()}
-  if(existing) await store.update('onboarding_checklists',existing.id,payload); else await store.create('onboarding_checklists',{id:uid(),...payload,created_at:new Date().toISOString()})
+  try{
+   if(existing) await store.update('onboarding_checklists',existing.id,payload)
+   else await store.create('onboarding_checklists',{id:uid(),...payload,created_at:new Date().toISOString()})
+   store.notify(done?'Schritt als erledigt markiert ✓':'Schritt zurueckgesetzt')
+  }catch(e:any){
+   store.notify('Konnte Schritt nicht speichern: '+(e?.message||'Fehler'))
+  }
  }
  async function bootstrap(){
   if(!customer)return
