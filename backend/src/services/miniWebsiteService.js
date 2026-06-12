@@ -6,6 +6,9 @@
 // Tabelle: mini_websites (siehe Migration 0121).
 // Exportierte Pure-Funktionen sind ohne Supabase testbar.
 
+// Prozessweiter TTL-Cache für Review-Aggregate (öffentliche Seiten).
+const reviewAggregateCache = new Map()
+
 function slugify(value) {
   const base = String(value || '')
     .toLowerCase()
@@ -123,12 +126,19 @@ class MiniWebsiteService {
   }
 
   async _reviewAggregate(customerId) {
+    // In-Memory-TTL-Cache: öffentliche Seiten lesen sonst je Aufruf bis zu 1000
+    // Review-Zeilen. Standard-TTL 5 Min (MINI_WEBSITE_REVIEW_TTL_MS).
+    const ttl = Number(process.env.MINI_WEBSITE_REVIEW_TTL_MS || 5 * 60 * 1000)
+    const cached = reviewAggregateCache.get(customerId)
+    if (cached && cached.expires > Date.now()) return cached.value
     try {
       const { data } = await this.supabase.from('review_feedback').select('rating').eq('customer_id', customerId).limit(1000)
       const ratings = (data || []).map((r) => Number(r.rating)).filter((n) => Number.isFinite(n) && n > 0)
-      if (ratings.length === 0) return { average: null, count: 0 }
-      const average = Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
-      return { average, count: ratings.length }
+      const value = ratings.length === 0
+        ? { average: null, count: 0 }
+        : { average: Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10, count: ratings.length }
+      reviewAggregateCache.set(customerId, { value, expires: Date.now() + ttl })
+      return value
     } catch (_) {
       return { average: null, count: 0 }
     }
