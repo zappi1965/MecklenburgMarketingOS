@@ -1,6 +1,7 @@
 // Kundenscoped Routes für Mini-Website / Google-Booster.
 const express = require('express')
 const { MiniWebsiteService } = require('../services/miniWebsiteService')
+const { miniWebsiteUpdateSchema, parseOrThrow } = require('../validators/marketingSchemas')
 
 module.exports = function miniWebsiteRoutes(supabase) {
   const router = express.Router()
@@ -14,8 +15,9 @@ module.exports = function miniWebsiteRoutes(supabase) {
 
   router.put('/:customer_id', async (req, res, next) => {
     try {
-      res.json({ ok: true, site: await service.update(req.params.customer_id, req.body || {}) })
-    } catch (e) { next(e) }
+      const body = parseOrThrow(miniWebsiteUpdateSchema, req.body)
+      res.json({ ok: true, site: await service.update(req.params.customer_id, body) })
+    } catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message, code: e.code }) }
   })
 
   // Audit-Ergebnis (aus dem Frontend-Mini-Audit) speichern -> Booster-Checkliste.

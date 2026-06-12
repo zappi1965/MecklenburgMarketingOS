@@ -1,6 +1,7 @@
 // Kundenscoped Routes für "Deal der Woche" / Aktionen.
 const express = require('express')
 const { DealCampaignService } = require('../services/dealCampaignService')
+const { dealCreateSchema, dealUpdateSchema, parseOrThrow } = require('../validators/marketingSchemas')
 
 module.exports = function dealCampaignRoutes(supabase) {
   const router = express.Router()
@@ -14,14 +15,16 @@ module.exports = function dealCampaignRoutes(supabase) {
 
   router.post('/:customer_id', async (req, res, next) => {
     try {
-      res.json({ ok: true, deal: await service.create(req.params.customer_id, req.body || {}) })
-    } catch (e) { next(e) }
+      const body = parseOrThrow(dealCreateSchema, req.body)
+      res.json({ ok: true, deal: await service.create(req.params.customer_id, body) })
+    } catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message, code: e.code }) }
   })
 
   router.put('/:customer_id/:id', async (req, res, next) => {
     try {
-      res.json({ ok: true, deal: await service.update(req.params.customer_id, req.params.id, req.body || {}) })
-    } catch (e) { next(e) }
+      const body = parseOrThrow(dealUpdateSchema, req.body)
+      res.json({ ok: true, deal: await service.update(req.params.customer_id, req.params.id, body) })
+    } catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message, code: e.code }) }
   })
 
   router.post('/:customer_id/:id/status', async (req, res, next) => {
