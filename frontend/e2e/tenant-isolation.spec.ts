@@ -27,5 +27,5 @@ test('admin can open security core health', async ({ page }) => {
 
 test('anonymous user cannot open customer reports', async ({ page }) => {
   await page.goto('/portal/reports')
-  await expect(page.getByText(/Anmeldung erforderlich|Login|Zur Anmeldung/i)).toBeVisible({ timeout: 10000 })
+  await expect(page.getByRole('heading', { name: /Anmeldung erforderlich/i })).toBeVisible({ timeout: 10000 })
 })

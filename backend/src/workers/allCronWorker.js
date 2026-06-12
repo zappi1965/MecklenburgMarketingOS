@@ -17,6 +17,7 @@ const automation = require('./automationWorker')
 const gdpr = require('./gdprWorker')
 const briefing = require('./dailyBriefingWorker')
 const maintenance = require('./maintenanceCheckWorker')
+const brancheBenchmark = require('./brancheBenchmarkWorker')
 
 function start() {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -26,7 +27,8 @@ function start() {
     ['automation', automation],
     ['gdpr', gdpr],
     ['dailyBriefing', briefing],
-    ['maintenance', maintenance]
+    ['maintenance', maintenance],
+    ['brancheBenchmark', brancheBenchmark]
   ]
   for (const [name, mod] of jobs) {
     try {

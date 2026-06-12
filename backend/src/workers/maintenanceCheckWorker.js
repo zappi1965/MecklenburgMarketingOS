@@ -29,9 +29,16 @@ async function runOnce() {
   await logJob(supabase, 'running')
   try {
     const r = await runAllChecks()
-    console.log(`[maintenanceCheckWorker] processed=${r.processed} fired=${r.fired_total}`)
-    await logJob(supabase, 'completed', `processed=${r.processed} fired=${r.fired_total}`)
-    return r
+    // Abgelaufene Deals auf 'expired' setzen (für korrekte Admin-Listen).
+    let dealsExpired = 0
+    try {
+      const { DealCampaignService } = require('../services/dealCampaignService')
+      const sweep = await new DealCampaignService(supabase).sweepExpired()
+      dealsExpired = sweep?.expired || 0
+    } catch (_) {}
+    console.log(`[maintenanceCheckWorker] processed=${r.processed} fired=${r.fired_total} deals_expired=${dealsExpired}`)
+    await logJob(supabase, 'completed', `processed=${r.processed} fired=${r.fired_total} deals_expired=${dealsExpired}`)
+    return { ...r, deals_expired: dealsExpired }
   } catch (e) {
     console.error('[maintenanceCheckWorker]', e?.message || e)
     await logJob(supabase, 'failed', e?.message || String(e))
