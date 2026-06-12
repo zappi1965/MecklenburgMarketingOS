@@ -4,10 +4,16 @@
 
 const express = require('express')
 const { EndcustomerReferralService } = require('../services/endcustomerReferralService')
+const MailService = require('../services/mailService')
+
+function appBaseUrl() {
+  return String(process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.FRONTEND_URL || '').replace(/\/+$/, '')
+}
 
 module.exports = function endcustomerReferralRoutes(supabase) {
   const router = express.Router()
   const service = new EndcustomerReferralService(supabase)
+  const mail = new MailService()
 
   // Persönlicher Link/QR-Wert eines Mitglieds.
   router.get('/:customer_id/link', async (req, res, next) => {
@@ -26,6 +32,36 @@ module.exports = function endcustomerReferralRoutes(supabase) {
       const result = await service.listForCustomer(req.params.customer_id)
       res.json({ ok: true, ...result })
     } catch (e) { next(e) }
+  })
+
+  // Freund per E-Mail einladen: registriert PENDING-Referral + sendet den Link.
+  router.post('/:customer_id/invite', async (req, res, next) => {
+    try {
+      const customerId = req.params.customer_id
+      const body = req.body || {}
+      const memberToken = body.member_token || body.token
+      const friendEmail = String(body.friend_email || body.email || '').trim()
+      if (!memberToken) return res.status(400).json({ ok: false, error: 'member_token fehlt.' })
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(friendEmail)) return res.status(400).json({ ok: false, error: 'Gültige Freund-E-Mail erforderlich.' })
+
+      const link = await service.getOrCreateReferralLink({ customer_id: customerId, member_token: memberToken })
+      const referral = await service.registerReferral({ customer_id: customerId, referrer_token: memberToken, friend_email: friendEmail, source: 'email_invite' })
+
+      const base = appBaseUrl()
+      const url = base ? `${base}${link.path}` : link.path
+      let emailSent = false
+      try {
+        const result = await mail.send({
+          to: friendEmail,
+          subject: 'Du wurdest eingeladen – sichere dir Bonuspunkte',
+          html: `<p>Hallo,</p><p>du wurdest zu einem Bonusprogramm eingeladen. Tritt über diesen Link bei und sichere dir Startpunkte:</p><p><a href="${url}">${url}</a></p>`,
+          text: `Du wurdest eingeladen. Jetzt beitreten: ${url}`
+        })
+        emailSent = Boolean(result?.ok ?? true)
+      } catch (_) { emailSent = false }
+
+      res.json({ ok: true, referral, url, email_sent: emailSent, dry_run: !base || !process.env.RESEND_API_KEY })
+    } catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message, code: e.code }) }
   })
 
   // Anti-Abuse-/Bonus-Settings aktualisieren.
