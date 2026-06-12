@@ -2,6 +2,7 @@
 const express = require('express')
 const { MiniWebsiteService } = require('../services/miniWebsiteService')
 const { miniWebsiteUpdateSchema, parseOrThrow } = require('../validators/marketingSchemas')
+const { captureToolError } = require('../lib/toolObservability')
 
 module.exports = function miniWebsiteRoutes(supabase) {
   const router = express.Router()
@@ -17,7 +18,10 @@ module.exports = function miniWebsiteRoutes(supabase) {
     try {
       const body = parseOrThrow(miniWebsiteUpdateSchema, req.body)
       res.json({ ok: true, site: await service.update(req.params.customer_id, body) })
-    } catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message, code: e.code }) }
+    } catch (e) {
+      if (!e.status || e.status >= 500) captureToolError(e, { tool: 'mini_website', action: 'update', customer_id: req.params.customer_id })
+      res.status(e.status || 500).json({ ok: false, error: e.message, code: e.code })
+    }
   })
 
   // Audit-Ergebnis (aus dem Frontend-Mini-Audit) speichern -> Booster-Checkliste.

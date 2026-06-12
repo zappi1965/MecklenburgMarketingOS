@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth')
 const requireCustomerAccess = require('../middleware/requireCustomerAccess')
 const { BrancheBenchmarkService } = require('../services/brancheBenchmarkService')
 const { renderAndStoreDocument } = require('../services/documentEngineV2Service')
+const { captureToolError } = require('../lib/toolObservability')
 
 const requireAdmin = authMiddleware({ roles: ['admin'] })
 
@@ -42,7 +43,10 @@ module.exports = function brancheBenchmarkRoutes(supabase) {
     try {
       const period = parsePeriod(req.body)
       res.json({ ok: true, ...(await service.computeAggregates(period)) })
-    } catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message }) }
+    } catch (e) {
+      if (!e.status || e.status >= 500) captureToolError(e, { tool: 'branche_benchmark', action: 'compute' })
+      res.status(e.status || 500).json({ ok: false, error: e.message })
+    }
   })
 
   // --- Admin: Report für einen Kunden erzeugen ---
@@ -51,7 +55,10 @@ module.exports = function brancheBenchmarkRoutes(supabase) {
       const period = parsePeriod(req.body)
       const report = await service.generateReport(req, { customer_id: req.params.customer_id, period })
       res.json({ ok: true, report })
-    } catch (e) { res.status(e.status || 500).json({ ok: false, error: e.message }) }
+    } catch (e) {
+      if (!e.status || e.status >= 500) captureToolError(e, { tool: 'branche_benchmark', action: 'generate', customer_id: req.params.customer_id })
+      res.status(e.status || 500).json({ ok: false, error: e.message })
+    }
   })
 
   // --- Kunde: eigene Reports lesen ---
