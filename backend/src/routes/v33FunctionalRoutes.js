@@ -250,6 +250,21 @@ function v33FunctionalRoutes(supabase) {
     } catch (e) { next(e) }
   })
 
+  // Public: Slugs für die dynamische Sitemap (nur aktive/freigegebene Inhalte).
+  router.get('/public/sitemap-entries', async (_req, res) => {
+    try {
+      const [sites, deals] = await Promise.all([
+        supabase.from('mini_websites').select('slug, updated_at').eq('enabled', true).limit(5000),
+        supabase.from('deal_campaigns').select('slug, updated_at').eq('status', 'active').limit(5000)
+      ])
+      res.json({
+        ok: true,
+        sites: (sites.data || []).map((r) => ({ slug: r.slug, updated_at: r.updated_at })),
+        deals: (deals.data || []).map((r) => ({ slug: r.slug, updated_at: r.updated_at }))
+      })
+    } catch (e) { res.json({ ok: false, sites: [], deals: [] }) }
+  })
+
   const stampLogoUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: STAMP_LOGO_MAX_BYTES, files: 1 },
