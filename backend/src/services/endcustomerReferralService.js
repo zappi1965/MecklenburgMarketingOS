@@ -84,6 +84,8 @@ class EndcustomerReferralService {
       .maybeSingle()
     if (!member?.data) { const e = new Error('Mitglied nicht gefunden'); e.status = 404; throw e }
     const code = referralCodeForMember(member.data.member_token)
+    // Denormalisierten Code persistieren -> schneller, indexierter Lookup (V098).
+    this.supabase.from('loyalty_customers').update({ referral_code: code }).eq('id', member.data.id).then(() => {}, () => {})
     let slug = null
     if (member.data.loyalty_program_id) {
       const prog = await this.supabase
@@ -117,14 +119,28 @@ class EndcustomerReferralService {
     }
     const code = String(referral_code || '').trim().toUpperCase()
     if (!code) return null
-    // Code ist die letzten 8 Stellen des Tokens -> über alle Mitglieder matchen.
-    const candidates = await this.supabase
+    // Schneller Pfad (V098): indexierter Lookup über die denormalisierte Spalte.
+    const indexed = await this.supabase
       .from('loyalty_customers')
       .select('id, email, member_token, loyalty_program_id')
       .eq('customer_id', customer_id)
+      .eq('referral_code', code)
+      .limit(1)
+    if ((indexed?.data || []).length > 0) return indexed.data[0]
+    // Fallback (Mitglieder ohne befüllten Code): begrenzter Scan + lazy Backfill.
+    const candidates = await this.supabase
+      .from('loyalty_customers')
+      .select('id, email, member_token, loyalty_program_id, referral_code')
+      .eq('customer_id', customer_id)
+      .is('referral_code', null)
       .limit(2000)
     const list = candidates?.data || []
-    return list.find((m) => referralCodeForMember(m.member_token) === code) || null
+    const match = list.find((m) => referralCodeForMember(m.member_token) === code) || null
+    if (match) {
+      // Backfill, damit der nächste Lookup den schnellen Pfad nimmt.
+      this.supabase.from('loyalty_customers').update({ referral_code: code }).eq('id', match.id).then(() => {}, () => {})
+    }
+    return match
   }
 
   // Legt eine PENDING-Referral an (KEINE Sofort-Gutschrift!).
