@@ -1,80 +1,46 @@
-'use client'
+import type { Metadata } from 'next'
+import { headers } from 'next/headers'
+import PublicMiniSite from '@/components/public/PublicMiniSite'
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
-import PublicMarketingShell from '@/components/public/PublicMarketingShell'
-import { v33FunctionalClient } from '@/lib/v33FunctionalClient'
+export const dynamic = 'force-dynamic'
 
-export default function PublicMiniSitePage() {
-  const params = useParams<{ slug: string }>()
-  const slug = String(params?.slug || '')
-  const [site, setSite] = useState<any>(null)
-  const [state, setState] = useState<'loading' | 'ok' | 'notfound'>('loading')
+// Server-seitiger Best-Effort-Fetch des öffentlichen Site-DTOs für SEO-Metadaten.
+async function fetchSite(slug: string): Promise<any | null> {
+  try {
+    const h = await headers()
+    const host = h.get('x-forwarded-host') || h.get('host')
+    const proto = h.get('x-forwarded-proto') || 'https'
+    if (!host) return null
+    const res = await fetch(`${proto}://${host}/api/v33-functional/public/site/${encodeURIComponent(slug)}`, { cache: 'no-store' })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json?.site || null
+  } catch {
+    return null
+  }
+}
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res: any = await v33FunctionalClient.publicSite(slug)
-        setSite(res.site)
-        setState('ok')
-      } catch (_) {
-        setState('notfound')
-      }
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params
+  const site = await fetchSite(slug)
+  if (!site) return { title: 'Mini-Website · MMOS', robots: { index: false } }
+  const name = site.brand?.name || 'Unser Betrieb'
+  const description = site.hero?.subline || `${name}${site.branch ? ` – ${site.branch}` : ''}. Leistungen, Öffnungszeiten und Kontakt.`
+  return {
+    title: site.hero?.headline || name,
+    description,
+    robots: { index: true, follow: true },
+    openGraph: {
+      title: site.hero?.headline || name,
+      description,
+      type: 'website',
+      images: site.hero?.image_url ? [{ url: site.hero.image_url }] : undefined
     }
-    if (slug) void load()
-  }, [slug])
-
-  if (state === 'loading') {
-    return <PublicMarketingShell><h1>Seite wird geladen…</h1></PublicMarketingShell>
   }
-  if (state === 'notfound' || !site) {
-    return (
-      <PublicMarketingShell>
-        <h1>Seite nicht gefunden</h1>
-        <p className="v37-subline">Diese Mini-Website ist nicht verfügbar.</p>
-      </PublicMarketingShell>
-    )
-  }
+}
 
-  return (
-    <PublicMarketingShell brandName={site.brand?.name} logoUrl={site.brand?.logo_url} accent={site.brand?.primary_color}>
-      <h1>{site.hero?.headline || site.brand?.name}</h1>
-      {site.hero?.subline ? <p className="v37-subline">{site.hero.subline}</p> : null}
-      {site.hero?.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={site.hero.image_url} alt={site.brand?.name || ''} style={{ width: '100%', borderRadius: 12, margin: '12px 0' }} />
-      ) : null}
-
-      {site.reviews && site.reviews.count > 0 ? (
-        <p style={{ fontWeight: 600 }}>★ {site.reviews.average} aus {site.reviews.count} Bewertungen</p>
-      ) : null}
-
-      {Array.isArray(site.services) && site.services.length > 0 ? (
-        <section style={{ marginTop: 16 }}>
-          <h2>Leistungen</h2>
-          <ul>
-            {site.services.map((s: any, i: number) => (
-              <li key={i}>{s.name}{s.price ? ` — ${s.price}` : ''}{s.note ? ` (${s.note})` : ''}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {Array.isArray(site.hours) && site.hours.length > 0 ? (
-        <section style={{ marginTop: 16 }}>
-          <h2>Öffnungszeiten</h2>
-          <ul>
-            {site.hours.map((h: any, i: number) => (
-              <li key={i}>{h.day}: {h.open}–{h.close}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {site.cta?.url ? <a className="btn" href={site.cta.url}>{site.cta.label || 'Termin anfragen'}</a> : null}
-        {site.cta?.phone ? <a className="btn ghost" href={`tel:${site.cta.phone}`}>Anrufen</a> : null}
-      </div>
-    </PublicMarketingShell>
-  )
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const site = await fetchSite(slug)
+  return <PublicMiniSite slug={slug} initialSite={site} />
 }
