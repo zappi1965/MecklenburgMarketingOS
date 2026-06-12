@@ -217,7 +217,10 @@ function v33FunctionalRoutes(supabase) {
   // Public: "Deal der Woche" auflösen (nur aktive, im Zeitfenster).
   router.get('/public/deal/:slug', async (req, res, next) => {
     try {
-      const result = await dealCampaignService.publicResolve(String(req.params.slug || '').trim())
+      const slug = String(req.params.slug || '').trim()
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_deal_view', slug, max: 240 })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok: false, error: shield.error })
+      const result = await dealCampaignService.publicResolve(slug)
       if (!result.found) return res.status(404).json({ ok: false, error: 'Aktion nicht gefunden.' })
       if (!result.visible) return res.status(410).json({ ok: false, code: 'DEAL_NOT_ACTIVE', status: result.status, deal: result.dto })
       res.json({ ok: true, deal: result.dto })
@@ -238,7 +241,10 @@ function v33FunctionalRoutes(supabase) {
   // Public: Mini-Website (One-Pager) ausliefern.
   router.get('/public/site/:slug', async (req, res, next) => {
     try {
-      const dto = await miniWebsiteService.assemblePublicSite(String(req.params.slug || '').trim())
+      const slug = String(req.params.slug || '').trim()
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_site_view', slug, max: 240 })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok: false, error: shield.error })
+      const dto = await miniWebsiteService.assemblePublicSite(slug)
       if (!dto) return res.status(404).json({ ok: false, error: 'Seite nicht gefunden oder nicht aktiviert.' })
       res.json({ ok: true, site: dto })
     } catch (e) { next(e) }
