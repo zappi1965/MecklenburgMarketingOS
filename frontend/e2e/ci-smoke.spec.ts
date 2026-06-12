@@ -25,3 +25,15 @@ test('Anonym: Admin-Production zeigt keine sensiblen Inhalte', async ({ page }) 
   await expect(page).toHaveURL(/auth|admin|login/)
   await expect(page.locator('body')).not.toContainText('API Keys')
 })
+
+test('Öffentliche Deal-Seite rendert ohne 5xx (unbekannter Slug)', async ({ page }) => {
+  const res = await page.goto('/deal/ci-smoke-unknown')
+  expect(res!.status()).toBeLessThan(500)
+  await expect(page.locator('body')).not.toBeEmpty()
+})
+
+test('Öffentliche Mini-Website rendert ohne 5xx (unbekannter Slug)', async ({ page }) => {
+  const res = await page.goto('/site/ci-smoke-unknown')
+  expect(res!.status()).toBeLessThan(500)
+  await expect(page.locator('body')).not.toBeEmpty()
+})
