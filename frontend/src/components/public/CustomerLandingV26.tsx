@@ -108,6 +108,7 @@ h1,h2,h3{letter-spacing:-.057em;line-height:.96;font-weight:850}
   .logo{padding-left:4px;min-height:42px}
   .nav-links,.nav-actions .ghost{display:none}
   .menu-btn{display:grid}
+  .nav.open .nav-shell{background:#0a0a16;-webkit-backdrop-filter:none;backdrop-filter:none;border-color:rgba(255,255,255,.14);box-shadow:0 26px 80px rgba(0,0,0,.62)}
   .nav.open .mobile-menu{display:grid}
   .nav.open .menu-btn i{background:transparent}
   .nav.open .menu-btn i::before{transform:translateY(1px) rotate(45deg)}
@@ -325,7 +326,7 @@ body.sticky-cta-blocked .desktop-sticky{opacity:0;pointer-events:none;transform:
 @keyframes auroraDriftA{from{transform:translate3d(-4%,0,0) scale(1)}to{transform:translate3d(14%,8%,0) scale(1.16)}}
 @keyframes auroraDriftB{from{transform:translate3d(7%,-4%,0) scale(1.08)}to{transform:translate3d(-12%,12%,0) scale(.96)}}
 @keyframes auroraDriftC{from{transform:translate3d(-6%,10%,0) scale(.98)}to{transform:translate3d(10%,-8%,0) scale(1.14)}}
-.nav,.hero,main,.footer,.mobile-sticky,.desktop-sticky,.skip-link{position:relative;z-index:2}.nav{position:fixed}.mobile-sticky,.desktop-sticky{position:fixed}
+.nav,.hero,main,.footer,.mobile-sticky,.desktop-sticky,.skip-link{position:relative;z-index:2}.nav{position:fixed;z-index:100}.mobile-sticky,.desktop-sticky{position:fixed}
 .phone-device{will-change:transform;transition:transform .18s ease-out}.product-stage{--phone-y-center:0px;--phone-y-left:0px;--phone-y-right:0px;--tilt-x:0deg;--tilt-y:0deg}
 .p-center{transform:translateX(-50%) translateY(var(--phone-y-center)) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) scale(1)}
 .p-left{transform:translateX(-50%) translateX(-86%) translateY(calc(56px + var(--phone-y-left))) rotateY(14deg) rotateZ(-5deg) scale(.91)}
