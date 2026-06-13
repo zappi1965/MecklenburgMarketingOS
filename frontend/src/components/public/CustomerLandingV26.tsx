@@ -200,6 +200,23 @@ h1,h2,h3{letter-spacing:-.057em;line-height:.96;font-weight:850}
 .solution-panel{border:1px solid var(--line);border-radius:42px;background:linear-gradient(180deg,rgba(139,92,246,.13),rgba(255,255,255,.03));padding:34px;box-shadow:var(--shadow)}
 .solution-panel h3{font-size:clamp(2rem,4vw,3.6rem)}.solution-panel p{color:var(--muted);font-size:1.05rem;margin-top:16px}
 .solution-points{display:grid;gap:12px;margin-top:24px}.solution-points span{display:flex;gap:10px;color:var(--soft);font-weight:720;border-bottom:1px solid var(--line);padding-bottom:10px}.solution-points span::before{content:"✓";color:#d8ccff;font-weight:900}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.compare-card{border:1px solid var(--line);border-radius:32px;padding:26px}
+.compare-card.self{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02))}
+.compare-card.us{background:linear-gradient(180deg,rgba(139,92,246,.14),rgba(255,255,255,.035));border-color:var(--line2)}
+.compare-tag{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:.4rem .8rem;font-weight:820;font-size:.82rem;letter-spacing:-.01em;color:var(--muted)}
+.compare-card.us .compare-tag{color:#e6ddff;background:rgba(139,92,246,.16);border-color:var(--line2)}
+.compare-card ul{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:12px}
+.compare-card li{display:flex;gap:10px;color:var(--soft);font-weight:640;line-height:1.42;border-bottom:1px solid var(--line);padding-bottom:12px}
+.compare-card li:last-child{border-bottom:0;padding-bottom:0}
+.compare-card.self li{color:var(--muted)}
+.compare-card.self li::before{content:"–";color:var(--muted2);font-weight:900;flex:none}
+.compare-card.us li::before{content:"✓";color:#9d7bff;font-weight:900;flex:none}
+.capacity-note{margin-top:18px;border:1px solid var(--line2);background:rgba(139,92,246,.1);border-radius:18px;padding:14px 16px;color:#e9e2ff;font-weight:700;font-size:.95rem;display:flex;gap:10px;align-items:flex-start;line-height:1.42}
+.capacity-note::before{content:"●";color:#9d7bff;font-size:.7rem;line-height:1.7}
+.cta-reassure{margin-top:14px;color:var(--muted);font-weight:700;font-size:.85rem;letter-spacing:.01em}
+.cta-reassure.center{text-align:center}
+@media(max-width:780px){.compare-grid{grid-template-columns:1fr}.compare-card{border-radius:24px;padding:20px}}
 @media(max-width:920px){.problem-grid{grid-template-columns:1fr}.big-panel,.solution-panel{border-radius:32px;padding:24px}}
 
 /* ANALYSIS PRODUCT */
@@ -804,6 +821,32 @@ const landingHtml = `
   </div>
 </section>
 
+<section class="section compact" id="vergleich">
+  <div class="container section-head reveal"><h2>Selbst kümmern — oder kümmern lassen.</h2><p>Gleicher Effekt für deinen Betrieb, völlig anderer Aufwand für dich.</p></div>
+  <div class="container compare-grid">
+    <div class="compare-card self reveal">
+      <span class="compare-tag">Selbst machen</span>
+      <ul>
+        <li>Profil, Fotos und Öffnungszeiten laufend selbst pflegen</li>
+        <li>Bewertungen einzeln einsammeln und hinterherlaufen</li>
+        <li>QR-, Punkte- und Rückholaktionen selbst aufsetzen</li>
+        <li>Mehrere Tools lernen, verwalten und bezahlen</li>
+        <li>Zahlen selbst zusammensuchen und richtig deuten</li>
+      </ul>
+    </div>
+    <div class="compare-card us reveal delay1">
+      <span class="compare-tag">Mit MecklenburgMarketing</span>
+      <ul>
+        <li>Wir richten dein Google-Profil professionell ein und pflegen es</li>
+        <li>Bewertungen werden systematisch zur richtigen Zeit eingeholt</li>
+        <li>QR-, Loyalty- und Rückholaktionen laufen für dich</li>
+        <li>Ein betreutes System statt Tool-Chaos</li>
+        <li>Ein verständlicher Monatsblick statt Kennzahlen-Wirrwarr</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
 <section class="human-beat reveal" id="warum">
   <div class="container">
     <span class="kicker">Worum es eigentlich geht</span>
@@ -914,7 +957,7 @@ const landingHtml = `
     </div>
 
     <div class="included"><span>kostenlos</span><span>unverbindlich</span><span>Analyse ohne Vertragsbindung</span><span>ohne Kaufpflicht</span><span>verständlich erklärt</span></div>
-    <div class="analysis-cta cta-priority"><a class="btn primary big" href="#start" data-event="analyse_cta">Betrieb kostenlos prüfen lassen</a><a class="btn ghost big whatsapp-btn" href="#start" data-whatsapp-link data-whatsapp-number="+491627533619" data-event="whatsapp_cta">Per WhatsApp kurz fragen</a></div>
+    <div class="analysis-cta cta-priority"><a class="btn primary big" href="#start" data-event="analyse_cta">Betrieb kostenlos prüfen lassen</a><a class="btn ghost big whatsapp-btn" href="#start" data-whatsapp-link data-whatsapp-number="+491627533619" data-event="whatsapp_cta">Per WhatsApp kurz fragen</a><p class="cta-reassure">Kostenlos · unverbindlich · keine Vertragsbindung</p></div>
     <p class="subtle-contact">Oder direkt per Mail: <a href="mailto:zapf@mecklenburgmarketing.de?subject=Kostenlose%20Analyse%20MecklenburgMarketing">zapf@mecklenburgmarketing.de</a></p>
   </div>
 </section>
@@ -1035,6 +1078,7 @@ const landingHtml = `
       <details><summary>Muss ich etwas vorbereiten oder Zugangsdaten senden?</summary><p>Nein. Für die kostenlose Ersteinschätzung reichen dein Betriebsname und eine Kontaktmöglichkeit. Zugangsdaten brauchst du erst, wenn du dich später bewusst für eine Umsetzung entscheidest.</p></details>
       <details><summary>Was passiert nach meiner Anfrage?</summary><p>Wir melden uns in der Regel innerhalb von 24–48 Stunden, prüfen öffentlich sichtbare Punkte und geben dir eine verständliche Einschätzung mit nächster Empfehlung.</p></details>
       <details><summary>Muss ich danach etwas buchen?</summary><p>Nein. Die Analyse löst keine Vertragsbindung und keine Kaufpflicht aus. Wenn du danach starten möchtest, besprechen wir Laufzeit, Umfang und Kosten transparent.</p></details>
+      <details><summary>Was kostet es, wenn ich danach starte?</summary><p>Die Pakete starten ab 149 €/Monat, dazu kommt je nach Umfang ein einmaliges Setup. Die genaue Empfehlung und alle Kosten besprechen wir transparent nach der kostenlosen Analyse — du entscheidest erst danach, ob und womit du startest.</p></details>
       <details><summary>Brauche ich eine eigene Website?</summary><p>Nein. Google Business, QR-Zielseiten, Bewertungs-Funnel und Loyalty können auch ohne eigene Website funktionieren.</p></details>
       <details><summary>Funktioniert das auch für kleine Betriebe?</summary><p>Ja. Gerade kleinere lokale Betriebe profitieren, wenn Google-Profil, Bewertungen und Wiederbesuche systematisch gepflegt werden, ohne intern viel Zeit zu verlieren.</p></details>
       <details><summary>Was ist, wenn ich schon Social Media mache?</summary><p>Dann ergänzt MecklenburgMarketing deine bestehenden Maßnahmen. Social Media schafft Aufmerksamkeit — Google, Bewertungen und QR-Kampagnen helfen besonders beim konkreten lokalen Such- und Kaufmoment.</p></details>
@@ -1047,7 +1091,7 @@ const landingHtml = `
 
 <section class="form-section" id="start">
   <div class="container form-box">
-    <div class="form-copy reveal"><span class="kicker">Kostenlos & unverbindlich</span><h2>Lass deinen Betrieb kostenlos prüfen.</h2><p>Für die Ersteinschätzung reichen dein Betriebsname und eine Kontaktmöglichkeit. Du musst nichts vorbereiten und keine Zugangsdaten senden.</p><p>Wir prüfen Google-Sichtbarkeit, Bewertungen, Fotos, Öffnungszeiten und Potenziale für QR- oder Loyalty-Kampagnen. Danach bekommst du eine klare Empfehlung.</p><div class="after-request"><span><b>1.</b> Du trägst deinen Betrieb ein.</span><span><b>2.</b> Wir melden uns in der Regel innerhalb von 24–48 Stunden.</span><span><b>3.</b> Wir prüfen öffentlich sichtbare Potenziale — ohne Zugangsdaten.</span><span><b>4.</b> Du bekommst eine verständliche Empfehlung. Die Analyse ist ohne Vertragsbindung.</span></div></div>
+    <div class="form-copy reveal"><span class="kicker">Kostenlos & unverbindlich</span><h2>Lass deinen Betrieb kostenlos prüfen.</h2><p>Für die Ersteinschätzung reichen dein Betriebsname und eine Kontaktmöglichkeit. Du musst nichts vorbereiten und keine Zugangsdaten senden.</p><p>Wir prüfen Google-Sichtbarkeit, Bewertungen, Fotos, Öffnungszeiten und Potenziale für QR- oder Loyalty-Kampagnen. Danach bekommst du eine klare Empfehlung.</p><div class="after-request"><span><b>1.</b> Du trägst deinen Betrieb ein.</span><span><b>2.</b> Wir melden uns in der Regel innerhalb von 24–48 Stunden.</span><span><b>3.</b> Wir prüfen öffentlich sichtbare Potenziale — ohne Zugangsdaten.</span><span><b>4.</b> Du bekommst eine verständliche Empfehlung. Die Analyse ist ohne Vertragsbindung.</span></div><p class="capacity-note">Weil wir jeden Betrieb persönlich betreuen, nehmen wir bewusst nur eine begrenzte Zahl neuer Kunden pro Monat an.</p></div>
     <form class="contact-form reveal delay1" data-lead-form data-email="zapf@mecklenburgmarketing.de" data-endpoint="" novalidate>
       <div class="hp-field" aria-hidden="true"><label for="company-website">Website</label><input id="company-website" name="Website" type="text" tabindex="-1" autocomplete="off" /></div>
       <div class="field"><label for="name">Name</label><input id="name" name="Name" type="text" placeholder="Dein Name" autocomplete="name" required /></div>
@@ -1077,6 +1121,7 @@ const landingHtml = `
       <a class="btn primary big" href="#start" data-event="premium_close_analyse">Betrieb kostenlos prüfen lassen</a>
       <a class="btn ghost big whatsapp-btn" href="#start" data-whatsapp-link data-whatsapp-number="+491627533619" data-event="premium_close_whatsapp">Per WhatsApp schreiben</a>
     </div>
+    <p class="cta-reassure center">Kostenlos · unverbindlich · keine Vertragsbindung · Antwort in 24–48 h</p>
   </div>
 </section>
 <footer class="footer premium-footer"><div class="container footer-row"><span>© 2026 MecklenburgMarketing · zapf@mecklenburgmarketing.de · <a class="tel-link" href="tel:+491627533619">0162 7533619</a></span><span class="legal"><a href="/impressum">Impressum</a><a href="/datenschutz">Datenschutz</a><a href="/privacy/me">Meine Datenrechte</a><a href="/cookies">Cookie-Einstellungen</a><a href="/agb">AGB</a><a href="/widerruf">Widerruf</a></span></div></footer>
