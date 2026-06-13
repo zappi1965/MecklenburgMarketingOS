@@ -136,7 +136,7 @@ h1,h2,h3{letter-spacing:-.057em;line-height:.96;font-weight:850}
 .live-dot{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:rgba(134,239,172,.12)}
 .live-dot::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 16px var(--green)}
 .hero h1{font-size:clamp(3.2rem,8.1vw,7.55rem);margin:1.28rem auto 0;max-width:13.8ch}
-.hero-sub{max-width:790px;margin:1.35rem auto 0;color:var(--muted);font-size:clamp(1.07rem,1.9vw,1.38rem);font-weight:520;line-height:1.48}
+.hero-sub{max-width:790px;margin:1.35rem auto 0;color:#cbc6dc;font-size:clamp(1.07rem,1.9vw,1.38rem);font-weight:520;line-height:1.48}
 .hero-ctas{display:flex;justify-content:center;align-items:center;gap:.9rem;flex-wrap:wrap;margin-top:2rem}
 .risk-row{display:flex;justify-content:center;gap:.7rem;flex-wrap:wrap;margin-top:1.1rem;color:var(--muted2);font-size:.88rem}
 .risk-row span{display:inline-flex;align-items:center;gap:.45rem;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035);padding:.38rem .6rem;border-radius:999px}
@@ -735,8 +735,8 @@ const landingHtml = `
   <div class="nav-shell">
     <a class="logo" href="#top" aria-label="MecklenburgMarketing Startseite"><span class="logo-mark"><img src="/brand/mecklenburg-marketing-logo-mark.png" alt="MecklenburgMarketing"></span></a>
     <div class="nav-links"><a href="#problem">Problem</a><a href="#analyse">Analyse</a><a href="#report">Beispiel</a><a href="#team">Team</a><a href="#pakete">Preise</a></div>
-    <div class="nav-actions"><a class="btn ghost login-link" href="/auth">Einloggen / Registrieren</a><a class="btn ghost" href="#pakete">Pakete</a><a class="btn primary" href="#start">Analyse anfragen</a><button class="menu-btn" id="menuBtn" type="button" aria-label="Menü öffnen" aria-expanded="false"><i></i></button></div>
-    <div class="mobile-menu"><a href="#problem">Problem</a><a href="#analyse">Kostenlose Analyse</a><a href="#report">Beispiel</a><a href="#team">Team</a><a class="login-link" href="/auth">Einloggen / Registrieren</a><a class="menu-cta" href="#start">Kostenlos anfragen</a></div>
+    <div class="nav-actions"><a class="btn ghost login-link" href="/auth">Einloggen / Registrieren</a><a class="btn ghost" href="#pakete">Pakete</a><a class="btn primary" href="#start">Kostenlos prüfen lassen</a><button class="menu-btn" id="menuBtn" type="button" aria-label="Menü öffnen" aria-expanded="false"><i></i></button></div>
+    <div class="mobile-menu"><a href="#problem">Problem</a><a href="#analyse">Kostenlose Analyse</a><a href="#report">Beispiel</a><a href="#team">Team</a><a class="login-link" href="/auth">Einloggen / Registrieren</a><a class="menu-cta" href="#start">Kostenlos prüfen lassen</a></div>
   </div>
 </nav>
 
@@ -946,7 +946,7 @@ const landingHtml = `
           <li>QR-Hinweis an Theke platzieren</li>
           <li>Bewertungen freundlich nach dem Kaufmoment anstoßen</li>
         </ul>
-        <a class="btn ghost" href="#start" data-event="audit_preview_cta">Eigene Einschätzung anfragen</a>
+        <a class="btn ghost" href="#start" data-event="audit_preview_cta">Kostenlos prüfen lassen</a>
       </article>
     </div>
   </div>
@@ -1084,12 +1084,12 @@ const landingHtml = `
   <div class="desktop-sticky-card">
     <small>Kostenlose Einschätzung für deinen Betrieb?</small>
     <div class="desktop-sticky-actions">
-      <a class="btn primary" href="#start" data-event="desktop_sticky_analyse">Analyse anfragen</a>
+      <a class="btn primary" href="#start" data-event="desktop_sticky_analyse">Kostenlos prüfen lassen</a>
       <a class="btn ghost whatsapp-btn" href="#start" data-whatsapp-link data-whatsapp-number="+491627533619" aria-label="WhatsApp öffnen" data-event="desktop_sticky_whatsapp">WhatsApp</a>
     </div>
   </div>
 </div>
-<div class="mobile-sticky"><div class="mobile-sticky-actions"><a class="btn primary" href="#start" data-event="mobile_sticky_analyse">Betrieb prüfen lassen</a><a class="btn ghost whatsapp-btn" href="#start" data-whatsapp-link data-whatsapp-number="+491627533619" aria-label="WhatsApp öffnen" data-event="mobile_sticky_whatsapp">WhatsApp</a></div></div>
+<div class="mobile-sticky"><div class="mobile-sticky-actions"><a class="btn primary" href="#start" data-event="mobile_sticky_analyse">Kostenlos prüfen lassen</a><a class="btn ghost whatsapp-btn" href="#start" data-whatsapp-link data-whatsapp-number="+491627533619" aria-label="WhatsApp öffnen" data-event="mobile_sticky_whatsapp">WhatsApp</a></div></div>
 
 <noscript><div class="container" style="padding:16px;color:#dfdcec">JavaScript ist deaktiviert. Du kannst uns direkt per E-Mail an zapf@mecklenburgmarketing.de oder per WhatsApp/Telefon unter <a class="tel-link" href="tel:+491627533619">0162 7533619</a> erreichen.</div></noscript>
 `
