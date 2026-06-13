@@ -213,6 +213,13 @@ export const v33FunctionalClient = {
   publicReview: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/review`, { method: 'POST', body: JSON.stringify(payload) }),
 
+  publicDeal: (slug: string) => request(`/public/deal/${slug}`),
+
+  publicDealTrack: (slug: string, kind: 'view' | 'share') =>
+    request(`/public/deal/${slug}/track`, { method: 'POST', body: JSON.stringify({ kind }) }),
+
+  publicSite: (slug: string) => request(`/public/site/${slug}`),
+
   publicPasswordReset: (slug: string, payload: any) =>
     request(`/public/loyalty/${slug}/password-reset-request`, { method: 'POST', body: JSON.stringify(payload) }),
 

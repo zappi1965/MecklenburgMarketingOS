@@ -76,8 +76,31 @@ Supabase (Frankfurt empfohlen) ─ Postgres + Auth + Storage + RLS
 | `yarn typecheck` (Frontend) | — | < 5 s |
 | `yarn build` (Next.js) | — | < 60 s |
 
-GitHub Actions Workflow unter `.github/workflows/ci.yml` läuft alle Suites
-auf jedem Push.
+### CI-Gates
+
+**Pro Pull Request** (`.github/workflows/build-check.yml`): Fullbuild-Guard,
+Quality-Guard, Frontend-Typecheck, Next.js-Build, **Backend-Unit-Tests** und ein
+**E2E-Smoke** (Chromium; der Server wird über `webServer` in
+`frontend/playwright.config.ts` automatisch gestartet). Ein zusätzlicher,
+**nicht-blockierender** `security-audit`-Job meldet `yarn audit`-Funde, ohne den
+Merge zu stoppen.
+
+**Nächtlich + manuell** (`.github/workflows/e2e-tenant-isolation.yml`): die
+sicherheitskritischen Tenant-Isolations- und Production-Readiness-E2E-Tests gegen
+eine laufende **Staging-Umgebung**. Diese brauchen echte Logins und werden ohne
+hinterlegte Secrets sauber übersprungen. Benötigte GitHub Secrets
+(*Settings → Secrets and variables → Actions*):
+
+| Secret | Zweck |
+|---|---|
+| `E2E_BASE_URL` | Staging-URL, z.B. `https://staging.deine-domain.de` |
+| `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | Admin-Login auf Staging |
+| `E2E_CUSTOMER_EMAIL` / `E2E_CUSTOMER_PASSWORD` | Kunden-Login auf Staging |
+
+Manuell auslösbar über *Actions → E2E Tenant Isolation (Staging) → Run workflow*.
+
+**Dependency-Updates** kommen wöchentlich über Dependabot
+(`.github/dependabot.yml`, npm + GitHub Actions).
 
 ## Lizenz / Status
 

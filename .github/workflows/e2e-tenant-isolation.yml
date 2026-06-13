@@ -1,0 +1,59 @@
+name: E2E Tenant Isolation (Staging)
+
+# Sicherheitskritische Auth-/Tenant-Isolations-Tests gegen eine laufende
+# Staging-Umgebung. Brauchen echte Credentials -> laufen NICHT pro PR, sondern
+# nächtlich und manuell. Ohne hinterlegte Secrets skippen die Specs sauber.
+#
+# Benötigte GitHub Secrets (Settings -> Secrets and variables -> Actions):
+#   E2E_BASE_URL            z.B. https://staging.deine-domain.de
+#   E2E_ADMIN_EMAIL         Admin-Login für Staging
+#   E2E_ADMIN_PASSWORD
+#   E2E_CUSTOMER_EMAIL      Kunden-Login für Staging
+#   E2E_CUSTOMER_PASSWORD
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  tenant-isolation:
+    name: Tenant Isolation E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install Playwright (chromium)
+        run: yarn --cwd frontend exec playwright install --with-deps chromium
+
+      - name: Run tenant isolation + production readiness specs
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_CUSTOMER_EMAIL: ${{ secrets.E2E_CUSTOMER_EMAIL }}
+          E2E_CUSTOMER_PASSWORD: ${{ secrets.E2E_CUSTOMER_PASSWORD }}
+        run: yarn --cwd frontend e2e:ci --project=chromium tenant-isolation production-readiness
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

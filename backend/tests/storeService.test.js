@@ -10,7 +10,7 @@ test('ALLOWLIST enthaelt kritische Settings-Tabellen', () => {
 
 test('ALLOWLIST hat fuer jede Tabelle eine scope-Eigenschaft', () => {
   for (const [name, cfg] of Object.entries(ALLOWLIST)) {
-    assert.ok(['admin', 'customer'].includes(cfg.scope), `${name}.scope ist '${cfg.scope}', muss admin|customer sein`)
+    assert.ok(['admin', 'customer', 'customer_readonly'].includes(cfg.scope), `${name}.scope ist '${cfg.scope}', muss admin|customer|customer_readonly sein`)
   }
 })
 
@@ -35,7 +35,7 @@ test('tableConfig: case-insensitive', () => {
 })
 
 test('Customer-scoped Tabellen umfassen typische CRUD-Tabellen', () => {
-  const customerScoped = Object.entries(ALLOWLIST).filter(([_, c]) => c.scope === 'customer').map(([t]) => t)
+  const customerScoped = Object.entries(ALLOWLIST).filter(([_, c]) => c.scope === 'customer' || c.scope === 'customer_readonly').map(([t]) => t)
   for (const t of ['qr_campaigns', 'loyalty_programs', 'customer_notes', 'seo_snapshots']) {
     assert.ok(customerScoped.includes(t), `${t} sollte customer-scoped sein`)
   }
