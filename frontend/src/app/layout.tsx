@@ -11,8 +11,8 @@ export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 
 
 export const metadata = {
   applicationName: 'MMOS',
-  title: 'Mecklenburg Marketing OS',
-  description: 'Das lokale Marketing-Betriebssystem für Google Business, SEO, Reviews, QR-Kampagnen und Kundenbindung.',
+  title: 'MecklenburgMarketing — Mehr lokale Kunden durch Google, Bewertungen & Wiederbesuche',
+  description: 'Kostenlose Analyse für lokale Betriebe in MV: Google-Sichtbarkeit, Bewertungen, Fotos und Wiederbesuch-Potenziale verständlich prüfen lassen.',
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: 'MMOS', statusBarStyle: 'black-translucent' },
   other: { 'mobile-web-app-capable': 'yes', 'apple-mobile-web-app-capable': 'yes', 'apple-mobile-web-app-status-bar-style': 'black-translucent' },

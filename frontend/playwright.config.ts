@@ -17,5 +17,16 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile', use: { ...devices['iPhone 14'] } }
-  ]
+  ],
+  // Lokal / CI-Smoke starten selbst `next start`. Wird eine externe E2E_BASE_URL
+  // gesetzt (z.B. Staging im Tenant-Isolation-Workflow), laufen die Tests dagegen
+  // und es wird kein lokaler Server gestartet.
+  webServer: process.env.E2E_BASE_URL
+    ? undefined
+    : {
+        command: 'yarn start',
+        url: 'http://127.0.0.1:3000',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000
+      }
 })

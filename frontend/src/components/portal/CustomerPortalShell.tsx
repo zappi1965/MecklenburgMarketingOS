@@ -8,11 +8,11 @@ import BrandLogo from '@/components/brand/BrandLogo'
 
 const BASE_NAV = [
   { href: '/portal/dashboard', label: 'Dashboard', icon: BarChart3, toolKeys: ['dashboard', 'customer_portal_pro', 'portal_home'] },
-  { href: '/portal/reports', label: 'Reports & PDFs', icon: FileText, toolKeys: ['portal_reports', 'monthly_report_pdf_delivery', 'dashboard_reporting', 'media_center'] },
+  { href: '/portal/reports', label: 'Reports & PDFs', icon: FileText, toolKeys: ['portal_reports', 'monthly_report_pdf_delivery', 'dashboard_reporting', 'media_center', 'branche_benchmark'] },
   { href: '/portal/qr-campaigns', label: 'QR-Kampagnen', icon: QrCode, toolKeys: ['qr_campaigns', 'qr_slug_loyalty_campaigns', 'public_landing_page'] },
-  { href: '/portal/loyalty', label: 'Loyalty', icon: Gift, toolKeys: ['loyalty', 'loyalty_growth_center', 'loyalty_rewards', 'retention_intelligence_suite'] },
+  { href: '/portal/loyalty', label: 'Loyalty', icon: Gift, toolKeys: ['loyalty', 'loyalty_growth_center', 'loyalty_rewards', 'retention_intelligence_suite', 'referral_program'] },
   { href: '/portal/reviews', label: 'Reviews', icon: Star, toolKeys: ['reviews', 'reviews_reputation', 'review_intelligence', 'feedback_action_board', 'service_recovery_tool'] },
-  { href: '/portal/campaigns', label: 'Kampagnen', icon: Megaphone, toolKeys: ['segment_campaigns', 'marketing_automation', 'churn_prevention_center', 'ai_social_posts'] },
+  { href: '/portal/campaigns', label: 'Kampagnen', icon: Megaphone, toolKeys: ['segment_campaigns', 'marketing_automation', 'churn_prevention_center', 'ai_social_posts', 'deal_of_week', 'mini_website'] },
   { href: '/portal/consents', label: 'Einwilligungen', icon: ShieldCheck, toolKeys: ['portal_consents', 'consent_center_double_optin', 'public_consent_center'] },
   { href: '/portal/billing', label: 'Paket & Billing', icon: Receipt, toolKeys: ['e_invoice', 'accounting_export', 'pos_integration', 'sumup_revenue_connection', 'invoices'] },
   { href: '/portal/settings', label: 'Einstellungen', icon: Settings, toolKeys: ['branding', 'online_booking', 'profile'] },

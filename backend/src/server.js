@@ -47,6 +47,10 @@ const gdprRoutes = require('./routes/gdprRoutes')
 const automationRoutes = require('./routes/automationRoutes')
 const eInvoiceRoutes = require('./routes/eInvoiceRoutes')
 const referralRoutes = require('./routes/referralRoutes')
+const endcustomerReferralRoutes = require('./routes/endcustomerReferralRoutes')
+const dealCampaignRoutes = require('./routes/dealCampaignRoutes')
+const miniWebsiteRoutes = require('./routes/miniWebsiteRoutes')
+const brancheBenchmarkRoutes = require('./routes/brancheBenchmarkRoutes')
 const { walletPassRoutes, newsletterRoutes, voucherRoutes } = require('./routes/quickWinRoutes')
 const securityRoutes = require('./routes/securityRoutes')
 const dataQualityRoutes = require('./routes/dataQualityRoutes')
@@ -283,6 +287,9 @@ const PUBLIC_PATHS = [
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/marketing-consent\/status$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/marketing-consent\/resend-double-opt-in$/,
   /^\/api\/v33-functional\/public\/loyalty\/[^/]+\/review$/,
+  /^\/api\/v33-functional\/public\/deal\/[^/]+$/,
+  /^\/api\/v33-functional\/public\/deal\/[^/]+\/track$/,
+  /^\/api\/v33-functional\/public\/site\/[^/]+$/,
   /^\/api\/v33-functional\/public\/reactivation\/[^/]+\/status$/,
   /^\/api\/v33-functional\/public\/reactivation\/[^/]+\/redeem$/,
   /^\/api\/v33-functional\/public\/reactivation\/mail-webhook$/, 
@@ -357,6 +364,10 @@ app.use('/api/auth', authRoutes(supabaseAdmin))
 app.use('/api/qr', qrRoutes())
 app.use('/api/gdpr', gdprRoutes(supabaseAdmin))
 app.use('/api/referrals', referralRoutes(supabaseAdmin))
+app.use('/api/endcustomer-referrals', requireCustomerAccess(), endcustomerReferralRoutes(supabaseAdmin))
+app.use('/api/deals', requireCustomerAccess(), dealCampaignRoutes(supabaseAdmin))
+app.use('/api/mini-website', requireCustomerAccess(), miniWebsiteRoutes(supabaseAdmin))
+app.use('/api/branche-benchmark', brancheBenchmarkRoutes(supabaseAdmin))
 app.use('/api/wallet', walletPassRoutes(supabaseAdmin))
 app.use('/api/newsletter', newsletterRoutes(supabaseAdmin))
 app.use('/api/vouchers', voucherRoutes(supabaseAdmin))
