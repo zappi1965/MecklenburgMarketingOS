@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useEffect } from 'react'
+import { memo, useEffect } from 'react'
 
 const landingCss = `
 :root{
@@ -1148,7 +1148,7 @@ const landingScript = `(function(){
 
   var whatsappText=encodeURIComponent("Hallo MecklenburgMarketing, ich interessiere mich für die kostenlose Analyse meines Betriebs.");
   document.querySelectorAll("[data-whatsapp-link]").forEach(function(link){
-    var number=(link.getAttribute("data-whatsapp-number")||"").replace(/\D/g,"");
+    var number=(link.getAttribute("data-whatsapp-number")||"").replace(/\\D/g,"");
     if(number){
       link.href="https://wa.me/"+number+"?text="+whatsappText;
       link.hidden=false;
@@ -1187,7 +1187,7 @@ const landingScript = `(function(){
         "",
         "Bitte eine verständliche Einschätzung vorbereiten."
       ];
-      return "mailto:"+(leadForm.dataset.email||"zapf@mecklenburgmarketing.de")+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(lines.join("\n"));
+      return "mailto:"+(leadForm.dataset.email||"zapf@mecklenburgmarketing.de")+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(lines.join("\\n"));
     };
 
     leadForm.addEventListener("submit",async function(event){
@@ -1460,7 +1460,21 @@ const faqJsonLd = `
 }
 `
 
-export default function CustomerLandingV26() {
+// Markup (Styles, JSON-LD und HTML) wird einmalig in EIN dangerouslySetInnerHTML
+// gefaltet. Werte sind konstant, daher außerhalb der Komponente berechnet.
+const landingMarkup =
+  '<style>' + landingCss + '</style>' +
+  '<script type="application/ld+json">' + organizationJsonLd + '</script>' +
+  '<script type="application/ld+json">' + faqJsonLd + '</script>' +
+  landingHtml
+
+// Wichtig: memo() ohne Props verhindert ein Re-Rendern nach dem Mount.
+// Die umgebende page.tsx lädt Auth/Store-Daten asynchron und löst danach
+// Re-Renders aus. Ohne memo committet React dabei das dangerouslySetInnerHTML-
+// DOM neu (innerHTML wird auf den Ausgangszustand zurückgesetzt) und verwirft
+// die imperativen Script-Effekte (Menü-Toggle, Scroll-Reveal, QR-Aufbau),
+// die der useEffect-Script direkt im DOM erzeugt hat.
+const CustomerLandingV26 = memo(function CustomerLandingV26() {
   useEffect(() => {
     document.body.classList.add('mmos-landing-v26-active')
     let disposed = false
@@ -1476,12 +1490,7 @@ export default function CustomerLandingV26() {
     }
   }, [])
 
-  return (
-    <div className="mmosLandingV26">
-      <style dangerouslySetInnerHTML={{ __html: landingCss }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: organizationJsonLd }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqJsonLd }} />
-      <div dangerouslySetInnerHTML={{ __html: landingHtml }} />
-    </div>
-  )
-}
+  return <div className="mmosLandingV26" dangerouslySetInnerHTML={{ __html: landingMarkup }} />
+})
+
+export default CustomerLandingV26
