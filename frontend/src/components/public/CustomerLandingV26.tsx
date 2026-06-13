@@ -82,8 +82,10 @@ h1,h2,h3{letter-spacing:-.057em;line-height:.96;font-weight:850}
   background:rgba(7,7,15,.64);-webkit-backdrop-filter:blur(28px) saturate(1.5);backdrop-filter:blur(28px) saturate(1.5);box-shadow:0 14px 58px rgba(0,0,0,.28);
 }
 .logo{display:flex;align-items:center;gap:.64rem;font-weight:820;letter-spacing:-.025em;white-space:nowrap}
-.logo-mark{height:34px;display:grid;place-items:center}
-.logo-mark img{height:34px;width:auto;display:block;-webkit-user-drag:none;user-select:none}
+.nav .logo{background:none!important;box-shadow:none!important;padding:0!important;border-radius:0!important;min-height:0!important;margin:0!important}
+.nav .logo-mark{flex:none;margin:0}
+.logo-mark{height:36px;display:grid;place-items:center}
+.logo-mark img{height:36px;width:auto;max-width:none;display:block;-webkit-user-drag:none;user-select:none}
 .logo span:last-child{color:#cbbaff}
 .nav-links{display:flex;gap:2px;align-items:center;color:var(--muted);font-weight:720;font-size:.86rem}
 .nav-links a{padding:.58rem .82rem;border-radius:999px;transition:.2s}
@@ -105,9 +107,9 @@ h1,h2,h3{letter-spacing:-.057em;line-height:.96;font-weight:850}
 .mobile-menu a.login-link::after{content:"↗";opacity:.72;font-size:.88rem}
 .mobile-menu a.menu-cta{background:var(--grad);color:white;text-align:center;margin-top:3px}
 @media(max-width:900px){
-  .nav-shell{border-radius:25px;flex-wrap:wrap;align-items:flex-start;padding:8px}
-  .logo{padding-left:4px;min-height:42px}
-  .nav-links,.nav-actions .ghost{display:none}
+  .nav-shell{border-radius:25px;flex-wrap:wrap;align-items:flex-start;padding:8px;position:relative;justify-content:flex-end;min-height:46px}
+  .logo{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:max-content;height:42px;padding:0;justify-content:center}
+  .nav-links,.nav-actions .ghost,.nav-actions .primary{display:none}
   .menu-btn{display:grid}
   .nav.open .nav-shell{background:#0a0a16;-webkit-backdrop-filter:none;backdrop-filter:none;border-color:rgba(255,255,255,.14);box-shadow:0 26px 80px rgba(0,0,0,.62)}
   .nav.open .mobile-menu{display:grid}
@@ -417,9 +419,8 @@ body{background-attachment:fixed}
   .product-stack-section.active .stack-card{transform:none!important}
 }
 @media(max-width:560px){
-  .logo > span:last-child{display:none!important}
   .nav-shell{min-height:58px}
-  .nav-actions .primary{display:inline-flex;font-size:.86rem;padding:.62rem .86rem;max-width:210px}
+  .nav-actions .primary{display:none}
   .hero{padding-top:100px!important}
   .hero h1{font-size:clamp(2.35rem,10.4vw,3.35rem)!important;line-height:.97!important}
   .hero-line{white-space:normal}
@@ -732,7 +733,7 @@ const landingHtml = `
 <a class="skip-link" href="#start">Direkt zur Anfrage</a>
 <nav class="nav" id="nav">
   <div class="nav-shell">
-    <a class="logo" href="#top" aria-label="MecklenburgMarketing Startseite"><span class="logo-mark"><img src="/brand/mecklenburg-marketing-logo-mark.png" alt="" aria-hidden="true"></span><span><span class="hide-sm">Mecklenburg</span><span>Marketing</span></span></a>
+    <a class="logo" href="#top" aria-label="MecklenburgMarketing Startseite"><span class="logo-mark"><img src="/brand/mecklenburg-marketing-logo-mark.png" alt="MecklenburgMarketing"></span></a>
     <div class="nav-links"><a href="#problem">Problem</a><a href="#analyse">Analyse</a><a href="#report">Beispiel</a><a href="#team">Team</a><a href="#pakete">Preise</a></div>
     <div class="nav-actions"><a class="btn ghost login-link" href="/auth">Einloggen / Registrieren</a><a class="btn ghost" href="#pakete">Pakete</a><a class="btn primary" href="#start">Analyse anfragen</a><button class="menu-btn" id="menuBtn" type="button" aria-label="Menü öffnen" aria-expanded="false"><i></i></button></div>
     <div class="mobile-menu"><a href="#problem">Problem</a><a href="#analyse">Kostenlose Analyse</a><a href="#report">Beispiel</a><a href="#team">Team</a><a class="login-link" href="/auth">Einloggen / Registrieren</a><a class="menu-cta" href="#start">Kostenlos anfragen</a></div>
