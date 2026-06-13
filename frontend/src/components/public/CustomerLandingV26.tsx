@@ -82,7 +82,8 @@ h1,h2,h3{letter-spacing:-.057em;line-height:.96;font-weight:850}
   background:rgba(7,7,15,.64);-webkit-backdrop-filter:blur(28px) saturate(1.5);backdrop-filter:blur(28px) saturate(1.5);box-shadow:0 14px 58px rgba(0,0,0,.28);
 }
 .logo{display:flex;align-items:center;gap:.64rem;font-weight:820;letter-spacing:-.025em;white-space:nowrap}
-.logo-mark{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--grad);box-shadow:0 12px 32px rgba(139,92,246,.38);font-weight:850;color:white;font-size:.82rem}
+.logo-mark{height:34px;display:grid;place-items:center}
+.logo-mark img{height:34px;width:auto;display:block;-webkit-user-drag:none;user-select:none}
 .logo span:last-child{color:#cbbaff}
 .nav-links{display:flex;gap:2px;align-items:center;color:var(--muted);font-weight:720;font-size:.86rem}
 .nav-links a{padding:.58rem .82rem;border-radius:999px;transition:.2s}
@@ -731,7 +732,7 @@ const landingHtml = `
 <a class="skip-link" href="#start">Direkt zur Anfrage</a>
 <nav class="nav" id="nav">
   <div class="nav-shell">
-    <a class="logo" href="#top" aria-label="MecklenburgMarketing Startseite"><span class="logo-mark">M</span><span><span class="hide-sm">Mecklenburg</span><span>Marketing</span></span></a>
+    <a class="logo" href="#top" aria-label="MecklenburgMarketing Startseite"><span class="logo-mark"><img src="/brand/mecklenburg-marketing-logo-mark.png" alt="" aria-hidden="true"></span><span><span class="hide-sm">Mecklenburg</span><span>Marketing</span></span></a>
     <div class="nav-links"><a href="#problem">Problem</a><a href="#analyse">Analyse</a><a href="#report">Beispiel</a><a href="#team">Team</a><a href="#pakete">Preise</a></div>
     <div class="nav-actions"><a class="btn ghost login-link" href="/auth">Einloggen / Registrieren</a><a class="btn ghost" href="#pakete">Pakete</a><a class="btn primary" href="#start">Analyse anfragen</a><button class="menu-btn" id="menuBtn" type="button" aria-label="Menü öffnen" aria-expanded="false"><i></i></button></div>
     <div class="mobile-menu"><a href="#problem">Problem</a><a href="#analyse">Kostenlose Analyse</a><a href="#report">Beispiel</a><a href="#team">Team</a><a class="login-link" href="/auth">Einloggen / Registrieren</a><a class="menu-cta" href="#start">Kostenlos anfragen</a></div>
