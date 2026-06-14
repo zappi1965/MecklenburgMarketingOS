@@ -94,5 +94,26 @@ export const seoAutopilotClient = {
       method: 'PATCH', body: JSON.stringify(patch)
     }),
   deleteArticle: (id: string) =>
-    call<{ ok: boolean }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    call<{ ok: boolean }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  publishArticle: (id: string) =>
+    call<{ ok: boolean; article: SeoArticle; blog_slug: string }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}/publish`, { method: 'POST' }),
+  unpublishArticle: (id: string) =>
+    call<{ ok: boolean; article: SeoArticle }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}/unpublish`, { method: 'POST' }),
+
+  // Schedule (M3)
+  getSchedule: (customer_id: string) =>
+    call<{ ok: boolean; schedule: SeoSchedule | null }>(`/api/seo-autopilot/schedule?customer_id=${encodeURIComponent(customer_id)}`),
+  saveSchedule: (schedule: SeoSchedule & { customer_id: string }) =>
+    call<{ ok: boolean; schedule: SeoSchedule }>(`/api/seo-autopilot/schedule`, { method: 'POST', body: JSON.stringify(schedule) })
+}
+
+export type SeoSchedule = {
+  id?: string
+  customer_id?: string
+  enabled: boolean
+  cadence: 'daily' | 'weekly'
+  auto_publish: boolean
+  target_type?: string
+  next_run_at?: string | null
+  last_run_at?: string | null
 }

@@ -3,16 +3,17 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { Sparkles, KeyRound, FileText, Check, RefreshCw, Trash2, Wand2 } from 'lucide-react'
+import { Sparkles, KeyRound, FileText, Check, RefreshCw, Trash2, Wand2, Globe, Clock, EyeOff } from 'lucide-react'
 import { getCurrentUserProfile } from '@/lib/authClient'
-import { seoAutopilotClient, type SeoBrandProfile, type SeoKeyword, type SeoArticle } from '@/lib/seoAutopilotClient'
+import { seoAutopilotClient, type SeoBrandProfile, type SeoKeyword, type SeoArticle, type SeoSchedule } from '@/lib/seoAutopilotClient'
 
-type Step = 'brand' | 'keywords' | 'articles'
+type Step = 'brand' | 'keywords' | 'articles' | 'autopilot'
 
 const STEPS: Array<{ key: Step; label: string; icon: any }> = [
   { key: 'brand', label: 'Brand-DNA', icon: Sparkles },
   { key: 'keywords', label: 'Keywords', icon: KeyRound },
-  { key: 'articles', label: 'Artikel', icon: FileText }
+  { key: 'articles', label: 'Artikel', icon: FileText },
+  { key: 'autopilot', label: 'Autopilot', icon: Clock }
 ]
 
 function StatusBadge({ status }: { status: string }) {
@@ -47,6 +48,9 @@ export default function SeoAutopilotPage() {
   const [articles, setArticles] = useState<SeoArticle[]>([])
   const [editing, setEditing] = useState<SeoArticle | null>(null)
 
+  // Autopilot-Schedule
+  const [schedule, setSchedule] = useState<SeoSchedule>({ enabled: false, cadence: 'weekly', auto_publish: false })
+
   useEffect(() => {
     getCurrentUserProfile()
       .then((p) => setAuthorized(['admin', 'super_admin'].includes(String(p?.role || '').toLowerCase())))
@@ -60,14 +64,16 @@ export default function SeoAutopilotPage() {
     if (!cid) return
     setBusy(true); setError('')
     try {
-      const [bp, kw, ar] = await Promise.all([
+      const [bp, kw, ar, sc] = await Promise.all([
         seoAutopilotClient.getBrandProfile(cid).catch(() => ({ profile: null } as any)),
         seoAutopilotClient.listKeywords(cid).catch(() => ({ keywords: [] } as any)),
-        seoAutopilotClient.listArticles(cid).catch(() => ({ articles: [] } as any))
+        seoAutopilotClient.listArticles(cid).catch(() => ({ articles: [] } as any)),
+        seoAutopilotClient.getSchedule(cid).catch(() => ({ schedule: null } as any))
       ])
       setBrand(bp.profile || null)
       setKeywords(kw.keywords || [])
       setArticles(ar.articles || [])
+      if (sc.schedule) setSchedule(sc.schedule)
     } catch (e) { fail(e) } finally { setBusy(false) }
   }
 
@@ -154,6 +160,34 @@ export default function SeoAutopilotPage() {
       await seoAutopilotClient.deleteArticle(a.id)
       setArticles((prev) => prev.filter((x) => x.id !== a.id))
       if (editing?.id === a.id) setEditing(null)
+    } catch (e) { fail(e) } finally { setBusy(false) }
+  }
+  async function publishArticle(a: SeoArticle) {
+    setBusy(true); setError('')
+    try {
+      const r = await seoAutopilotClient.publishArticle(a.id)
+      setArticles((prev) => prev.map((x) => (x.id === r.article.id ? r.article : x)))
+      if (editing?.id === a.id) setEditing(r.article)
+      note(`Veröffentlicht unter ${r.article.published_url}`)
+    } catch (e) { fail(e) } finally { setBusy(false) }
+  }
+  async function unpublishArticle(a: SeoArticle) {
+    setBusy(true); setError('')
+    try {
+      const r = await seoAutopilotClient.unpublishArticle(a.id)
+      setArticles((prev) => prev.map((x) => (x.id === r.article.id ? r.article : x)))
+      if (editing?.id === a.id) setEditing(r.article)
+      note('Artikel zurückgezogen.')
+    } catch (e) { fail(e) } finally { setBusy(false) }
+  }
+
+  // Autopilot-Schedule
+  async function saveSchedule() {
+    if (!customerId) return fail(new Error('Bitte zuerst eine Kunden-ID eingeben.'))
+    setBusy(true); setError('')
+    try {
+      const r = await seoAutopilotClient.saveSchedule({ ...schedule, customer_id: customerId })
+      setSchedule(r.schedule); note('Autopilot-Einstellungen gespeichert.')
     } catch (e) { fail(e) } finally { setBusy(false) }
   }
 
@@ -283,11 +317,25 @@ export default function SeoAutopilotPage() {
                 <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
                   <span>{a.keyword}</span><span>·</span><span>{a.provider}</span>
                 </div>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   {a.status === 'draft' && <button onClick={() => approveArticle(a)} disabled={busy}
                     className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs font-semibold text-emerald-50 hover:bg-emerald-600 disabled:opacity-40">
                     <Check className="h-3.5 w-3.5" /> Freigeben
                   </button>}
+                  {a.status === 'approved' && <button onClick={() => publishArticle(a)} disabled={busy}
+                    className="inline-flex items-center gap-1 rounded bg-violet-700 px-2 py-1 text-xs font-semibold text-violet-50 hover:bg-violet-600 disabled:opacity-40">
+                    <Globe className="h-3.5 w-3.5" /> Veröffentlichen
+                  </button>}
+                  {a.status === 'published' && <>
+                    {a.published_url && <a href={a.published_url} target="_blank" rel="noopener"
+                      className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-violet-300 hover:bg-zinc-700">
+                      <Globe className="h-3.5 w-3.5" /> Live ansehen
+                    </a>}
+                    <button onClick={() => unpublishArticle(a)} disabled={busy}
+                      className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-300 hover:bg-zinc-700 disabled:opacity-40">
+                      <EyeOff className="h-3.5 w-3.5" /> Zurückziehen
+                    </button>
+                  </>}
                   <button onClick={() => removeArticle(a)} disabled={busy}
                     className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-300 hover:bg-rose-900 disabled:opacity-40">
                     <Trash2 className="h-3.5 w-3.5" /> Löschen
@@ -327,6 +375,43 @@ export default function SeoAutopilotPage() {
               </div>
             )}
           </div>
+        </section>
+      )}
+
+      {/* Autopilot */}
+      {step === 'autopilot' && (
+        <section className="space-y-4 rounded-xl border border-zinc-700 bg-zinc-900/40 p-5">
+          <p className="text-sm text-zinc-400">
+            Der Autopilot erzeugt automatisch neue Artikel aus den gespeicherten Keywords dieses Kunden.
+            Ein Cron-Worker prüft fällige Pläne und legt Entwürfe an – oder veröffentlicht direkt, wenn „Auto-Publish“ aktiv ist.
+          </p>
+          <label className="flex items-center gap-3 text-sm">
+            <input type="checkbox" checked={schedule.enabled} onChange={(e) => setSchedule({ ...schedule, enabled: e.target.checked })}
+              className="h-4 w-4 accent-violet-500" />
+            <span className="font-semibold">Autopilot aktiv</span>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-zinc-400">Takt</span>
+            <select value={schedule.cadence} onChange={(e) => setSchedule({ ...schedule, cadence: e.target.value as 'daily' | 'weekly' })}
+              className="rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-violet-500">
+              <option value="weekly">Wöchentlich</option>
+              <option value="daily">Täglich</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-3 text-sm">
+            <input type="checkbox" checked={schedule.auto_publish} onChange={(e) => setSchedule({ ...schedule, auto_publish: e.target.checked })}
+              className="h-4 w-4 accent-violet-500" />
+            <span>
+              <span className="font-semibold">Auto-Publish</span>
+              <span className="ml-2 text-zinc-400">– Artikel direkt live stellen (sonst nur Entwurf zur Freigabe).</span>
+            </span>
+          </label>
+          {schedule.next_run_at && <div className="text-xs text-zinc-500">Nächster Lauf: {new Date(schedule.next_run_at).toLocaleString('de-DE')}</div>}
+          {schedule.last_run_at && <div className="text-xs text-zinc-500">Letzter Lauf: {new Date(schedule.last_run_at).toLocaleString('de-DE')}</div>}
+          <button onClick={saveSchedule} disabled={busy || !customerId}
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+            <Check className="h-4 w-4" /> Speichern
+          </button>
         </section>
       )}
     </div>

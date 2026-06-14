@@ -64,3 +64,13 @@ test('generateArticle (mock): Titel, Meta, Body, Slug', async () => {
 test('generateArticle: ohne keyword -> Fehler', async () => {
   await assert.rejects(() => seo.generateArticle({}), /keyword erforderlich/)
 })
+
+const worker = require('../src/workers/seoAutopilotWorker')
+
+test('worker nextRun: daily = +1 Tag, weekly = +7 Tage', () => {
+  const from = new Date('2026-06-01T06:00:00.000Z')
+  assert.equal(worker._nextRun('daily', from), '2026-06-02T06:00:00.000Z')
+  assert.equal(worker._nextRun('weekly', from), '2026-06-08T06:00:00.000Z')
+  // Default (unbekannt) faellt auf weekly zurueck
+  assert.equal(worker._nextRun('xyz', from), '2026-06-08T06:00:00.000Z')
+})
