@@ -63,6 +63,7 @@ const analyticsRoutes = require('./routes/analyticsRoutes')
 const gmbRoutes = require('./routes/gmbRoutes')
 const aiCrmMailRoutes = require('./routes/aiCrmMailRoutes')
 const socialRoutes = require('./routes/socialRoutes')
+const seoAutopilotRoutes = require('./routes/seoAutopilotRoutes')
 const { reviewWidgetRoutes, reviewWidgetEmbedRouter } = require('./routes/reviewWidgetRoutes')
 const complianceCockpitRoutes = require('./routes/complianceCockpitRoutes')
 const apiKeyRoutes = require('./routes/apiKeyRoutes')
@@ -334,7 +335,8 @@ const adminScopedRoutes = [
   ['/api/google', googleRoutes],
   ['/api/business-tools', businessToolsRoutes],
   ['/api/automations', automationRoutes],
-  ['/api/e-invoice', eInvoiceRoutes]
+  ['/api/e-invoice', eInvoiceRoutes],
+  ['/api/seo-autopilot', seoAutopilotRoutes]
 ]
 
 for (const [routePath, routeFactory] of adminScopedRoutes) {
