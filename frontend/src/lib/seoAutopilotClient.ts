@@ -51,6 +51,7 @@ export type SeoArticle = {
   provider?: string
   model?: string
   published_url?: string | null
+  cover_image_url?: string | null
   created_at?: string
   updated_at?: string
   approved_at?: string | null
@@ -96,7 +97,9 @@ export const seoAutopilotClient = {
   deleteArticle: (id: string) =>
     call<{ ok: boolean }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   publishArticle: (id: string) =>
-    call<{ ok: boolean; article: SeoArticle; blog_slug: string }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}/publish`, { method: 'POST' }),
+    call<{ ok: boolean; article: SeoArticle; target_type: string }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}/publish`, { method: 'POST' }),
+  generateCover: (id: string) =>
+    call<{ ok: boolean; provider: string; article: SeoArticle }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}/cover`, { method: 'POST' }),
   unpublishArticle: (id: string) =>
     call<{ ok: boolean; article: SeoArticle }>(`/api/seo-autopilot/articles/${encodeURIComponent(id)}/unpublish`, { method: 'POST' }),
 
@@ -107,13 +110,21 @@ export const seoAutopilotClient = {
     call<{ ok: boolean; schedule: SeoSchedule }>(`/api/seo-autopilot/schedule`, { method: 'POST', body: JSON.stringify(schedule) })
 }
 
+export type SeoTargetConfig = {
+  language?: string
+  wp_url?: string
+  wp_user?: string
+  wp_app_password?: string
+}
+
 export type SeoSchedule = {
   id?: string
   customer_id?: string
   enabled: boolean
   cadence: 'daily' | 'weekly'
   auto_publish: boolean
-  target_type?: string
+  target_type?: 'in_app' | 'wordpress'
+  target_config?: SeoTargetConfig
   next_run_at?: string | null
   last_run_at?: string | null
 }

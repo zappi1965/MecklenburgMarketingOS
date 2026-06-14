@@ -1,5 +1,7 @@
 const express = require('express')
 const seo = require('../services/seoAutopilotService')
+const seoImage = require('../services/seoImageService')
+const seoPublish = require('../services/seoPublishService')
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
 // SEO-Autopilot (Milestone 1): Brand-DNA, Keywords und Artikel generieren,
@@ -218,38 +220,33 @@ function seoAutopilotRoutes(injectedSupabase) {
     } catch (e) { next(e) }
   })
 
-  // --- Veroeffentlichen (Milestone 2) ------------------------------------
+  // --- KI-Titelbild (Milestone 4) ----------------------------------------
 
-  // Stellt sicher, dass der Kunde einen eindeutigen blog_slug hat (legt ihn
-  // sonst aus Name/ID an) und liefert ihn zurueck.
-  async function ensureBlogSlug(customer_id) {
-    const { data: bp } = await db().from('seo_brand_profiles').select('blog_slug').eq('customer_id', String(customer_id)).maybeSingle()
-    if (bp?.blog_slug) return bp.blog_slug
-    const cust = await loadCustomer(customer_id)
-    let base = seo._slugify(cust?.business_name || cust?.name || '') || `kunde-${String(customer_id).slice(0, 8)}`
-    let slug = base
-    for (let i = 0; i < 25; i++) {
-      const { data: clash } = await db().from('seo_brand_profiles').select('customer_id').eq('blog_slug', slug).maybeSingle()
-      if (!clash || clash.customer_id === String(customer_id)) break
-      slug = `${base}-${i + 2}`
-    }
-    await db().from('seo_brand_profiles')
-      .upsert({ customer_id: String(customer_id), blog_slug: slug, updated_at: new Date().toISOString() }, { onConflict: 'customer_id' })
-    return slug
-  }
+  router.post('/articles/:id/cover', async (req, res, next) => {
+    try {
+      if (!requireAdmin(req, res)) return
+      const { data: art } = await db().from('seo_articles').select('id, customer_id, title').eq('id', String(req.params.id)).maybeSingle()
+      if (!art) return res.status(404).json({ ok: false, error: 'Artikel nicht gefunden' })
+      const cust = await loadCustomer(art.customer_id)
+      const out = await seoImage.generateCoverImage({
+        title: art.title, branch: cust?.branch || '', businessName: cust?.business_name || cust?.name || ''
+      })
+      const { data, error } = await db().from('seo_articles')
+        .update({ cover_image_url: out.url, updated_at: new Date().toISOString() })
+        .eq('id', String(req.params.id)).select().maybeSingle()
+      if (error) throw new Error(error.message)
+      res.json({ ok: true, provider: out.provider, article: data })
+    } catch (e) { next(e) }
+  })
+
+  // --- Veroeffentlichen (Milestone 2 + 4) --------------------------------
+  // Zielabhaengig (In-App-Blog oder WordPress) ueber den gemeinsamen Service.
 
   router.post('/articles/:id/publish', async (req, res, next) => {
     try {
       if (!requireAdmin(req, res)) return
-      const { data: art } = await db().from('seo_articles').select('id, customer_id, slug').eq('id', String(req.params.id)).maybeSingle()
-      if (!art) return res.status(404).json({ ok: false, error: 'Artikel nicht gefunden' })
-      const blogSlug = await ensureBlogSlug(art.customer_id)
-      const published_url = `/blog/${blogSlug}/${art.slug}`
-      const { data, error } = await db().from('seo_articles').update({
-        status: 'published', published_at: new Date().toISOString(), published_url, updated_at: new Date().toISOString()
-      }).eq('id', String(req.params.id)).select().maybeSingle()
-      if (error) throw new Error(error.message)
-      res.json({ ok: true, article: data, blog_slug: blogSlug })
+      const result = await seoPublish.publishArticle(db(), String(req.params.id))
+      res.json({ ok: true, ...result })
     } catch (e) { next(e) }
   })
 
@@ -279,14 +276,15 @@ function seoAutopilotRoutes(injectedSupabase) {
   router.post('/schedule', async (req, res, next) => {
     try {
       if (!requireAdmin(req, res)) return
-      const { customer_id, enabled, cadence, auto_publish, target_type } = req.body || {}
+      const { customer_id, enabled, cadence, auto_publish, target_type, target_config } = req.body || {}
       if (!customer_id) return res.status(400).json({ ok: false, error: 'customer_id erforderlich' })
       const row = {
         customer_id: String(customer_id),
         enabled: !!enabled,
         cadence: ['daily', 'weekly'].includes(String(cadence)) ? String(cadence) : 'weekly',
         auto_publish: !!auto_publish,
-        target_type: target_type ? String(target_type) : 'in_app',
+        target_type: ['in_app', 'wordpress'].includes(String(target_type)) ? String(target_type) : 'in_app',
+        target_config: (target_config && typeof target_config === 'object') ? target_config : {},
         updated_at: new Date().toISOString()
       }
       // next_run_at neu setzen, wenn aktiviert und noch keiner geplant ist.

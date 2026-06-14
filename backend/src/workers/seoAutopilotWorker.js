@@ -13,27 +13,13 @@
 const cron = require('node-cron')
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 const seo = require('../services/seoAutopilotService')
+const seoPublish = require('../services/seoPublishService')
 
 function nextRun(cadence, from = new Date()) {
   const d = new Date(from)
   if (String(cadence) === 'daily') d.setUTCDate(d.getUTCDate() + 1)
   else d.setUTCDate(d.getUTCDate() + 7)
   return d.toISOString()
-}
-
-async function ensureBlogSlug(db, customer) {
-  const { data: bp } = await db.from('seo_brand_profiles').select('blog_slug').eq('customer_id', customer.id).maybeSingle()
-  if (bp?.blog_slug) return bp.blog_slug
-  let base = seo._slugify(customer.business_name || customer.name || '') || `kunde-${String(customer.id).slice(0, 8)}`
-  let slug = base
-  for (let i = 0; i < 25; i++) {
-    const { data: clash } = await db.from('seo_brand_profiles').select('customer_id').eq('blog_slug', slug).maybeSingle()
-    if (!clash || clash.customer_id === customer.id) break
-    slug = `${base}-${i + 2}`
-  }
-  await db.from('seo_brand_profiles')
-    .upsert({ customer_id: customer.id, blog_slug: slug, updated_at: new Date().toISOString() }, { onConflict: 'customer_id' })
-  return slug
 }
 
 // Waehlt das naechste Keyword, fuer das es noch keinen Artikel gibt.
@@ -61,13 +47,10 @@ async function processSchedule(db, sched, summary) {
   if (bp?.tone) tone = bp.tone
   audience = bp?.audience || ''
 
+  const lang = sched.target_config?.language || 'de'
   const out = await seo.generateArticle({
-    keyword, businessName: customer.business_name || customer.name || '', branch: customer.branch || '', tone, audience, language: 'de'
+    keyword, businessName: customer.business_name || customer.name || '', branch: customer.branch || '', tone, audience, language: lang
   })
-
-  const publish = !!sched.auto_publish
-  let published_url = null
-  if (publish) published_url = `/blog/${await ensureBlogSlug(db, customer)}/${out.article.slug}`
 
   const now = new Date().toISOString()
   const row = {
@@ -79,18 +62,22 @@ async function processSchedule(db, sched, summary) {
     body_markdown: out.article.body_markdown,
     internal_link_ideas: out.article.internal_link_ideas || [],
     language: out.article.language,
-    status: publish ? 'published' : 'draft',
+    status: 'draft',
     provider: out.provider,
     model: out.provider === 'mock' ? 'mock' : (process.env.ANTHROPIC_MODEL || process.env.OPENAI_MODEL || out.provider),
-    published_url,
-    published_at: publish ? now : null,
-    approved_at: publish ? now : null,
+    approved_at: now,
     updated_at: now
   }
-  const { error } = await db.from('seo_articles').insert(row)
+  const { data: inserted, error } = await db.from('seo_articles').insert(row).select('id').maybeSingle()
   if (error) throw new Error(error.message)
   summary.created++
-  if (publish) summary.published++
+
+  // Auto-Publish (zielabhaengig: In-App-Blog oder WordPress) ueber den
+  // gemeinsamen Service – identisch zur manuellen Freigabe in der Admin-UI.
+  if (sched.auto_publish && inserted?.id) {
+    await seoPublish.publishArticle(db, inserted.id)
+    summary.published++
+  }
 }
 
 async function runOnce() {

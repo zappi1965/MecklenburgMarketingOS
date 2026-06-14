@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { Sparkles, KeyRound, FileText, Check, RefreshCw, Trash2, Wand2, Globe, Clock, EyeOff } from 'lucide-react'
+import { Sparkles, KeyRound, FileText, Check, RefreshCw, Trash2, Wand2, Globe, Clock, EyeOff, Image as ImageIcon } from 'lucide-react'
 import { getCurrentUserProfile } from '@/lib/authClient'
 import { seoAutopilotClient, type SeoBrandProfile, type SeoKeyword, type SeoArticle, type SeoSchedule } from '@/lib/seoAutopilotClient'
 
@@ -29,6 +29,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function SeoAutopilotPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [customerId, setCustomerId] = useState('')
+  const [lang, setLang] = useState('de')
   const [step, setStep] = useState<Step>('brand')
   const [provider, setProvider] = useState<string>('')
   const [busy, setBusy] = useState(false)
@@ -82,7 +83,7 @@ export default function SeoAutopilotPage() {
     if (!customerId) return fail(new Error('Bitte zuerst eine Kunden-ID eingeben.'))
     setBusy(true); setError('')
     try {
-      const r = await seoAutopilotClient.generateBrandProfile({ customer_id: customerId, website_url: websiteUrl, notes })
+      const r = await seoAutopilotClient.generateBrandProfile({ customer_id: customerId, website_url: websiteUrl, notes, language: lang })
       setProvider(r.provider)
       setBrand({ ...r.profile, customer_id: customerId, website_url: websiteUrl, provider: r.provider })
       note(`Brand-DNA generiert (${r.provider}).`)
@@ -102,7 +103,7 @@ export default function SeoAutopilotPage() {
     if (!customerId) return fail(new Error('Bitte zuerst eine Kunden-ID eingeben.'))
     setBusy(true); setError('')
     try {
-      const r = await seoAutopilotClient.generateKeywords({ customer_id: customerId, count: 12 })
+      const r = await seoAutopilotClient.generateKeywords({ customer_id: customerId, count: 12, language: lang })
       setProvider(r.provider)
       setKeywords(r.keywords)
       const sel: Record<string, boolean> = {}
@@ -126,7 +127,7 @@ export default function SeoAutopilotPage() {
     if (!customerId) return
     setBusy(true); setError('')
     try {
-      const r = await seoAutopilotClient.generateArticle({ customer_id: customerId, keyword })
+      const r = await seoAutopilotClient.generateArticle({ customer_id: customerId, keyword, language: lang })
       setProvider(r.provider)
       setArticles((prev) => [r.article, ...prev])
       setEditing(r.article)
@@ -180,6 +181,15 @@ export default function SeoAutopilotPage() {
       note('Artikel zurückgezogen.')
     } catch (e) { fail(e) } finally { setBusy(false) }
   }
+  async function genCover(a: SeoArticle) {
+    setBusy(true); setError('')
+    try {
+      const r = await seoAutopilotClient.generateCover(a.id)
+      setArticles((prev) => prev.map((x) => (x.id === r.article.id ? r.article : x)))
+      if (editing?.id === a.id) setEditing(r.article)
+      note(`Titelbild generiert (${r.provider}).`)
+    } catch (e) { fail(e) } finally { setBusy(false) }
+  }
 
   // Autopilot-Schedule
   async function saveSchedule() {
@@ -210,6 +220,16 @@ export default function SeoAutopilotPage() {
           <input value={customerId} onChange={(e) => setCustomerId(e.target.value.trim())}
             placeholder="UUID des Kunden"
             className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-violet-500" />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-zinc-400">Sprache</span>
+          <select value={lang} onChange={(e) => setLang(e.target.value)}
+            className="rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-violet-500">
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+            <option value="pl">Polski</option>
+            <option value="fr">Français</option>
+          </select>
         </label>
         <button onClick={() => loadAll(customerId)} disabled={!customerId || busy}
           className="inline-flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm font-semibold hover:bg-zinc-700 disabled:opacity-40">
@@ -349,6 +369,18 @@ export default function SeoAutopilotPage() {
             {!editing && <div className="text-sm text-zinc-500">Wähle links einen Artikel zum Bearbeiten/Vorschau.</div>}
             {editing && (
               <div className="space-y-3 text-sm">
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-zinc-400">Titelbild</span>
+                    <button onClick={() => genCover(editing)} disabled={busy}
+                      className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs font-semibold hover:bg-zinc-700 disabled:opacity-40">
+                      <ImageIcon className="h-3.5 w-3.5" /> {editing.cover_image_url ? 'Neu generieren' : 'Generieren'}
+                    </button>
+                  </div>
+                  {editing.cover_image_url
+                    ? <img src={editing.cover_image_url} alt="" className="w-full rounded-lg border border-zinc-700" />
+                    : <div className="rounded-lg border border-dashed border-zinc-700 px-3 py-6 text-center text-xs text-zinc-500">Noch kein Titelbild</div>}
+                </div>
                 <label className="block"><span className="mb-1 block text-zinc-400">Titel ({(editing.title || '').length} Zeichen)</span>
                   <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })}
                     className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
@@ -406,6 +438,31 @@ export default function SeoAutopilotPage() {
               <span className="ml-2 text-zinc-400">– Artikel direkt live stellen (sonst nur Entwurf zur Freigabe).</span>
             </span>
           </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-zinc-400">Veröffentlichungs-Ziel</span>
+            <select value={schedule.target_type || 'in_app'} onChange={(e) => setSchedule({ ...schedule, target_type: e.target.value as 'in_app' | 'wordpress' })}
+              className="rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-violet-500">
+              <option value="in_app">In-House-Blog (/blog)</option>
+              <option value="wordpress">WordPress (REST API)</option>
+            </select>
+          </label>
+          {schedule.target_type === 'wordpress' && (
+            <div className="grid gap-3 rounded-lg border border-zinc-700 bg-zinc-950/50 p-4 sm:grid-cols-3">
+              <label className="text-sm sm:col-span-3"><span className="mb-1 block text-zinc-400">WordPress-URL</span>
+                <input value={schedule.target_config?.wp_url || ''} placeholder="https://kunde.de"
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, wp_url: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <label className="text-sm"><span className="mb-1 block text-zinc-400">Benutzer</span>
+                <input value={schedule.target_config?.wp_user || ''}
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, wp_user: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <label className="text-sm sm:col-span-2"><span className="mb-1 block text-zinc-400">Application Password</span>
+                <input type="password" value={schedule.target_config?.wp_app_password || ''}
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, wp_app_password: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <p className="text-xs text-zinc-500 sm:col-span-3">Ohne vollständige Zugangsdaten läuft die Veröffentlichung im Mock-Modus (simulierte URL).</p>
+            </div>
+          )}
           {schedule.next_run_at && <div className="text-xs text-zinc-500">Nächster Lauf: {new Date(schedule.next_run_at).toLocaleString('de-DE')}</div>}
           {schedule.last_run_at && <div className="text-xs text-zinc-500">Letzter Lauf: {new Date(schedule.last_run_at).toLocaleString('de-DE')}</div>}
           <button onClick={saveSchedule} disabled={busy || !customerId}

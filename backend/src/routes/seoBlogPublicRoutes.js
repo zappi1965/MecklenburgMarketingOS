@@ -44,7 +44,7 @@ function seoBlogPublicRoutes(injectedSupabase) {
       if (!ctx) return res.status(404).json({ ok: false, error: 'Blog nicht gefunden' })
       const { data } = await db()
         .from('seo_articles')
-        .select('title, slug, meta_description, body_markdown, published_at, language')
+        .select('title, slug, meta_description, body_markdown, cover_image_url, published_at, language')
         .eq('customer_id', ctx.customerId).eq('status', 'published')
         .eq('slug', String(req.params.articleSlug)).maybeSingle()
       if (!data) return res.status(404).json({ ok: false, error: 'Artikel nicht gefunden' })

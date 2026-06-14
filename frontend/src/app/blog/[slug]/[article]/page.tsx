@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { markdownToHtml } from '@/lib/miniMarkdown'
 
-type Article = { title: string; slug: string; meta_description?: string; body_markdown: string; published_at?: string; language?: string }
+type Article = { title: string; slug: string; meta_description?: string; body_markdown: string; cover_image_url?: string | null; published_at?: string; language?: string }
 type ArticleData = { ok: boolean; blog: { slug: string; business_name: string }; article: Article }
 
 async function fetchArticle(slug: string, articleSlug: string): Promise<ArticleData | null> {
@@ -60,6 +60,7 @@ export default async function BlogArticlePage({ params }: { params: Promise<{ sl
       <article>
         <h1 style={{ fontSize: 32, fontWeight: 800, margin: '0 0 8px', lineHeight: 1.25 }}>{a.title}</h1>
         {a.published_at && <div style={{ fontSize: 13, color: '#999', marginBottom: 24 }}>{fmtDate(a.published_at)} · {data.blog.business_name}</div>}
+        {a.cover_image_url && <img src={a.cover_image_url} alt="" style={{ width: '100%', borderRadius: 14, margin: '0 0 28px', display: 'block' }} />}
         <div className="seo-blog-body" dangerouslySetInnerHTML={{ __html: html }} />
       </article>
     </main>

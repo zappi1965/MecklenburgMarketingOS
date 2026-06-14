@@ -74,3 +74,43 @@ test('worker nextRun: daily = +1 Tag, weekly = +7 Tage', () => {
   // Default (unbekannt) faellt auf weekly zurueck
   assert.equal(worker._nextRun('xyz', from), '2026-06-08T06:00:00.000Z')
 })
+
+// --- Milestone 4 -----------------------------------------------------------
+
+const md = require('../src/services/seoMarkdown')
+
+test('seoMarkdown: HTML wird escaped (kein XSS)', () => {
+  const out = md.markdownToHtml('Hallo <script>alert(1)</script> Welt')
+  assert.ok(!out.includes('<script>'))
+  assert.ok(out.includes('&lt;script&gt;'))
+})
+
+test('seoMarkdown: Subset (Ueberschrift, Liste, fett)', () => {
+  const out = md.markdownToHtml('## Titel\n\n- a\n- b\n\n**fett**')
+  assert.ok(out.includes('<h2>Titel</h2>'))
+  assert.ok(out.includes('<ul><li>a</li><li>b</li></ul>'))
+  assert.ok(out.includes('<strong>fett</strong>'))
+})
+
+const img = require('../src/services/seoImageService')
+
+test('seoImageService (mock): liefert data:-SVG-URI', async () => {
+  delete process.env.OPENAI_API_KEY
+  assert.equal(img._provider(), 'mock')
+  const { provider, url } = await img.generateCoverImage({ title: 'Friseur Schwerin Tipps', branch: 'Friseur' })
+  assert.equal(provider, 'mock')
+  assert.ok(url.startsWith('data:image/svg+xml,'))
+})
+
+const wp = require('../src/services/wordpressPublishService')
+
+test('wordpressPublishService (mock): ohne Zugangsdaten simulierte URL', async () => {
+  const r = await wp.publishPost({ wpUrl: 'https://kunde.de', title: 'X', contentHtml: '<p>x</p>' })
+  assert.equal(r.mocked, true)
+  assert.ok(r.url.startsWith('https://kunde.de/?p=mock-'))
+})
+
+test('wordpressPublishService: hasCredentials nur bei allen Feldern', () => {
+  assert.equal(wp._hasCredentials({ wpUrl: 'a', wpUser: 'b', wpAppPassword: 'c' }), true)
+  assert.equal(wp._hasCredentials({ wpUrl: 'a', wpUser: 'b' }), false)
+})
