@@ -5,9 +5,13 @@
 
 const seo = require('./seoAutopilotService')
 const wp = require('./wordpressPublishService')
+const shopify = require('./shopifyPublishService')
+const webflow = require('./webflowPublishService')
 const secretBox = require('../lib/secretBox')
 const { markdownToHtml } = require('./seoMarkdown')
 const { injectInternalLinks } = require('./seoInternalLinks')
+
+const TARGETS = ['in_app', 'wordpress', 'shopify', 'webflow']
 
 // Sammelt veroeffentlichte Geschwister-Artikel als interne Link-Ziele.
 async function siblingLinks(db, customerId, selfId) {
@@ -44,17 +48,17 @@ async function publishArticle(db, articleId) {
   const { data: sched } = await db.from('seo_publishing_schedules')
     .select('target_type, target_config').eq('customer_id', art.customer_id).maybeSingle()
 
-  const targetType = sched?.target_type === 'wordpress' ? 'wordpress' : 'in_app'
+  const targetType = TARGETS.includes(sched?.target_type) ? sched.target_type : 'in_app'
+  const cfg = sched?.target_config || {}
   let published_url
   let extra = {}
 
   // M5: automatische interne Verlinkung auf bereits veroeffentlichte Artikel.
   const links = await siblingLinks(db, art.customer_id, art.id)
   const linkedMarkdown = injectInternalLinks(art.body_markdown, links, 3)
+  const html = markdownToHtml(linkedMarkdown)
 
   if (targetType === 'wordpress') {
-    const cfg = sched?.target_config || {}
-    const html = markdownToHtml(linkedMarkdown)
     const result = await wp.publishPost({
       wpUrl: cfg.wp_url, wpUser: cfg.wp_user, wpAppPassword: secretBox.decrypt(cfg.wp_app_password),
       title: art.title, contentHtml: html, status: 'publish',
@@ -62,6 +66,21 @@ async function publishArticle(db, articleId) {
     })
     published_url = result.url
     extra = { wordpress: { id: result.id, mocked: !!result.mocked, featured_media: result.featured_media || null } }
+  } else if (targetType === 'shopify') {
+    const result = await shopify.publishPost({
+      shop: cfg.shopify_shop, accessToken: secretBox.decrypt(cfg.shopify_access_token), blogId: cfg.shopify_blog_id,
+      title: art.title, contentHtml: html
+    })
+    published_url = result.url
+    extra = { shopify: { id: result.id, mocked: !!result.mocked } }
+  } else if (targetType === 'webflow') {
+    const result = await webflow.publishPost({
+      apiToken: secretBox.decrypt(cfg.webflow_api_token), collectionId: cfg.webflow_collection_id,
+      siteUrl: cfg.webflow_site_url, bodyField: cfg.webflow_body_field || 'post-body',
+      title: art.title, contentHtml: html, slug: art.slug
+    })
+    published_url = result.url
+    extra = { webflow: { id: result.id, mocked: !!result.mocked } }
   } else {
     const blogSlug = await ensureBlogSlug(db, customer || { id: art.customer_id })
     published_url = `/blog/${blogSlug}/${art.slug}`

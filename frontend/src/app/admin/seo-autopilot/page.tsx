@@ -3,18 +3,21 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { Sparkles, KeyRound, FileText, Check, RefreshCw, Trash2, Wand2, Globe, Clock, EyeOff, Image as ImageIcon } from 'lucide-react'
+import { Sparkles, KeyRound, FileText, Check, RefreshCw, Trash2, Wand2, Globe, Clock, EyeOff, Image as ImageIcon, BarChart3 } from 'lucide-react'
 import { getCurrentUserProfile } from '@/lib/authClient'
-import { seoAutopilotClient, type SeoBrandProfile, type SeoKeyword, type SeoArticle, type SeoSchedule } from '@/lib/seoAutopilotClient'
+import { seoAutopilotClient, type SeoBrandProfile, type SeoKeyword, type SeoArticle, type SeoSchedule, type SeoArticleMetric } from '@/lib/seoAutopilotClient'
 
-type Step = 'brand' | 'keywords' | 'articles' | 'autopilot'
+type Step = 'brand' | 'keywords' | 'articles' | 'autopilot' | 'performance'
 
 const STEPS: Array<{ key: Step; label: string; icon: any }> = [
   { key: 'brand', label: 'Brand-DNA', icon: Sparkles },
   { key: 'keywords', label: 'Keywords', icon: KeyRound },
   { key: 'articles', label: 'Artikel', icon: FileText },
-  { key: 'autopilot', label: 'Autopilot', icon: Clock }
+  { key: 'autopilot', label: 'Autopilot', icon: Clock },
+  { key: 'performance', label: 'Performance', icon: BarChart3 }
 ]
+
+type MetricRow = SeoArticle & { metric: SeoArticleMetric | null }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -52,6 +55,10 @@ export default function SeoAutopilotPage() {
   // Autopilot-Schedule
   const [schedule, setSchedule] = useState<SeoSchedule>({ enabled: false, cadence: 'weekly', auto_publish: false })
 
+  // Performance
+  const [metrics, setMetrics] = useState<MetricRow[]>([])
+  const [totals, setTotals] = useState<{ impressions: number; clicks: number }>({ impressions: 0, clicks: 0 })
+
   useEffect(() => {
     getCurrentUserProfile()
       .then((p) => setAuthorized(['admin', 'super_admin'].includes(String(p?.role || '').toLowerCase())))
@@ -75,6 +82,7 @@ export default function SeoAutopilotPage() {
       setKeywords(kw.keywords || [])
       setArticles(ar.articles || [])
       if (sc.schedule) setSchedule(sc.schedule)
+      loadMetrics()
     } catch (e) { fail(e) } finally { setBusy(false) }
   }
 
@@ -201,6 +209,24 @@ export default function SeoAutopilotPage() {
     } catch (e) { fail(e) } finally { setBusy(false) }
   }
 
+  // Performance
+  async function loadMetrics() {
+    if (!customerId) return
+    try {
+      const r = await seoAutopilotClient.listMetrics(customerId)
+      setMetrics(r.articles || []); setTotals(r.totals || { impressions: 0, clicks: 0 })
+    } catch (e) { fail(e) }
+  }
+  async function refreshMetrics() {
+    if (!customerId) return fail(new Error('Bitte zuerst eine Kunden-ID eingeben.'))
+    setBusy(true); setError('')
+    try {
+      const r = await seoAutopilotClient.refreshMetrics(customerId)
+      await loadMetrics()
+      note(`Kennzahlen aktualisiert (${r.updated} Artikel).`)
+    } catch (e) { fail(e) } finally { setBusy(false) }
+  }
+
   if (authorized === null) return <div className="p-8 text-zinc-400">Lade…</div>
   if (!authorized) return <div className="p-8 text-rose-400">Kein Zugriff. Diese Seite ist nur für Admins.</div>
 
@@ -310,6 +336,9 @@ export default function SeoAutopilotPage() {
                 <input type="checkbox" checked={!!selected[k.keyword]} onChange={(e) => setSelected({ ...selected, [k.keyword]: e.target.checked })}
                   className="h-4 w-4 accent-violet-500" />
                 <span className="flex-1 font-medium">{k.keyword}</span>
+                {k.search_volume != null && <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-emerald-300" title="Suchvolumen / Monat">{new Intl.NumberFormat('de-DE').format(k.search_volume)}/M</span>}
+                {k.difficulty != null && <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-amber-300" title="Difficulty 0–100">KD {k.difficulty}</span>}
+                {k.cpc != null && <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300" title="CPC">{k.cpc.toFixed(2)} €</span>}
                 <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">{k.intent}</span>
                 <span className="text-xs text-zinc-400">Prio {k.priority}</span>
                 <button onClick={() => genArticle(k.keyword)} disabled={busy}
@@ -440,10 +469,12 @@ export default function SeoAutopilotPage() {
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-zinc-400">Veröffentlichungs-Ziel</span>
-            <select value={schedule.target_type || 'in_app'} onChange={(e) => setSchedule({ ...schedule, target_type: e.target.value as 'in_app' | 'wordpress' })}
+            <select value={schedule.target_type || 'in_app'} onChange={(e) => setSchedule({ ...schedule, target_type: e.target.value as 'in_app' | 'wordpress' | 'shopify' | 'webflow' })}
               className="rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-violet-500">
               <option value="in_app">In-House-Blog (/blog)</option>
               <option value="wordpress">WordPress (REST API)</option>
+              <option value="shopify">Shopify (Blog)</option>
+              <option value="webflow">Webflow (CMS)</option>
             </select>
           </label>
           {schedule.target_type === 'wordpress' && (
@@ -464,12 +495,90 @@ export default function SeoAutopilotPage() {
               <p className="text-xs text-zinc-500 sm:col-span-3">Verschlüsselt gespeichert (AES-256-GCM, sofern SEO_SECRET_KEY gesetzt). Ohne vollständige Zugangsdaten läuft die Veröffentlichung im Mock-Modus.</p>
             </div>
           )}
+          {schedule.target_type === 'shopify' && (
+            <div className="grid gap-3 rounded-lg border border-zinc-700 bg-zinc-950/50 p-4 sm:grid-cols-3">
+              <label className="text-sm"><span className="mb-1 block text-zinc-400">Shop-Domain</span>
+                <input value={schedule.target_config?.shopify_shop || ''} placeholder="kunde.myshopify.com"
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, shopify_shop: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <label className="text-sm"><span className="mb-1 block text-zinc-400">Blog-ID</span>
+                <input value={schedule.target_config?.shopify_blog_id || ''}
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, shopify_blog_id: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <label className="text-sm"><span className="mb-1 block text-zinc-400">Access-Token {schedule.target_config?.shopify_access_token_set && <span className="text-emerald-400">· gespeichert</span>}</span>
+                <input type="password" value={schedule.target_config?.shopify_access_token || ''}
+                  placeholder={schedule.target_config?.shopify_access_token_set ? '•••••••• (leer = behalten)' : ''}
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, shopify_access_token: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <p className="text-xs text-zinc-500 sm:col-span-3">Token verschlüsselt gespeichert. Ohne vollständige Zugangsdaten Mock-Modus.</p>
+            </div>
+          )}
+          {schedule.target_type === 'webflow' && (
+            <div className="grid gap-3 rounded-lg border border-zinc-700 bg-zinc-950/50 p-4 sm:grid-cols-3">
+              <label className="text-sm"><span className="mb-1 block text-zinc-400">Collection-ID</span>
+                <input value={schedule.target_config?.webflow_collection_id || ''}
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, webflow_collection_id: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <label className="text-sm"><span className="mb-1 block text-zinc-400">Site-URL</span>
+                <input value={schedule.target_config?.webflow_site_url || ''} placeholder="https://kunde.webflow.io"
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, webflow_site_url: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <label className="text-sm"><span className="mb-1 block text-zinc-400">Body-Feld (Slug)</span>
+                <input value={schedule.target_config?.webflow_body_field || ''} placeholder="post-body"
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, webflow_body_field: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <label className="text-sm sm:col-span-3"><span className="mb-1 block text-zinc-400">API-Token {schedule.target_config?.webflow_api_token_set && <span className="text-emerald-400">· gespeichert</span>}</span>
+                <input type="password" value={schedule.target_config?.webflow_api_token || ''}
+                  placeholder={schedule.target_config?.webflow_api_token_set ? '•••••••• (leer = behalten)' : ''}
+                  onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, webflow_api_token: e.target.value } })}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
+              <p className="text-xs text-zinc-500 sm:col-span-3">Token verschlüsselt gespeichert. Ohne vollständige Zugangsdaten Mock-Modus.</p>
+            </div>
+          )}
           {schedule.next_run_at && <div className="text-xs text-zinc-500">Nächster Lauf: {new Date(schedule.next_run_at).toLocaleString('de-DE')}</div>}
           {schedule.last_run_at && <div className="text-xs text-zinc-500">Letzter Lauf: {new Date(schedule.last_run_at).toLocaleString('de-DE')}</div>}
           <button onClick={saveSchedule} disabled={busy || !customerId}
             className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
             <Check className="h-4 w-4" /> Speichern
           </button>
+        </section>
+      )}
+
+      {/* Performance */}
+      {step === 'performance' && (
+        <section className="space-y-4 rounded-xl border border-zinc-700 bg-zinc-900/40 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-4">
+              <div><div className="text-2xl font-bold text-violet-300">{new Intl.NumberFormat('de-DE').format(totals.impressions)}</div><div className="text-xs text-zinc-400">Impressionen</div></div>
+              <div><div className="text-2xl font-bold text-emerald-300">{new Intl.NumberFormat('de-DE').format(totals.clicks)}</div><div className="text-xs text-zinc-400">Klicks</div></div>
+            </div>
+            <button onClick={refreshMetrics} disabled={busy || !customerId}
+              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+              <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} /> Kennzahlen aktualisieren
+            </button>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-zinc-700">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-800/60 text-xs text-zinc-400">
+                <tr><th className="px-3 py-2 text-left">Artikel</th><th className="px-3 py-2 text-right">Impr.</th><th className="px-3 py-2 text-right">Klicks</th><th className="px-3 py-2 text-right">CTR</th><th className="px-3 py-2 text-right">Ø Pos.</th></tr>
+              </thead>
+              <tbody>
+                {metrics.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-zinc-500">Keine veröffentlichten Artikel oder noch keine Kennzahlen. „Aktualisieren“ klicken.</td></tr>}
+                {metrics.map((a) => (
+                  <tr key={a.id} className="border-t border-zinc-800">
+                    <td className="px-3 py-2">
+                      {a.published_url ? <a href={a.published_url} target="_blank" rel="noopener" className="text-violet-300 hover:underline">{a.title}</a> : a.title}
+                    </td>
+                    <td className="px-3 py-2 text-right">{a.metric ? new Intl.NumberFormat('de-DE').format(a.metric.impressions) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{a.metric ? new Intl.NumberFormat('de-DE').format(a.metric.clicks) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{a.metric?.ctr != null ? `${(a.metric.ctr * 100).toFixed(1)}%` : '—'}</td>
+                    <td className="px-3 py-2 text-right">{a.metric?.position != null ? a.metric.position.toFixed(1) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-zinc-500">Quelle: Mock (deterministisch). Mit angebundener Google Search Console (SEO_METRICS_PROVIDER=gsc) echte Werte.</p>
         </section>
       )}
     </div>

@@ -1,7 +1,9 @@
 const express = require('express')
 const seo = require('../services/seoAutopilotService')
 const seoImage = require('../services/seoImageService')
+const seoKeywordData = require('../services/seoKeywordDataService')
 const seoPublish = require('../services/seoPublishService')
+const seoMetrics = require('../services/seoMetricsService')
 const secretBox = require('../lib/secretBox')
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
@@ -100,7 +102,9 @@ function seoAutopilotRoutes(injectedSupabase) {
         language: language ? String(language) : 'de',
         count: Number(count) || 10
       })
-      res.json({ ok: true, ...out })
+      // Mit echten/geschaetzten Kennzahlen (Suchvolumen, Difficulty, CPC) anreichern.
+      const enriched = await seoKeywordData.enrichKeywords(out.keywords, {})
+      res.json({ ok: true, provider: out.provider, data_provider: enriched.provider, keywords: enriched.keywords })
     } catch (e) { next(e) }
   })
 
@@ -116,7 +120,11 @@ function seoAutopilotRoutes(injectedSupabase) {
         keyword: String(k?.keyword || '').trim(),
         intent: ['local', 'informational', 'transactional'].includes(String(k?.intent)) ? String(k.intent) : 'informational',
         priority: Math.min(5, Math.max(1, Number(k?.priority) || 3)),
-        status: 'idea'
+        status: 'idea',
+        search_volume: k?.search_volume != null ? Math.max(0, Number(k.search_volume) || 0) : null,
+        difficulty: k?.difficulty != null ? Math.min(100, Math.max(0, Number(k.difficulty) || 0)) : null,
+        cpc: k?.cpc != null ? Math.round((Number(k.cpc) || 0) * 100) / 100 : null,
+        data_provider: k?.data_provider ? String(k.data_provider) : null
       })).filter((k) => k.keyword)
       if (!rows.length) return res.status(400).json({ ok: false, error: 'keine gueltigen Keywords' })
       const { data, error } = await db().from('seo_keyword_targets')
@@ -264,14 +272,25 @@ function seoAutopilotRoutes(injectedSupabase) {
 
   // --- Veroeffentlichungs-Plan (Milestone 3) -----------------------------
 
-  // Maskiert sensible Felder in target_config fuer die Ausgabe: das
-  // WordPress-Passwort wird nie zurueckgegeben, nur ob es gesetzt ist.
+  // Verschluesselte Geheimnisfelder in target_config (nie im Klartext ausgeben).
+  const SECRET_FIELDS = ['wp_app_password', 'shopify_access_token', 'webflow_api_token']
+  // Nicht-geheime Konfigurationsfelder je Ziel.
+  const PLAIN_FIELDS = [
+    'language', 'wp_url', 'wp_user',
+    'shopify_shop', 'shopify_blog_id',
+    'webflow_collection_id', 'webflow_site_url', 'webflow_body_field'
+  ]
+
+  // Maskiert Geheimnisse fuer die Ausgabe: Wert wird entfernt, stattdessen
+  // <feld>_set: true/false zurueckgegeben.
   function maskSchedule(sched) {
     if (!sched) return sched
     const cfg = (sched.target_config && typeof sched.target_config === 'object') ? { ...sched.target_config } : {}
-    const hasPw = !!cfg.wp_app_password
-    delete cfg.wp_app_password
-    cfg.wp_app_password_set = hasPw
+    for (const f of SECRET_FIELDS) {
+      const has = !!cfg[f]
+      delete cfg[f]
+      cfg[`${f}_set`] = has
+    }
     return { ...sched, target_config: cfg }
   }
 
@@ -293,24 +312,27 @@ function seoAutopilotRoutes(injectedSupabase) {
       const { data: existing } = await db().from('seo_publishing_schedules')
         .select('next_run_at, target_config').eq('customer_id', String(customer_id)).maybeSingle()
 
-      // target_config zusammenfuehren: WP-Passwort verschluesselt ablegen;
-      // ein leeres Passwort-Feld behaelt den bestehenden (verschluesselten) Wert.
+      // target_config zusammenfuehren: Geheimnisse verschluesselt ablegen;
+      // ein leeres Geheimnisfeld behaelt den bestehenden (verschluesselten) Wert.
       const incoming = (target_config && typeof target_config === 'object') ? target_config : {}
       const prevCfg = (existing?.target_config && typeof existing.target_config === 'object') ? existing.target_config : {}
-      const cfg = {
-        language: incoming.language || prevCfg.language || 'de',
-        wp_url: incoming.wp_url != null ? String(incoming.wp_url) : (prevCfg.wp_url || ''),
-        wp_user: incoming.wp_user != null ? String(incoming.wp_user) : (prevCfg.wp_user || '')
+      const cfg = {}
+      for (const f of PLAIN_FIELDS) {
+        if (incoming[f] != null) cfg[f] = String(incoming[f])
+        else if (prevCfg[f] != null) cfg[f] = prevCfg[f]
       }
-      if (incoming.wp_app_password) cfg.wp_app_password = secretBox.encrypt(String(incoming.wp_app_password))
-      else if (prevCfg.wp_app_password) cfg.wp_app_password = prevCfg.wp_app_password
+      if (!cfg.language) cfg.language = 'de'
+      for (const f of SECRET_FIELDS) {
+        if (incoming[f]) cfg[f] = secretBox.encrypt(String(incoming[f]))
+        else if (prevCfg[f]) cfg[f] = prevCfg[f]
+      }
 
       const row = {
         customer_id: String(customer_id),
         enabled: !!enabled,
         cadence: ['daily', 'weekly'].includes(String(cadence)) ? String(cadence) : 'weekly',
         auto_publish: !!auto_publish,
-        target_type: ['in_app', 'wordpress'].includes(String(target_type)) ? String(target_type) : 'in_app',
+        target_type: ['in_app', 'wordpress', 'shopify', 'webflow'].includes(String(target_type)) ? String(target_type) : 'in_app',
         target_config: cfg,
         updated_at: new Date().toISOString()
       }
@@ -321,6 +343,53 @@ function seoAutopilotRoutes(injectedSupabase) {
         .upsert(row, { onConflict: 'customer_id' }).select().maybeSingle()
       if (error) throw new Error(error.message)
       res.json({ ok: true, schedule: maskSchedule(data) })
+    } catch (e) { next(e) }
+  })
+
+  // --- Performance-Analytics ---------------------------------------------
+
+  // Aktualisiert die Tageskennzahlen aller veroeffentlichten Artikel eines
+  // Kunden (Upsert je Artikel/heute).
+  router.post('/metrics/refresh', async (req, res, next) => {
+    try {
+      if (!requireAdmin(req, res)) return
+      const { customer_id } = req.body || {}
+      if (!customer_id) return res.status(400).json({ ok: false, error: 'customer_id erforderlich' })
+      const { data: arts } = await db().from('seo_articles')
+        .select('id, customer_id, published_at').eq('customer_id', String(customer_id)).eq('status', 'published').limit(500)
+      const today = new Date().toISOString().slice(0, 10)
+      let updated = 0
+      for (const a of arts || []) {
+        const m = await seoMetrics.fetchMetrics(a)
+        const { error } = await db().from('seo_article_metrics').upsert({
+          article_id: a.id, customer_id: String(customer_id), metric_date: today,
+          impressions: m.impressions, clicks: m.clicks, position: m.position, ctr: m.ctr, source: m.source
+        }, { onConflict: 'article_id,metric_date' })
+        if (!error) updated++
+      }
+      res.json({ ok: true, updated, date: today })
+    } catch (e) { next(e) }
+  })
+
+  // Liefert je veroeffentlichtem Artikel die neueste Kennzahl + Summe.
+  router.get('/metrics', async (req, res, next) => {
+    try {
+      if (!requireAdmin(req, res)) return
+      const customer_id = req.query.customer_id
+      if (!customer_id) return res.status(400).json({ ok: false, error: 'customer_id erforderlich' })
+      const { data: arts } = await db().from('seo_articles')
+        .select('id, title, slug, published_url, published_at').eq('customer_id', String(customer_id)).eq('status', 'published').limit(500)
+      const { data: metrics } = await db().from('seo_article_metrics')
+        .select('article_id, metric_date, impressions, clicks, position, ctr, source')
+        .eq('customer_id', String(customer_id)).order('metric_date', { ascending: false }).limit(2000)
+      const latest = new Map()
+      for (const m of metrics || []) { if (!latest.has(m.article_id)) latest.set(m.article_id, m) }
+      const rows = (arts || []).map((a) => ({ ...a, metric: latest.get(a.id) || null }))
+      const totals = rows.reduce((acc, r) => {
+        if (r.metric) { acc.impressions += r.metric.impressions || 0; acc.clicks += r.metric.clicks || 0 }
+        return acc
+      }, { impressions: 0, clicks: 0 })
+      res.json({ ok: true, articles: rows, totals })
     } catch (e) { next(e) }
   })
 

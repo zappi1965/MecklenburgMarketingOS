@@ -155,3 +155,51 @@ test('secretBox: ohne Schluessel Klartext (Dev) und idempotentes decrypt', () =>
   assert.equal(secretBox.decrypt('abc'), 'abc')
   assert.equal(secretBox.encrypt(''), '')
 })
+
+// --- Ausbau: Keyword-Daten, CMS-Ziele, Metriken ---------------------------
+
+const kwData = require('../src/services/seoKeywordDataService')
+
+test('seoKeywordDataService (mock): reichert mit plausiblen Kennzahlen an', async () => {
+  delete process.env.DATAFORSEO_LOGIN
+  delete process.env.DATAFORSEO_PASSWORD
+  assert.equal(kwData._provider(), 'mock')
+  const { provider, keywords } = await kwData.enrichKeywords([{ keyword: 'friseur schwerin', intent: 'local', priority: 5 }])
+  assert.equal(provider, 'mock')
+  const k = keywords[0]
+  assert.ok(k.search_volume >= 10)
+  assert.ok(k.difficulty >= 0 && k.difficulty <= 100)
+  assert.ok(k.cpc >= 0)
+  assert.equal(k.data_provider, 'mock')
+})
+
+test('seoKeywordDataService: deterministisch fuer gleiches Keyword', () => {
+  const a = kwData._mockMetrics('cafe schwerin')
+  const b = kwData._mockMetrics('cafe schwerin')
+  assert.deepEqual(a, b)
+})
+
+const shopify = require('../src/services/shopifyPublishService')
+const webflow = require('../src/services/webflowPublishService')
+
+test('shopifyPublishService (mock): simulierte URL ohne Zugang', async () => {
+  const r = await shopify.publishPost({ shop: 'kunde.myshopify.com', title: 'X', contentHtml: '<p>x</p>' })
+  assert.equal(r.mocked, true)
+  assert.ok(r.url.includes('kunde.myshopify.com/blogs/news/mock-'))
+})
+
+test('webflowPublishService (mock): simulierte URL ohne Zugang', async () => {
+  const r = await webflow.publishPost({ siteUrl: 'https://kunde.webflow.io', title: 'Mein Titel', contentHtml: '<p>x</p>' })
+  assert.equal(r.mocked, true)
+  assert.ok(r.url.includes('/post/mein-titel'))
+})
+
+const metrics = require('../src/services/seoMetricsService')
+
+test('seoMetricsService (mock): Kennzahlen in plausiblen Grenzen', async () => {
+  const m = await metrics.fetchMetrics({ id: 'abc-123', published_at: '2026-05-01T00:00:00Z' })
+  assert.ok(m.impressions >= 0)
+  assert.ok(m.clicks >= 0 && m.clicks <= m.impressions)
+  assert.ok(m.position >= 1)
+  assert.equal(m.source, 'mock')
+})

@@ -35,6 +35,20 @@ export type SeoKeyword = {
   intent: 'local' | 'informational' | 'transactional'
   priority: number
   status?: string
+  search_volume?: number | null
+  difficulty?: number | null
+  cpc?: number | null
+  data_provider?: string | null
+}
+
+export type SeoArticleMetric = {
+  article_id: string
+  metric_date?: string
+  impressions: number
+  clicks: number
+  position?: number | null
+  ctr?: number | null
+  source?: string
 }
 
 export type SeoArticle = {
@@ -73,7 +87,7 @@ export const seoAutopilotClient = {
 
   // Keywords
   generateKeywords: (params: { customer_id: string; count?: number; language?: string }) =>
-    call<{ ok: boolean; provider: string; keywords: SeoKeyword[] }>(`/api/seo-autopilot/keywords/generate`, {
+    call<{ ok: boolean; provider: string; data_provider: string; keywords: SeoKeyword[] }>(`/api/seo-autopilot/keywords/generate`, {
       method: 'POST', body: JSON.stringify(params)
     }),
   saveKeywords: (customer_id: string, keywords: SeoKeyword[]) =>
@@ -107,15 +121,34 @@ export const seoAutopilotClient = {
   getSchedule: (customer_id: string) =>
     call<{ ok: boolean; schedule: SeoSchedule | null }>(`/api/seo-autopilot/schedule?customer_id=${encodeURIComponent(customer_id)}`),
   saveSchedule: (schedule: SeoSchedule & { customer_id: string }) =>
-    call<{ ok: boolean; schedule: SeoSchedule }>(`/api/seo-autopilot/schedule`, { method: 'POST', body: JSON.stringify(schedule) })
+    call<{ ok: boolean; schedule: SeoSchedule }>(`/api/seo-autopilot/schedule`, { method: 'POST', body: JSON.stringify(schedule) }),
+
+  // Performance-Analytics
+  refreshMetrics: (customer_id: string) =>
+    call<{ ok: boolean; updated: number; date: string }>(`/api/seo-autopilot/metrics/refresh`, { method: 'POST', body: JSON.stringify({ customer_id }) }),
+  listMetrics: (customer_id: string) =>
+    call<{ ok: boolean; articles: Array<SeoArticle & { metric: SeoArticleMetric | null }>; totals: { impressions: number; clicks: number } }>(
+      `/api/seo-autopilot/metrics?customer_id=${encodeURIComponent(customer_id)}`)
 }
 
 export type SeoTargetConfig = {
   language?: string
+  // WordPress
   wp_url?: string
   wp_user?: string
   wp_app_password?: string
   wp_app_password_set?: boolean
+  // Shopify
+  shopify_shop?: string
+  shopify_blog_id?: string
+  shopify_access_token?: string
+  shopify_access_token_set?: boolean
+  // Webflow
+  webflow_collection_id?: string
+  webflow_site_url?: string
+  webflow_body_field?: string
+  webflow_api_token?: string
+  webflow_api_token_set?: boolean
 }
 
 export type SeoSchedule = {
@@ -124,7 +157,7 @@ export type SeoSchedule = {
   enabled: boolean
   cadence: 'daily' | 'weekly'
   auto_publish: boolean
-  target_type?: 'in_app' | 'wordpress'
+  target_type?: 'in_app' | 'wordpress' | 'shopify' | 'webflow'
   target_config?: SeoTargetConfig
   next_run_at?: string | null
   last_run_at?: string | null
