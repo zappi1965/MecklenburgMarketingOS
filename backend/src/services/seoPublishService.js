@@ -5,7 +5,19 @@
 
 const seo = require('./seoAutopilotService')
 const wp = require('./wordpressPublishService')
+const secretBox = require('../lib/secretBox')
 const { markdownToHtml } = require('./seoMarkdown')
+const { injectInternalLinks } = require('./seoInternalLinks')
+
+// Sammelt veroeffentlichte Geschwister-Artikel als interne Link-Ziele.
+async function siblingLinks(db, customerId, selfId) {
+  const { data } = await db.from('seo_articles')
+    .select('id, keyword, title, published_url')
+    .eq('customer_id', customerId).eq('status', 'published').limit(200)
+  return (data || [])
+    .filter((a) => a.id !== selfId && a.published_url && (a.keyword || a.title))
+    .map((a) => ({ keyword: a.keyword || a.title, url: a.published_url }))
+}
 
 // Stellt sicher, dass der Kunde einen eindeutigen blog_slug hat.
 async function ensureBlogSlug(db, customer) {
@@ -36,15 +48,20 @@ async function publishArticle(db, articleId) {
   let published_url
   let extra = {}
 
+  // M5: automatische interne Verlinkung auf bereits veroeffentlichte Artikel.
+  const links = await siblingLinks(db, art.customer_id, art.id)
+  const linkedMarkdown = injectInternalLinks(art.body_markdown, links, 3)
+
   if (targetType === 'wordpress') {
     const cfg = sched?.target_config || {}
-    const html = markdownToHtml(art.body_markdown)
+    const html = markdownToHtml(linkedMarkdown)
     const result = await wp.publishPost({
-      wpUrl: cfg.wp_url, wpUser: cfg.wp_user, wpAppPassword: cfg.wp_app_password,
-      title: art.title, contentHtml: html, status: 'publish'
+      wpUrl: cfg.wp_url, wpUser: cfg.wp_user, wpAppPassword: secretBox.decrypt(cfg.wp_app_password),
+      title: art.title, contentHtml: html, status: 'publish',
+      featuredImageUrl: art.cover_image_url || undefined
     })
     published_url = result.url
-    extra = { wordpress: { id: result.id, mocked: !!result.mocked } }
+    extra = { wordpress: { id: result.id, mocked: !!result.mocked, featured_media: result.featured_media || null } }
   } else {
     const blogSlug = await ensureBlogSlug(db, customer || { id: art.customer_id })
     published_url = `/blog/${blogSlug}/${art.slug}`
@@ -52,10 +69,11 @@ async function publishArticle(db, articleId) {
 
   const now = new Date().toISOString()
   const { data, error } = await db.from('seo_articles').update({
-    status: 'published', published_at: now, published_url, approved_at: art.approved_at || now, updated_at: now
+    status: 'published', published_at: now, published_url, approved_at: art.approved_at || now,
+    body_markdown: linkedMarkdown, updated_at: now
   }).eq('id', String(articleId)).select().maybeSingle()
   if (error) throw new Error(error.message)
-  return { article: data, target_type: targetType, ...extra }
+  return { article: data, target_type: targetType, internal_links: links.length ? Math.min(3, links.length) : 0, ...extra }
 }
 
 module.exports = { publishArticle, ensureBlogSlug }

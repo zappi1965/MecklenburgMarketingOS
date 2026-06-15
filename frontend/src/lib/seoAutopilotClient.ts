@@ -115,6 +115,7 @@ export type SeoTargetConfig = {
   wp_url?: string
   wp_user?: string
   wp_app_password?: string
+  wp_app_password_set?: boolean
 }
 
 export type SeoSchedule = {

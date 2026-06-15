@@ -114,3 +114,44 @@ test('wordpressPublishService: hasCredentials nur bei allen Feldern', () => {
   assert.equal(wp._hasCredentials({ wpUrl: 'a', wpUser: 'b', wpAppPassword: 'c' }), true)
   assert.equal(wp._hasCredentials({ wpUrl: 'a', wpUser: 'b' }), false)
 })
+
+// --- Milestone 5 + Verschluesselung ---------------------------------------
+
+const links = require('../src/services/seoInternalLinks')
+
+test('seoInternalLinks: verlinkt erstes Vorkommen, max-Limit, ueberspringt Ueberschriften', () => {
+  const md = '## Friseur Schwerin\n\nEin guter Friseur in Schwerin ist wichtig. Noch ein Friseur Satz.'
+  const out = links.injectInternalLinks(md, [{ keyword: 'Friseur', url: '/blog/x/friseur' }], 3)
+  // Ueberschrift bleibt unveraendert
+  assert.ok(out.includes('## Friseur Schwerin'))
+  // genau ein Link gesetzt
+  assert.equal((out.match(/\]\(\/blog\/x\/friseur\)/g) || []).length, 1)
+})
+
+test('seoInternalLinks: respektiert maxLinks', () => {
+  const md = 'alpha beta gamma'
+  const out = links.injectInternalLinks(md, [
+    { keyword: 'alpha', url: '/a' }, { keyword: 'beta', url: '/b' }, { keyword: 'gamma', url: '/c' }
+  ], 2)
+  const count = (out.match(/\]\(/g) || []).length
+  assert.equal(count, 2)
+})
+
+const secretBox = require('../src/lib/secretBox')
+
+test('secretBox: Round-Trip mit Schluessel', () => {
+  process.env.SEO_SECRET_KEY = 'test-key-123'
+  const enc = secretBox.encrypt('geheim!')
+  assert.ok(secretBox.isEncrypted(enc))
+  assert.ok(enc.startsWith('enc:v1:'))
+  assert.equal(secretBox.decrypt(enc), 'geheim!')
+  delete process.env.SEO_SECRET_KEY
+})
+
+test('secretBox: ohne Schluessel Klartext (Dev) und idempotentes decrypt', () => {
+  delete process.env.SEO_SECRET_KEY
+  delete process.env.APP_ENCRYPTION_KEY
+  assert.equal(secretBox.encrypt('abc'), 'abc')
+  assert.equal(secretBox.decrypt('abc'), 'abc')
+  assert.equal(secretBox.encrypt(''), '')
+})

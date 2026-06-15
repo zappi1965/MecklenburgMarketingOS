@@ -456,11 +456,12 @@ export default function SeoAutopilotPage() {
                 <input value={schedule.target_config?.wp_user || ''}
                   onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, wp_user: e.target.value } })}
                   className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
-              <label className="text-sm sm:col-span-2"><span className="mb-1 block text-zinc-400">Application Password</span>
+              <label className="text-sm sm:col-span-2"><span className="mb-1 block text-zinc-400">Application Password {schedule.target_config?.wp_app_password_set && <span className="text-emerald-400">· gespeichert</span>}</span>
                 <input type="password" value={schedule.target_config?.wp_app_password || ''}
+                  placeholder={schedule.target_config?.wp_app_password_set ? '•••••••• (leer lassen = behalten)' : ''}
                   onChange={(e) => setSchedule({ ...schedule, target_config: { ...schedule.target_config, wp_app_password: e.target.value } })}
                   className="w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 outline-none focus:border-violet-500" /></label>
-              <p className="text-xs text-zinc-500 sm:col-span-3">Ohne vollständige Zugangsdaten läuft die Veröffentlichung im Mock-Modus (simulierte URL).</p>
+              <p className="text-xs text-zinc-500 sm:col-span-3">Verschlüsselt gespeichert (AES-256-GCM, sofern SEO_SECRET_KEY gesetzt). Ohne vollständige Zugangsdaten läuft die Veröffentlichung im Mock-Modus.</p>
             </div>
           )}
           {schedule.next_run_at && <div className="text-xs text-zinc-500">Nächster Lauf: {new Date(schedule.next_run_at).toLocaleString('de-DE')}</div>}

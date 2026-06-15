@@ -2,6 +2,7 @@ const express = require('express')
 const seo = require('../services/seoAutopilotService')
 const seoImage = require('../services/seoImageService')
 const seoPublish = require('../services/seoPublishService')
+const secretBox = require('../lib/secretBox')
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
 
 // SEO-Autopilot (Milestone 1): Brand-DNA, Keywords und Artikel generieren,
@@ -263,13 +264,24 @@ function seoAutopilotRoutes(injectedSupabase) {
 
   // --- Veroeffentlichungs-Plan (Milestone 3) -----------------------------
 
+  // Maskiert sensible Felder in target_config fuer die Ausgabe: das
+  // WordPress-Passwort wird nie zurueckgegeben, nur ob es gesetzt ist.
+  function maskSchedule(sched) {
+    if (!sched) return sched
+    const cfg = (sched.target_config && typeof sched.target_config === 'object') ? { ...sched.target_config } : {}
+    const hasPw = !!cfg.wp_app_password
+    delete cfg.wp_app_password
+    cfg.wp_app_password_set = hasPw
+    return { ...sched, target_config: cfg }
+  }
+
   router.get('/schedule', async (req, res, next) => {
     try {
       if (!requireAdmin(req, res)) return
       const customer_id = req.query.customer_id
       if (!customer_id) return res.status(400).json({ ok: false, error: 'customer_id erforderlich' })
       const { data } = await db().from('seo_publishing_schedules').select('*').eq('customer_id', String(customer_id)).maybeSingle()
-      res.json({ ok: true, schedule: data || null })
+      res.json({ ok: true, schedule: maskSchedule(data) })
     } catch (e) { next(e) }
   })
 
@@ -278,23 +290,37 @@ function seoAutopilotRoutes(injectedSupabase) {
       if (!requireAdmin(req, res)) return
       const { customer_id, enabled, cadence, auto_publish, target_type, target_config } = req.body || {}
       if (!customer_id) return res.status(400).json({ ok: false, error: 'customer_id erforderlich' })
+      const { data: existing } = await db().from('seo_publishing_schedules')
+        .select('next_run_at, target_config').eq('customer_id', String(customer_id)).maybeSingle()
+
+      // target_config zusammenfuehren: WP-Passwort verschluesselt ablegen;
+      // ein leeres Passwort-Feld behaelt den bestehenden (verschluesselten) Wert.
+      const incoming = (target_config && typeof target_config === 'object') ? target_config : {}
+      const prevCfg = (existing?.target_config && typeof existing.target_config === 'object') ? existing.target_config : {}
+      const cfg = {
+        language: incoming.language || prevCfg.language || 'de',
+        wp_url: incoming.wp_url != null ? String(incoming.wp_url) : (prevCfg.wp_url || ''),
+        wp_user: incoming.wp_user != null ? String(incoming.wp_user) : (prevCfg.wp_user || '')
+      }
+      if (incoming.wp_app_password) cfg.wp_app_password = secretBox.encrypt(String(incoming.wp_app_password))
+      else if (prevCfg.wp_app_password) cfg.wp_app_password = prevCfg.wp_app_password
+
       const row = {
         customer_id: String(customer_id),
         enabled: !!enabled,
         cadence: ['daily', 'weekly'].includes(String(cadence)) ? String(cadence) : 'weekly',
         auto_publish: !!auto_publish,
         target_type: ['in_app', 'wordpress'].includes(String(target_type)) ? String(target_type) : 'in_app',
-        target_config: (target_config && typeof target_config === 'object') ? target_config : {},
+        target_config: cfg,
         updated_at: new Date().toISOString()
       }
       // next_run_at neu setzen, wenn aktiviert und noch keiner geplant ist.
-      const { data: existing } = await db().from('seo_publishing_schedules').select('next_run_at').eq('customer_id', String(customer_id)).maybeSingle()
       if (row.enabled && !existing?.next_run_at) row.next_run_at = new Date().toISOString()
       if (!row.enabled) row.next_run_at = null
       const { data, error } = await db().from('seo_publishing_schedules')
         .upsert(row, { onConflict: 'customer_id' }).select().maybeSingle()
       if (error) throw new Error(error.message)
-      res.json({ ok: true, schedule: data })
+      res.json({ ok: true, schedule: maskSchedule(data) })
     } catch (e) { next(e) }
   })
 
