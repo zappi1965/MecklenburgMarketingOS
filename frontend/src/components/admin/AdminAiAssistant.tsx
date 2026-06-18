@@ -26,7 +26,7 @@ interface MmosSkill {
 type AgentEventType =
   | 'thinking' | 'tool_call' | 'tool_result' | 'tool_error'
   | 'file_changed' | 'complete' | 'max_steps' | 'creating_pr'
-  | 'pr_created' | 'no_changes' | 'error' | 'done'
+  | 'pr_created' | 'no_changes' | 'error' | 'done' | 'file_diff'
 
 interface AgentEvent {
   type: AgentEventType
@@ -45,6 +45,8 @@ interface AgentEvent {
   branch?: string
   filesCommitted?: number
   message?: string    // no_changes / error
+  oldContent?: string  // file_diff
+  newContent?: string  // file_diff
   stepsUsed?: number  // max_steps
 }
 
