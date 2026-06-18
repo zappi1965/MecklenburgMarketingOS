@@ -24,7 +24,9 @@ function billingRoutes(billingService) {
 
   router.post('/subscriptions/change', async (req, res, next) => {
     try {
-      const data = await billingService.upgradeDowngrade(req.body)
+      const { customer_id, new_package, reason } = req.body || {}
+      if (!customer_id || !new_package) return res.status(400).json({ ok: false, error: 'customer_id und new_package sind Pflichtfelder' })
+      const data = await billingService.upgradeDowngrade({ customer_id: String(customer_id), new_package: String(new_package), reason: reason ? String(reason).slice(0, 500) : undefined })
       res.json({ ok: true, data })
     } catch (e) { next(e) }
   })
