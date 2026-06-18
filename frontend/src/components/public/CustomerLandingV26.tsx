@@ -1013,7 +1013,7 @@ const landingHtml = `
 </section>
 
 <section class="section" id="report">
-  <div class="container section-head reveal"><h2>Ein Monatsblick, den sie direkt verstehen.</h2><p>Er zeigt nicht jedes Detail — sondern genau das, was lokale Betriebe schnell einordnen und entscheiden können.</p></div>
+  <div class="container section-head reveal"><h2>Ein Monatsblick, den Sie direkt verstehen.</h2><p>Er zeigt nicht jedes Detail — sondern genau das, was lokale Betriebe schnell einordnen und entscheiden können.</p></div>
   <div class="container report-grid">
     <article class="report-panel reveal"><div class="report-title"><small>Beispielbetrieb</small><span>Mai 2026</span></div><div class="metric-row"><div class="metric-box"><small>Profilaufrufe</small><b class="grad">2.846</b><span>+22% zum Vormonat</span></div><div class="metric-box"><small>Bewertungen</small><b class="grad">+34</b><span>4,8 Sterne aktuell</span></div><div class="metric-box"><small>QR-Scans</small><b class="grad">512</b><span>127 diese Woche</span></div></div><div class="report-chart" aria-hidden="true"><svg viewBox="0 0 640 190" preserveAspectRatio="none"><path d="M0 148 C70 132 88 138 148 108 C214 74 244 118 306 82 C375 42 408 66 465 48 C532 28 572 41 640 22" fill="none" stroke="url(#reportLine)" stroke-width="7" stroke-linecap="round"/><path d="M0 148 C70 132 88 138 148 108 C214 74 244 118 306 82 C375 42 408 66 465 48 C532 28 572 41 640 22 L640 190 L0 190 Z" fill="url(#reportArea)"/><defs><linearGradient id="reportLine" x1="0" x2="1"><stop stop-color="#5d5dfc"/><stop offset=".55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#c084fc"/></linearGradient><linearGradient id="reportArea" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#8b5cf6" stop-opacity=".27"/><stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/></linearGradient></defs></svg></div></article>
     <article class="report-panel reveal delay1"><div class="report-title"><small>Nächste Empfehlung</small><span>Priorität hoch</span></div><div class="activity"><div class="activity-row"><i></i><div><b>Sommer-Fotos freigeben</b><span>Verbessert Vertrauen und Darstellung in Google Maps.</span></div><em>1</em></div><div class="activity-row"><i></i><div><b>Wochenend-Booster starten</b><span>QR-Hinweis an Theke + Bewertungsfrage nach Kaufmoment.</span></div><em>2</em></div><div class="activity-row"><i></i><div><b>8 inaktive Gäste zurückholen</b><span>Kleiner Anreiz für Stammgäste, die 30 Tage nicht aktiv waren.</span></div><em>3</em></div></div></article>
@@ -1292,6 +1292,10 @@ const landingScript = `(function(){
       return rect.top < viewport*.78 && rect.bottom > 0;
     };
     blocked=checkBlock(form)||checkBlock(footer);
+    if(!blocked){
+      var guardEls=document.querySelectorAll(".analysis-cta,.premium-close,.report-panel,.audit-preview-grid");
+      for(var gi=0;gi<guardEls.length;gi++){ if(checkBlock(guardEls[gi])){ blocked=true; break; } }
+    }
     document.body.classList.toggle("sticky-cta-active",active);
     document.body.classList.toggle("sticky-cta-blocked",blocked);
   };
