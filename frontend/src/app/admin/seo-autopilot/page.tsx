@@ -361,6 +361,7 @@ export default function SeoAutopilotPage() {
               <div key={a.id} className={`rounded-lg border p-3 text-sm ${editing?.id === a.id ? 'border-violet-500 bg-violet-950/20' : 'border-zinc-700 bg-zinc-950/40'}`}>
                 <div className="flex items-center justify-between gap-2">
                   <button onClick={() => setEditing(a)} className="flex-1 text-left font-medium hover:text-violet-300">{a.title}</button>
+                  {a.is_refinement && <span className="rounded-full bg-amber-700 px-2 py-0.5 text-xs font-semibold text-amber-50" title="Automatisch nachgeschärfter Entwurf">überarbeitet</span>}
                   <StatusBadge status={a.status} />
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">

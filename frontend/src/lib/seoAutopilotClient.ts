@@ -66,6 +66,8 @@ export type SeoArticle = {
   model?: string
   published_url?: string | null
   cover_image_url?: string | null
+  is_refinement?: boolean
+  source_article_id?: string | null
   created_at?: string
   updated_at?: string
   approved_at?: string | null

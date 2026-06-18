@@ -203,3 +203,37 @@ test('seoMetricsService (mock): Kennzahlen in plausiblen Grenzen', async () => {
   assert.ok(m.position >= 1)
   assert.equal(m.source, 'mock')
 })
+
+// --- Autopilot 2.0: performance-gesteuerte Keyword-Auswahl ----------------
+
+const selection = require('../src/services/seoKeywordSelection')
+
+test('seoKeywordSelection: pickBest ueberspringt genutzte Keywords', () => {
+  const kws = [{ keyword: 'a lang keyword', priority: 5 }, { keyword: 'b anderes thema', priority: 1 }]
+  const best = selection.pickBest(kws, new Set(['a lang keyword']), new Map())
+  assert.equal(best.keyword, 'b anderes thema')
+})
+
+test('seoKeywordSelection: pickBest = null wenn alle genutzt', () => {
+  const best = selection.pickBest([{ keyword: 'nur eins', priority: 3 }], new Set(['nur eins']), new Map())
+  assert.equal(best, null)
+})
+
+test('seoKeywordSelection: Themen-Signal bevorzugt verwandtes Keyword', () => {
+  const signal = selection.performanceSignal([{ keyword: 'friseur schwerin tipps', clicks: 50 }])
+  const kws = [
+    { keyword: 'allgemeines marketing thema', priority: 3, search_volume: 100, difficulty: 40 },
+    { keyword: 'friseur beratung schwerin', priority: 3, search_volume: 100, difficulty: 40 }
+  ]
+  const best = selection.pickBest(kws, new Set(), signal)
+  assert.equal(best.keyword, 'friseur beratung schwerin')
+})
+
+test('seoKeywordSelection: hoeheres Volumen / geringere Difficulty gewinnt (ohne Signal)', () => {
+  const kws = [
+    { keyword: 'schwer und selten', priority: 3, search_volume: 50, difficulty: 90 },
+    { keyword: 'leicht und gefragt', priority: 3, search_volume: 1500, difficulty: 10 }
+  ]
+  const best = selection.pickBest(kws, new Set(), new Map())
+  assert.equal(best.keyword, 'leicht und gefragt')
+})
