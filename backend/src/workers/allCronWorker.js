@@ -9,6 +9,9 @@
 //   gdprWorker            GDPR_WORKER_CRON         (Default 30 4 * * *)
 //   dailyBriefingWorker   DAILY_BRIEFING_CRON      (Default 0 7 * * *)
 //   maintenanceCheckWorker MAINTENANCE_CHECK_CRON  (Default 30 5 * * *)
+//   dsarExportWorker      DSAR_EXPORT_WORKER_CRON  (Default 0 5 * * *)
+//   retentionWorker       RETENTION_WORKER_CRON    (Default 0 3 * * 0)
+//   breachAlertWorker     BREACH_ALERT_WORKER_CRON (Default 0 6 * * *)
 //
 // Benoetigt: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (sonst No-Op).
 // dailyBriefingWorker zusaetzlich: RESEND_API_KEY + MAIL_FROM + PUBLIC_APP_URL.
@@ -17,6 +20,9 @@ const automation = require('./automationWorker')
 const gdpr = require('./gdprWorker')
 const briefing = require('./dailyBriefingWorker')
 const maintenance = require('./maintenanceCheckWorker')
+const dsarExport = require('./dsarExportWorker')
+const retention = require('./retentionWorker')
+const breachAlert = require('./breachAlertWorker')
 
 function start() {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -26,7 +32,10 @@ function start() {
     ['automation', automation],
     ['gdpr', gdpr],
     ['dailyBriefing', briefing],
-    ['maintenance', maintenance]
+    ['maintenance', maintenance],
+    ['dsarExport', dsarExport],
+    ['retention', retention],
+    ['breachAlert', breachAlert]
   ]
   for (const [name, mod] of jobs) {
     try {

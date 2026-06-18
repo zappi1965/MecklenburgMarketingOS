@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BarChart3, FileText, QrCode, Star, User, LogOut, Gift, Megaphone, ShieldCheck, Receipt, Settings, Users } from 'lucide-react'
+import Link from 'next/link'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 import { CustomerOrAdminOnly } from '@/components/security/RoleGate'
 import { customerVisibleToolsForPackage } from '@/lib/toolRegistry'
@@ -53,10 +54,10 @@ export default function CustomerPortalShell({ children }: { children: ReactNode 
                 const Icon = item.icon
                 const active = currentPath === item.href || currentPath.startsWith(item.href + '/')
                 return (
-                  <a key={item.href} href={item.href} className={active ? 'adminNavItem active' : 'adminNavItem'} aria-current={active ? 'page' : undefined}>
+                  <Link key={item.href} href={item.href} className={active ? 'adminNavItem active' : 'adminNavItem'} aria-current={active ? 'page' : undefined}>
                     <Icon size={16} strokeWidth={2} />
                     <span>{item.label}</span>
-                  </a>
+                  </Link>
                 )
               })}
             </div>
