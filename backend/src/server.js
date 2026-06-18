@@ -384,6 +384,9 @@ app.use('/api/store', storeRoutes())
 app.use('/api/document-engine-v2', requireAdmin, documentEngineV2Routes(supabaseAdmin))
 app.use('/api/security-core', requireAdmin, securityCoreRoutes(supabaseAdmin))
 
+const adminAiRoutes = require('./routes/adminAiRoutes')
+app.use('/api/admin/ai', requireAdmin, adminAiRoutes(supabaseAdmin))
+
 app.use('/api/ops-admin', requireAdmin, opsAdminRoutes())
 app.use('/api/booking', bookingPublicRoutes())
 app.use('/api/stripe', stripeRoutes(supabaseAdmin))
