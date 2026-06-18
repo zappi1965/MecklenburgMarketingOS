@@ -49,7 +49,8 @@ interface AgentEvent {
   oldContent?: string  // file_diff
   newContent?: string  // file_diff
   stepsUsed?: number  // max_steps
-  todos?: string[]       // todo_update
+  filesCount?: number   // creating_pr
+  todos?: { index: number; text: string; done: boolean }[]  // todo_update
   requestId?: string    // confirmation_request
   op?: string           // confirmation_request
   preview?: string      // confirmation_request
@@ -325,7 +326,7 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
               setFileContents(prev => ({ ...prev, [event.path!]: event.newContent || '' }))
             }
             if (event.type === 'todo_update' && event.todos) setTodos(event.todos)
-            if (event.type === 'confirmation_request') setPendingConfirmation({ requestId: event.requestId, op: event.op, path: event.path, preview: event.preview || '' })
+            if (event.type === 'confirmation_request') setPendingConfirmation({ requestId: event.requestId ?? '', op: event.op ?? '', path: event.path ?? '', preview: event.preview ?? '' })
             if (event.type === 'confirmation_denied')  setPendingConfirmation(null)
             if (event.type === 'tool_call') steps++
             setStepCount(steps)

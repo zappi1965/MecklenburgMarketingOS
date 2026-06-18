@@ -15,7 +15,7 @@ export default function AiAssistantPage() {
     getCurrentUserProfile().then((profile) => {
       if (!profile) { setAuthorized(false); return }
       setAuthorized(true)
-      setUserName(profile.name || profile.email || 'Admin')
+      setUserName(profile.display_name || profile.email || 'Admin')
     })
   }, [])
 
