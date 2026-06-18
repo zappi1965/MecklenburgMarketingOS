@@ -49,26 +49,35 @@ async function getJob(supabase, id) {
 }
 
 async function claimNextJob(supabase, workerId = `worker-${process.pid}`) {
-  const { data: jobs, error } = await supabase
+  const now = nowIso()
+  const { data: candidates } = await supabase
     .from('job_queue')
-    .select('*')
+    .select('id, attempts')
     .eq('status', 'queued')
-    .lte('run_after', nowIso())
+    .lte('run_after', now)
     .order('created_at', { ascending: true })
-    .limit(1)
-  if (error) throw error
-  const job = jobs?.[0]
-  if (!job) return null
+    .limit(5)
 
-  const { data, error: updateError } = await supabase
-    .from('job_queue')
-    .update({ status: 'running', locked_by: workerId, locked_at: nowIso(), attempts: Number(job.attempts || 0) + 1, updated_at: nowIso() })
-    .eq('id', job.id)
-    .eq('status', 'queued')
-    .select('*')
-    .maybeSingle()
-  if (updateError) throw updateError
-  return data
+  if (!candidates || candidates.length === 0) return null
+
+  for (const candidate of candidates) {
+    const { data, error } = await supabase
+      .from('job_queue')
+      .update({
+        status: 'running',
+        locked_by: workerId,
+        locked_at: now,
+        attempts: Number(candidate.attempts || 0) + 1,
+        updated_at: now
+      })
+      .eq('id', candidate.id)
+      .eq('status', 'queued')  // atomic guard: only succeeds if still queued
+      .select('*')
+      .maybeSingle()
+    if (error) throw error
+    if (data) return data  // successfully claimed
+  }
+  return null
 }
 
 async function completeJob(supabase, job, result = {}) {

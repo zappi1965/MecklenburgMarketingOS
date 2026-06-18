@@ -3,7 +3,14 @@ const rateLimit = require('express-rate-limit')
 
 const securityHeaders = helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      scriptSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"]
+    }
+  },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 })
 
@@ -16,4 +23,12 @@ const generalRateLimit = rateLimit({
   message: { ok: false, error: 'Zu viele Anfragen. Bitte später erneut versuchen.' }
 })
 
-module.exports = { securityHeaders, generalRateLimit }
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Zu viele Authentifizierungsversuche. Bitte später erneut versuchen.' }
+})
+
+module.exports = { securityHeaders, generalRateLimit, authRateLimit }

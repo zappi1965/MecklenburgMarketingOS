@@ -77,7 +77,8 @@ const walletMeRoutes = require('./routes/walletMeRoutes')
 const storeRoutes = require('./routes/storeRoutes')
 const opsAdminRoutes = require('./routes/opsAdminRoutes')
 const { bookingPublicRoutes } = require('./routes/bookingRoutes')
-const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
+const stripeRoutes = require('./routes/stripeRoutes')
+const { securityHeaders, generalRateLimit, authRateLimit } = require('./middleware/securityHardening')
 const { createAdminAuditMiddleware } = require('./middleware/adminAuditMiddleware')
 
 const app = express()
@@ -130,7 +131,7 @@ const configuredCorsPatterns = [
   .map((v) => String(v || '').trim())
   .filter(Boolean)
 
-const allowAllCors = process.env.CORS_ALLOW_ALL === 'true' || (configuredCorsOrigins.length === 0 && process.env.NODE_ENV !== 'production')
+const allowAllCors = process.env.CORS_ALLOW_ALL === 'true'
 
 function wildcardToRegExp(pattern) {
   const escaped = String(pattern)
@@ -175,28 +176,6 @@ app.use((req, res, next) => {
 app.use(securityHeaders)
 app.use(generalRateLimit)
 
-const publicJsonPaths = [
-  /^\/api\/client-error$/,
-  /^\/api\/production\/client-error$/,
-  /^\/api\/security\/mfa\/verify$/,
-  /^\/api\/production\/client-error$/,
-  /^\/api\/v33-functional\/public\//,
-  /^\/api\/qr(\/.*)?$/,
-  /^\/api\/chatbot\//,
-  /^\/api\/review-widget\/embed\//,
-  /^\/api\/public\//,
-  /^\/api\/customer-portal\/(register|invite|accept-invite)/,
-  /^\/api\/wallet\/me/,
-  /^\/api\/booking\//
-]
-const publicJsonParser = express.json({ limit: process.env.PUBLIC_JSON_LIMIT || '250kb' })
-const privateJsonParser = express.json({ limit: process.env.JSON_BODY_LIMIT || '50mb' })
-app.use((req, res, next) => {
-  const fullPath = (req.originalUrl || req.url || '').split('?')[0]
-  const parser = publicJsonPaths.some((re) => re.test(fullPath)) ? publicJsonParser : privateJsonParser
-  return parser(req, res, next)
-})
-
 const supabaseAdmin = getSupabaseAdmin()
 const supabaseConfigured = Boolean(supabaseAdmin)
 app.locals.supabaseAdmin = supabaseAdmin
@@ -210,18 +189,6 @@ app.get('/api/version', (_, res) => {
   res.json({ ok: true, service: 'MMOS Backend', version: MMOS_VERSION, timestamp: new Date().toISOString() })
 })
 
-app.get('/api/system/runtime', (_, res) => {
-  res.json({
-    ok: true,
-    service: 'MMOS Backend',
-    version: MMOS_VERSION,
-    node_env: process.env.NODE_ENV || 'unknown',
-    supabase_configured: Boolean(supabaseAdmin),
-    public_shield_mode: process.env.PUBLIC_SHIELD_PERSISTENT === 'false' ? 'memory' : 'persistent_with_memory_fallback',
-    cors_allow_all: process.env.CORS_ALLOW_ALL === 'true',
-    timestamp: new Date().toISOString()
-  })
-})
 // Public client error collector; must stay before the global /api auth guard.
 app.post('/api/client-error', async (req, res) => res.json({ ok: true }))
 
@@ -251,7 +218,7 @@ app.post('/api/production/client-error', async (req, res) => {
 
 // V103.5 pre-auth MFA verify rescue.
 // Validates the Supabase bearer session first, then verifies TOTP/backup code with a schema-tolerant helper.
-app.post('/api/security/mfa/verify', async (req, res) => {
+app.post('/api/security/mfa/verify', authRateLimit, async (req, res) => {
   try {
     const supabase = supabaseAdmin || getSupabaseAdmin()
     if (!supabase) return res.status(503).json({ ok: false, code: 'SUPABASE_ADMIN_UNCONFIGURED', error: 'Backend-Supabase ist nicht konfiguriert.' })
@@ -272,9 +239,6 @@ const PUBLIC_PATHS = [
   /^\/api\/security\/mfa\/verify$/,
   /^\/api\/health$/,
   /^\/api\/version$/,
-  /^\/api\/system\/health$/,
-  /^\/api\/system\/runtime$/,
-  /^\/api\/system\/status$/,
   /^\/api\/v33-functional\/v42\/health$/,
   /^\/api\/auth\//,
   /^\/api\/production\/client-error$/,
@@ -307,8 +271,20 @@ const PUBLIC_PATHS = [
   /^\/api\/customer-portal\/accept-invite$/,
   /^\/api\/public\/v1\//,
   /^\/api\/wallet\/me(\/request-link)?$/,
-  /^\/api\/booking\/[^/]+\/(services|slots|book)$/
+  /^\/api\/booking\/[^/]+\/(services|slots|book)$/,
+  /^\/api\/stripe\/webhook$/
 ]
+
+// publicJsonPaths is now an alias for PUBLIC_PATHS — single source of truth.
+// Public routes get a tighter body limit; private routes get the larger one.
+const publicJsonPaths = PUBLIC_PATHS
+const publicJsonParser = express.json({ limit: process.env.PUBLIC_JSON_LIMIT || '250kb' })
+const privateJsonParser = express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' })
+app.use((req, res, next) => {
+  const fullPath = (req.originalUrl || req.url || '').split('?')[0]
+  const parser = publicJsonPaths.some((re) => re.test(fullPath)) ? publicJsonParser : privateJsonParser
+  return parser(req, res, next)
+})
 
 const requireAuth = authMiddleware()
 const requireAdmin = authMiddleware({ roles: ['admin'] })
@@ -321,7 +297,13 @@ app.use('/api', (req, res, next) => {
 
 app.use('/api', createAdminAuditMiddleware(supabaseAdmin))
 
-app.use('/api/system', systemRoutes(supabaseAdmin))
+app.get('/api/metrics', requireAdmin, (req, res) => {
+  const metrics = require('./observability/metrics')
+  res.setHeader('Content-Type', 'text/plain; version=0.0.4')
+  res.send(metrics.toPrometheusText ? metrics.toPrometheusText() : JSON.stringify(metrics))
+})
+
+app.use('/api/system', requireAdmin, systemRoutes(supabaseAdmin))
 app.use('/api/public', packageInquiryRoutes(supabaseAdmin))
 app.use('/api/public/seo-blog', seoBlogPublicRoutes(supabaseAdmin))
 
@@ -366,7 +348,7 @@ app.use('/api/document-media', documentMediaRoutes(supabaseAdmin))
 app.use('/api/customer-intelligence', requireCustomerAccess(), customerIntelligenceRoutes(supabaseAdmin))
 app.use('/api/customer-portal', customerPortalRoutes(supabaseAdmin))
 app.use('/api/v33-functional', v33FunctionalRoutes(supabaseAdmin))
-app.use('/api/auth', authRoutes(supabaseAdmin))
+app.use('/api/auth', authRateLimit, authRoutes(supabaseAdmin))
 app.use('/api/qr', qrRoutes())
 app.use('/api/gdpr', gdprRoutes(supabaseAdmin))
 app.use('/api/referrals', referralRoutes(supabaseAdmin))
@@ -379,7 +361,7 @@ app.use('/api/newsletter', newsletterRoutes(supabaseAdmin))
 app.use('/api/vouchers', voucherRoutes(supabaseAdmin))
 app.use('/api/security', securityRoutes())
 app.use('/api/data-quality', dataQualityRoutes())
-app.use('/api/accounting', accountingRoutes())
+app.use('/api/accounting', requireCustomerAccess(), accountingRoutes())
 app.use('/api/dunning', dunningRoutes())
 app.use('/api/pos', posRoutes())
 app.use('/api/no-show', noShowRoutes())
@@ -402,8 +384,9 @@ app.use('/api/store', storeRoutes())
 app.use('/api/document-engine-v2', requireAdmin, documentEngineV2Routes(supabaseAdmin))
 app.use('/api/security-core', requireAdmin, securityCoreRoutes(supabaseAdmin))
 
-app.use('/api/ops-admin', opsAdminRoutes())
+app.use('/api/ops-admin', requireAdmin, opsAdminRoutes())
 app.use('/api/booking', bookingPublicRoutes())
+app.use('/api/stripe', stripeRoutes(supabaseAdmin))
 
 if (demoModeEnabled) {
   const demoEnvironmentRoutes = require('./routes/demoEnvironmentRoutes')

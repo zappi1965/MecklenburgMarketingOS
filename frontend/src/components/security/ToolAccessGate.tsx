@@ -6,8 +6,6 @@ import { canAccessTool, accessStatus } from '@/lib/toolAccess'
 import { isActiveAdmin, isActiveCustomer } from '@/lib/routeAccessPolicy'
 import { isDemoMode } from '@/lib/environmentMode'
 
-let cachedProfile: any = undefined
-let pendingProfile: Promise<any> | null = null
 const rulesMemoryCache = new Map<string, any[]>()
 
 function localProfileFallback() {
@@ -39,16 +37,11 @@ function writeSessionJson(key: string, value: any, ttlMs = 1000 * 60 * 10) {
 }
 
 async function loadProfileOnce() {
-  if (cachedProfile !== undefined) return cachedProfile
   const stored = readSessionJson('mmos_profile_cache_v1')
-  if (stored !== undefined) { cachedProfile = stored; return cachedProfile }
-  if (!pendingProfile) {
-    pendingProfile = getCurrentUserProfile()
-      .then((profile) => { cachedProfile = profile || null; writeSessionJson('mmos_profile_cache_v1', cachedProfile); return cachedProfile })
-      .catch(() => { const fallback = localProfileFallback(); cachedProfile = fallback !== undefined ? fallback : null; if (fallback !== undefined) writeSessionJson('mmos_profile_cache_v1', cachedProfile); return cachedProfile })
-      .finally(() => { pendingProfile = null })
-  }
-  return pendingProfile
+  if (stored !== undefined) return stored
+  return getCurrentUserProfile()
+    .then((profile) => { const resolved = profile || null; writeSessionJson('mmos_profile_cache_v1', resolved); return resolved })
+    .catch(() => { const fallback = localProfileFallback(); const resolved = fallback !== undefined ? fallback : null; if (fallback !== undefined) writeSessionJson('mmos_profile_cache_v1', resolved); return resolved })
 }
 
 async function loadRulesOnce(customerId: string) {
@@ -78,7 +71,7 @@ export function clearToolAccessCache(customerId?: string) {
 }
 
 export default function ToolAccessGate({ toolKey, children, upgradeText }: { toolKey: string; children: ReactNode; upgradeText?: string }) {
-  const [profile, setProfile] = useState<any>(() => cachedProfile !== undefined ? cachedProfile : (readSessionJson('mmos_profile_cache_v1') ?? localProfileFallback()))
+  const [profile, setProfile] = useState<any>(() => readSessionJson('mmos_profile_cache_v1') ?? localProfileFallback())
   const [rules, setRules] = useState<any[]>([])
   const [loadedRules, setLoadedRules] = useState(false)
 
