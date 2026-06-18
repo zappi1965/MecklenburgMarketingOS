@@ -25,7 +25,13 @@ function isEncrypted(value) {
 function encrypt(plain) {
   if (plain == null || plain === '') return plain
   const k = key()
-  if (!k) return String(plain) // kein Schluessel -> Klartext (Dev)
+  if (!k) {
+    // In Produktion fail-closed: lieber Fehler als unverschluesselt speichern.
+    if (String(process.env.NODE_ENV) === 'production') {
+      throw new Error('SEO_SECRET_KEY (oder APP_ENCRYPTION_KEY) fehlt – Geheimnis kann nicht verschluesselt gespeichert werden.')
+    }
+    return String(plain) // Dev/CI: Klartext-Fallback
+  }
   const iv = crypto.randomBytes(12)
   const cipher = crypto.createCipheriv('aes-256-gcm', k, iv)
   const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()])

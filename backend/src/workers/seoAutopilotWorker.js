@@ -16,6 +16,9 @@
 
 const cron = require('node-cron')
 const { getSupabaseAdmin } = require('../lib/supabaseAdmin')
+const { logSeoEnv } = require('../lib/seoEnvCheck')
+let getSentry = () => null
+try { ({ getSentry } = require('../services/sentryService')) } catch (_) { /* Sentry optional */ }
 const seo = require('../services/seoAutopilotService')
 const seoPublish = require('../services/seoPublishService')
 const seoImage = require('../services/seoImageService')
@@ -196,6 +199,7 @@ async function refineWeakArticle(db, customer, summary) {
 async function runOnce() {
   const db = getSupabaseAdmin()
   if (!db) { console.log('[seoAutopilotWorker] Supabase nicht konfiguriert – uebersprungen.'); return }
+  logSeoEnv()
   const summary = { created: 0, published: 0, replenished: 0, refined: 0, skipped: 0, noKeyword: 0, errors: 0 }
   const nowIso = new Date().toISOString()
 
@@ -208,6 +212,7 @@ async function runOnce() {
     } catch (e) {
       summary.errors++
       console.error('[seoAutopilotWorker] Fehler fuer Kunde', sched.customer_id, e.message)
+      try { getSentry()?.captureException(e, { tags: { worker: 'seo_autopilot' }, extra: { customer_id: sched.customer_id } }) } catch (_) {}
     } finally {
       await db.from('seo_publishing_schedules').update({
         last_run_at: nowIso, next_run_at: nextRun(sched.cadence, new Date()), updated_at: nowIso
