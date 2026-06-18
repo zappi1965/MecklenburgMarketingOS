@@ -63,6 +63,8 @@ const analyticsRoutes = require('./routes/analyticsRoutes')
 const gmbRoutes = require('./routes/gmbRoutes')
 const aiCrmMailRoutes = require('./routes/aiCrmMailRoutes')
 const socialRoutes = require('./routes/socialRoutes')
+const seoAutopilotRoutes = require('./routes/seoAutopilotRoutes')
+const seoBlogPublicRoutes = require('./routes/seoBlogPublicRoutes')
 const { reviewWidgetRoutes, reviewWidgetEmbedRouter } = require('./routes/reviewWidgetRoutes')
 const complianceCockpitRoutes = require('./routes/complianceCockpitRoutes')
 const apiKeyRoutes = require('./routes/apiKeyRoutes')
@@ -298,6 +300,8 @@ const PUBLIC_PATHS = [
   /^\/api\/chatbot\/(start|message)$/,
   /^\/api\/review-widget\/embed\/[^/]+$/,
   /^\/api\/public\/package-inquiry$/,
+  /^\/api\/public\/seo-blog\/[^/]+$/,
+  /^\/api\/public\/seo-blog\/[^/]+\/[^/]+$/,
   /^\/api\/customer-portal\/register$/,
   /^\/api\/customer-portal\/invite\/[^/]+$/,
   /^\/api\/customer-portal\/accept-invite$/,
@@ -319,6 +323,7 @@ app.use('/api', createAdminAuditMiddleware(supabaseAdmin))
 
 app.use('/api/system', systemRoutes(supabaseAdmin))
 app.use('/api/public', packageInquiryRoutes(supabaseAdmin))
+app.use('/api/public/seo-blog', seoBlogPublicRoutes(supabaseAdmin))
 
 const adminScopedRoutes = [
   ['/api/monitoring', monitoringRoutes],
@@ -334,7 +339,8 @@ const adminScopedRoutes = [
   ['/api/google', googleRoutes],
   ['/api/business-tools', businessToolsRoutes],
   ['/api/automations', automationRoutes],
-  ['/api/e-invoice', eInvoiceRoutes]
+  ['/api/e-invoice', eInvoiceRoutes],
+  ['/api/seo-autopilot', seoAutopilotRoutes]
 ]
 
 for (const [routePath, routeFactory] of adminScopedRoutes) {
