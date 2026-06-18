@@ -70,28 +70,57 @@ function verifyCodeHash(code, stored) {
   catch (_) { return false }
 }
 
+// Wählt aus mehreren möglichen Profilzeilen die richtige für die MFA-Prüfung.
+// Wichtig: In diesem Projekt ist user_profiles.id NICHT immer identisch mit
+// auth.users.id (siehe auth.js). Enrollment/Aktivierung schreibt das Secret
+// ggf. in die per-E-Mail gefundene Zeile, während eine separate per-ID
+// gefundene Zeile ein altes/leeres Secret enthält. Würden wir hier wie bisher
+// einfach die per-ID gefundene Zeile bevorzugen, prüft der Login gegen das
+// falsche Secret und lehnt jeden gültigen Code mit MFA_INVALID ab.
+// Deshalb sammeln wir Kandidaten per ID UND E-Mail und bevorzugen — wie der
+// Aktivierungspfad in mfaService.findProfileForMfa — die Zeile, die tatsächlich
+// MFA konfiguriert hat.
+function pickProfile(candidates) {
+  return (
+    candidates.find((c) => c?.mfa_enabled && c?.mfa_secret) ||
+    candidates.find((c) => c?.mfa_secret) ||
+    candidates[0] ||
+    null
+  )
+}
+
 async function queryProfile(supabase, user) {
   const email = String(user?.email || '').trim().toLowerCase()
-  const candidates = [
+  const columnSets = [
     'id,email,role,status,mfa_enabled,mfa_secret,mfa_backup_codes_hash,mfa_verified_until,mfa_last_used_at',
     'id,email,role,status,mfa_enabled,mfa_secret,mfa_verified_until,mfa_last_used_at',
     'id,email,role,status,mfa_enabled,mfa_secret'
   ]
   const errors = []
-  for (const columns of candidates) {
+  for (const columns of columnSets) {
     try {
-      let byId = null
+      const candidates = []
+      const seen = new Set()
+      const add = (row) => {
+        if (!row) return
+        const key = String(row.id || row.email || JSON.stringify(row))
+        if (seen.has(key)) return
+        seen.add(key)
+        candidates.push(row)
+      }
+
       if (user?.id) {
-        const r = await supabase.from('user_profiles').select(columns).eq('id', user.id).maybeSingle()
+        const r = await supabase.from('user_profiles').select(columns).eq('id', user.id).limit(5)
         if (r.error) throw r.error
-        byId = r.data
+        for (const row of (Array.isArray(r.data) ? r.data : (r.data ? [r.data] : []))) add(row)
       }
-      if (byId) return { profile: byId, columns }
       if (email) {
-        const r = await supabase.from('user_profiles').select(columns).ilike('email', email).maybeSingle()
+        const r = await supabase.from('user_profiles').select(columns).ilike('email', email).limit(10)
         if (r.error) throw r.error
-        if (r.data) return { profile: r.data, columns }
+        for (const row of (Array.isArray(r.data) ? r.data : (r.data ? [r.data] : []))) add(row)
       }
+
+      if (candidates.length) return { profile: pickProfile(candidates), columns }
     } catch (e) {
       errors.push(e?.message || String(e))
     }
@@ -176,4 +205,9 @@ async function verifyMfaWithRescue(supabase, user, code, reqMeta = {}) {
   return { ok: true, via, verified_until: until, remaining: remainingBackupCodes ? remainingBackupCodes.length : undefined }
 }
 
-module.exports = { verifyMfaWithRescue }
+module.exports = {
+  verifyMfaWithRescue,
+  _queryProfile: queryProfile,
+  _pickProfile: pickProfile,
+  _verifyTotp: verifyTotp
+}
