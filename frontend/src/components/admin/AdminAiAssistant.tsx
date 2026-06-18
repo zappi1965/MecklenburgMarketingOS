@@ -27,6 +27,7 @@ type AgentEventType =
   | 'thinking' | 'tool_call' | 'tool_result' | 'tool_error'
   | 'file_changed' | 'complete' | 'max_steps' | 'creating_pr'
   | 'pr_created' | 'no_changes' | 'error' | 'done' | 'file_diff'
+  | 'todo_update' | 'confirmation_request' | 'confirmation_denied'
 
 interface AgentEvent {
   type: AgentEventType
@@ -48,6 +49,10 @@ interface AgentEvent {
   oldContent?: string  // file_diff
   newContent?: string  // file_diff
   stepsUsed?: number  // max_steps
+  todos?: string[]       // todo_update
+  requestId?: string    // confirmation_request
+  op?: string           // confirmation_request
+  preview?: string      // confirmation_request
 }
 
 interface GitHubIssue { number: number; title: string; html_url: string; labels: { name: string }[] }
