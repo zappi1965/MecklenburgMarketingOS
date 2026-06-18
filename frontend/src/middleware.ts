@@ -4,7 +4,7 @@ const AUTH_COOKIE_NAMES = ['sb-access-token', 'sb-refresh-token']
 
 function hasAuthCookie(req: NextRequest): boolean {
   return AUTH_COOKIE_NAMES.some((name) => req.cookies.has(name)) ||
-    Array.from(req.cookies.keys()).some((key) => key.startsWith('sb-') && key.endsWith('-auth-token'))
+    req.cookies.getAll().some(({ name }) => name.startsWith('sb-') && name.endsWith('-auth-token'))
 }
 
 export function middleware(req: NextRequest) {
