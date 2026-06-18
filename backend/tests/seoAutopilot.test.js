@@ -274,3 +274,85 @@ test('seoKeywordSelection: hoeheres Volumen / geringere Difficulty gewinnt (ohne
   const best = selection.pickBest(kws, new Set(), new Map())
   assert.equal(best.keyword, 'leicht und gefragt')
 })
+
+// --- Integrations-Smoke: Publish-Pipeline gegen In-Memory-DB ---------------
+
+// Minimaler, chainbarer Supabase-Mock (nur die von seoPublishService
+// genutzten Operationen). Bewusst klein gehalten.
+function makeFakeDb(seed) {
+  const tables = seed || {}
+  function from(table) {
+    if (!tables[table]) tables[table] = []
+    const rows = tables[table]
+    const state = { filters: [], pending: null, payload: null }
+    const matches = (r) => state.filters.every(([c, v]) => String(r[c]) === String(v))
+    const q = {
+      select() { return q },
+      eq(c, v) { state.filters.push([c, v]); return q },
+      lt() { return q }, gt() { return q }, not() { return q },
+      or() { return q }, order() { return q }, limit() { return q },
+      maybeSingle: async () => {
+        if (state.pending === 'insert') return { data: state.payload[state.payload.length - 1], error: null }
+        if (state.pending === 'update') {
+          const m = rows.filter(matches); m.forEach((r) => Object.assign(r, state.payload)); return { data: m[0] || null, error: null }
+        }
+        return { data: rows.find(matches) || null, error: null }
+      },
+      insert(obj) {
+        const arr = Array.isArray(obj) ? obj : [obj]
+        arr.forEach((o, i) => { if (!o.id) o.id = `gen-${table}-${rows.length + 1 + i}`; rows.push(o) })
+        state.pending = 'insert'; state.payload = arr; return q
+      },
+      update(patch) { state.pending = 'update'; state.payload = patch; return q },
+      upsert(obj, opts) {
+        const arr = Array.isArray(obj) ? obj : [obj]
+        const keys = String((opts && opts.onConflict) || 'id').split(',')
+        arr.forEach((o) => {
+          const idx = rows.findIndex((r) => keys.every((k) => String(r[k]) === String(o[k])))
+          if (idx >= 0) Object.assign(rows[idx], o); else { if (!o.id) o.id = `gen-${table}-${rows.length + 1}`; rows.push(o) }
+        })
+        state.pending = 'upsert'; state.payload = arr; return q
+      },
+      then(resolve) {
+        if (state.pending === 'insert' || state.pending === 'upsert') return resolve({ data: state.payload, error: null })
+        resolve({ data: rows.filter(matches), error: null })
+      }
+    }
+    return q
+  }
+  return { from }
+}
+
+const seoPublish = require('../src/services/seoPublishService')
+
+test('Pipeline-Smoke: in_app-Publish setzt Status, blog_slug und published_url', async () => {
+  const seed = {
+    customers: [{ id: 'c1', name: 'Salon Test', business_name: 'Salon Test' }],
+    seo_articles: [{ id: 'a1', customer_id: 'c1', title: 'Friseur Schwerin Tipps', slug: 'friseur-schwerin-tipps', body_markdown: '## Test\n\nInhalt.', status: 'approved' }],
+    seo_publishing_schedules: [],
+    seo_brand_profiles: []
+  }
+  const db = makeFakeDb(seed)
+  const res = await seoPublish.publishArticle(db, 'a1')
+  assert.equal(res.target_type, 'in_app')
+  assert.equal(res.article.status, 'published')
+  assert.ok(res.article.published_url.startsWith('/blog/salon-test/'))
+  assert.ok(res.article.published_at)
+  // blog_slug wurde am Brand-Profil angelegt
+  assert.equal(seed.seo_brand_profiles[0].blog_slug, 'salon-test')
+})
+
+test('Pipeline-Smoke: wordpress-Ziel ohne Zugang -> Mock-URL, Status published', async () => {
+  const seed = {
+    customers: [{ id: 'c2', name: 'Cafe Test', business_name: 'Cafe Test' }],
+    seo_articles: [{ id: 'a2', customer_id: 'c2', title: 'Cafe Schwerin', slug: 'cafe-schwerin', body_markdown: 'Text', status: 'approved' }],
+    seo_publishing_schedules: [{ customer_id: 'c2', target_type: 'wordpress', target_config: { wp_url: 'https://kunde.de' } }],
+    seo_brand_profiles: []
+  }
+  const db = makeFakeDb(seed)
+  const res = await seoPublish.publishArticle(db, 'a2')
+  assert.equal(res.target_type, 'wordpress')
+  assert.equal(res.article.status, 'published')
+  assert.ok(res.article.published_url.includes('kunde.de'))
+  assert.equal(res.wordpress.mocked, true)
+})
