@@ -393,6 +393,29 @@ function seoAutopilotRoutes(injectedSupabase) {
     } catch (e) { next(e) }
   })
 
+  // Health des Autopilot-Workers: letzter Lauf + ob ueberfaellig.
+  router.get('/health', async (req, res, next) => {
+    try {
+      if (!requireAdmin(req, res)) return
+      const maxAgeHours = Number(process.env.SEO_AUTOPILOT_MAX_AGE_HOURS) || 26
+      let lastRun = null
+      try {
+        const { data } = await db().from('job_runs').select('status, message, finished_at')
+          .eq('job_name', 'seo_autopilot').order('finished_at', { ascending: false }).limit(1).maybeSingle()
+        lastRun = data || null
+      } catch (_) { /* job_runs optional */ }
+      const ageMs = lastRun?.finished_at ? (Date.now() - new Date(lastRun.finished_at).getTime()) : null
+      const overdue = ageMs == null ? true : ageMs > maxAgeHours * 3600000
+      res.json({
+        ok: true,
+        last_run: lastRun,
+        age_hours: ageMs == null ? null : Math.round(ageMs / 360000) / 10,
+        overdue,
+        max_age_hours: maxAgeHours
+      })
+    } catch (e) { next(e) }
+  })
+
   return router
 }
 

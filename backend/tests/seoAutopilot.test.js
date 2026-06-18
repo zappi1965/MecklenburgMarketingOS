@@ -151,9 +151,46 @@ test('secretBox: Round-Trip mit Schluessel', () => {
 test('secretBox: ohne Schluessel Klartext (Dev) und idempotentes decrypt', () => {
   delete process.env.SEO_SECRET_KEY
   delete process.env.APP_ENCRYPTION_KEY
+  delete process.env.NODE_ENV
   assert.equal(secretBox.encrypt('abc'), 'abc')
   assert.equal(secretBox.decrypt('abc'), 'abc')
   assert.equal(secretBox.encrypt(''), '')
+})
+
+test('secretBox: in Produktion ohne Schluessel fail-closed (wirft)', () => {
+  delete process.env.SEO_SECRET_KEY
+  delete process.env.APP_ENCRYPTION_KEY
+  const prev = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    assert.throws(() => secretBox.encrypt('geheim'), /SEO_SECRET_KEY/)
+    assert.equal(secretBox.encrypt(''), '') // Leeres bleibt unkritisch
+  } finally {
+    if (prev === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prev
+  }
+})
+
+const { validateSeoEnv } = require('../src/lib/seoEnvCheck')
+
+test('validateSeoEnv: dev ohne Keys -> ok mit Warnungen', () => {
+  const r = validateSeoEnv({})
+  assert.equal(r.ok, true)
+  assert.ok(r.warnings.length >= 1)
+})
+
+test('validateSeoEnv: prod ohne SEO_SECRET_KEY -> Fehler', () => {
+  const r = validateSeoEnv({ NODE_ENV: 'production' })
+  assert.equal(r.ok, false)
+  assert.ok(r.errors.some((e) => /SEO_SECRET_KEY/.test(e)))
+})
+
+test('validateSeoEnv: prod mit Keys -> ok', () => {
+  const r = validateSeoEnv({
+    NODE_ENV: 'production', SEO_SECRET_KEY: 'k', ANTHROPIC_API_KEY: 'a', OPENAI_API_KEY: 'o',
+    DATAFORSEO_LOGIN: 'l', DATAFORSEO_PASSWORD: 'p', SEO_METRICS_PROVIDER: 'gsc'
+  })
+  assert.equal(r.ok, true)
+  assert.equal(r.warnings.length, 0)
 })
 
 // --- Ausbau: Keyword-Daten, CMS-Ziele, Metriken ---------------------------
