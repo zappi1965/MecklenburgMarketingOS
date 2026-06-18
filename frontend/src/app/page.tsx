@@ -726,7 +726,7 @@ function firstLiveCustomerId(d:any){return liveCustomers(d)[0]?.id||''}
 
 const customerScopedHintKeys=['customer_id','customerId','target_customer_id','targetCustomerId','client_customer_id','converted_customer_id','owner_customer_id','related_customer_id','selected_customer_id','customer']
 function demoCustomerIdSet(d:any){return new Set([...(d.customers||[]),...(d.demo_customers||[])].filter((c:any)=>isDemoRecord(c)).map((c:any)=>String(c.id)))}
-function valueContainsDemoId(value:any,demoIds:Set<string>){
+function valueContainsDemoId(value:any,demoIds:Set<string>):boolean{
  if(value===undefined||value===null)return false
  if(typeof value==='string'||typeof value==='number')return demoIds.has(String(value))
  if(Array.isArray(value))return value.some((v:any)=>valueContainsDemoId(v,demoIds))
