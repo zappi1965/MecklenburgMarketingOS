@@ -48,7 +48,10 @@ export default function AuthPage() {
       if (profile?.customer_id) localStorage.setItem('mmos_customer_id', profile.customer_id)
       sessionStorage.setItem('mmos_profile_cache_v1', JSON.stringify({ profile, expiresAt: Date.now() + 1000 * 60 * 10 }))
     } catch {}
-    window.location.href = '/?app=1&view=dashboard'
+    const params = new URLSearchParams(window.location.search)
+    const next = params.get('next')
+    const dest = next && next.startsWith('/') && !next.startsWith('//') ? next : '/?app=1&view=dashboard'
+    window.location.href = dest
   }
 
   async function verifyMfaLogin() {
