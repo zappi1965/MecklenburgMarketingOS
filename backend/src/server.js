@@ -218,7 +218,12 @@ app.post('/api/production/client-error', async (req, res) => {
 
 // V103.5 pre-auth MFA verify rescue.
 // Validates the Supabase bearer session first, then verifies TOTP/backup code with a schema-tolerant helper.
-app.post('/api/security/mfa/verify', authRateLimit, async (req, res) => {
+// WICHTIG: Diese Route ist absichtlich VOR dem globalen JSON-Body-Parser (siehe unten,
+// app.use(... parser ...)) registriert, damit sie vor dem /api-Auth-Guard greift.
+// Dadurch lief der Body-Parser hier aber NICHT — req.body war undefined und der
+// eingegebene Code kam leer an (code_len:0 -> MFA_INVALID). Deshalb parsen wir den
+// JSON-Body inline direkt auf dieser Route.
+app.post('/api/security/mfa/verify', authRateLimit, express.json({ limit: process.env.PUBLIC_JSON_LIMIT || '250kb' }), async (req, res) => {
   try {
     const supabase = supabaseAdmin || getSupabaseAdmin()
     if (!supabase) return res.status(503).json({ ok: false, code: 'SUPABASE_ADMIN_UNCONFIGURED', error: 'Backend-Supabase ist nicht konfiguriert.' })
