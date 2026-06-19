@@ -6,7 +6,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { authenticator } = require('otplib')
-const { _queryProfile, _pickProfile, _verifyTotp, verifyMfaWithRescue } = require('../src/services/mfaVerifyRescueService')
+const { _queryProfile, _pickProfile, _verifyTotp, _diagnoseTotpFailure, verifyMfaWithRescue } = require('../src/services/mfaVerifyRescueService')
 
 // Minimaler Supabase-Mock: liefert vorkonfigurierte Zeilen pro Filter.
 function makeSupabase({ byId = [], byEmail = [] }) {
@@ -69,6 +69,35 @@ test('verifyTotp akzeptiert einen frisch generierten Code', () => {
   const secret = authenticator.generateSecret()
   const token = authenticator.generate(secret)
   assert.equal(_verifyTotp(token, secret).ok, true)
+})
+
+test('diagnoseTotpFailure erkennt Uhren-Drift ausserhalb des Verifikations-Fensters', () => {
+  const secret = authenticator.generateSecret()
+  // Code, den die App 5 Schritte (=150s) in der Zukunft erzeugt -> ausserhalb window 2.
+  const future = authenticator.clone({ epoch: Date.now() + 5 * 30 * 1000 }).generate(secret)
+  const diag = _diagnoseTotpFailure(future, secret)
+  assert.equal(diag.reason, 'clock_drift')
+  assert.equal(diag.drift_steps, 5)
+})
+
+test('diagnoseTotpFailure erkennt Secret-Mismatch (falsches Secret)', () => {
+  const appSecret = authenticator.generateSecret()
+  const dbSecret = authenticator.generateSecret()
+  const token = authenticator.generate(appSecret)
+  const diag = _diagnoseTotpFailure(token, dbSecret)
+  assert.equal(diag.reason, 'secret_mismatch')
+})
+
+test('verifyMfaWithRescue liefert bei Fehlschlag eine Diagnose mit', async () => {
+  const appSecret = authenticator.generateSecret()
+  const dbSecret = authenticator.generateSecret()
+  const token = authenticator.generate(appSecret)
+  const row = { id: 'p', email: 'a@b.de', mfa_enabled: true, mfa_secret: dbSecret, mfa_backup_codes_hash: [] }
+  const supabase = makeSupabase({ byId: [row], byEmail: [row] })
+  const res = await verifyMfaWithRescue(supabase, { id: 'p', email: 'a@b.de' }, token)
+  assert.equal(res.ok, false)
+  assert.equal(res.code, 'MFA_INVALID')
+  assert.equal(res.diagnostic.reason, 'secret_mismatch')
 })
 
 test('verifyMfaWithRescue: gueltiger TOTP-Code wird akzeptiert, obwohl per-ID-Zeile leer ist', async () => {

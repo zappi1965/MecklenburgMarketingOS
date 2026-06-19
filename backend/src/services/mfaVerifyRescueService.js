@@ -49,6 +49,38 @@ function verifyTotp(code, secret) {
   return { ok: false, reason: 'totp_mismatch' }
 }
 
+// Wenn die normale Prüfung (Fenster MFA_TOTP_WINDOW) fehlschlägt, scannen wir
+// ein deutlich breiteres Zeitfenster, um Uhren-Drift von einem falschen Secret
+// zu unterscheiden. Es werden KEINE Geheimnisse oder Codes zurückgegeben –
+// nur die Diagnose. So lässt sich die eigentliche Ursache in genau einem
+// Login-Versuch eingrenzen (statt blind das Verifikations-Fenster zu öffnen).
+function diagnoseTotpFailure(code, secret, maxSteps = 20) {
+  const normalized = normalizeCode(code)
+  if (normalized.totp.length !== 6) {
+    return { reason: 'not_totp_format', hint: 'Eingabe ist kein 6-stelliger TOTP-Code. Backup-Code oder Tippfehler prüfen.' }
+  }
+  const now = Date.now()
+  for (const candidate of secretCandidates(secret)) {
+    for (let step = -maxSteps; step <= maxSteps; step++) {
+      try {
+        const gen = authenticator.clone({ epoch: now + step * 30 * 1000 })
+        if (gen.generate(candidate) === normalized.totp) {
+          return {
+            reason: 'clock_drift',
+            drift_steps: step,
+            drift_seconds: step * 30,
+            hint: `Code ist korrekt, aber Server- und App-Uhr weichen um ca. ${step * 30}s ab (Verifikations-Fenster: ±${Number(process.env.MFA_TOTP_WINDOW || 2) * 30}s). Automatische Zeitsynchronisation aktivieren oder MFA_TOTP_WINDOW erhöhen.`
+          }
+        }
+      } catch (_) {}
+    }
+  }
+  return {
+    reason: 'secret_mismatch',
+    hint: 'Der Code passt auch in einem ±10-Minuten-Fenster nicht zum gespeicherten Secret. Die Authenticator-App nutzt ein anderes Secret als in der DB hinterlegt → 2FA mit Backup-Code einloggen und neu einrichten oder per Admin-Reset zurücksetzen.'
+  }
+}
+
 function normalizeBackupHashes(value) {
   if (!value) return []
   if (Array.isArray(value)) return value.filter(Boolean).map(String)
@@ -177,7 +209,31 @@ async function verifyMfaWithRescue(supabase, user, code, reqMeta = {}) {
     }
   }
 
-  if (!via) return { ok: false, status: 401, code: 'MFA_INVALID', error: '2FA-Code ungueltig.', reason: totp.reason }
+  if (!via) {
+    const diagnostic = diagnoseTotpFailure(code, profile.mfa_secret)
+    const secretStr = String(profile.mfa_secret || '')
+    // Server-Log (Railway) – ohne Secret/Code, nur Form-Hinweise zur Ursachenanalyse.
+    console.warn('[MFA_INVALID_DIAG]', JSON.stringify({
+      reason: diagnostic.reason,
+      drift_steps: diagnostic.drift_steps,
+      server_time: new Date().toISOString(),
+      totp_window: Number(process.env.MFA_TOTP_WINDOW || 2),
+      profile_id: profile.id,
+      secret_len: secretStr.length,
+      secret_is_otpauth: secretStr.startsWith('otpauth://'),
+      code_len: normalizeCode(code).totp.length
+    }))
+    try {
+      await supabase.from('mfa_events').insert({
+        user_id: user.id,
+        event_type: 'failed',
+        ip_address: reqMeta.ip_address || null,
+        user_agent: reqMeta.user_agent ? String(reqMeta.user_agent).slice(0, 300) : null,
+        metadata: { reason: diagnostic.reason, drift_steps: diagnostic.drift_steps, server_time: new Date().toISOString() }
+      })
+    } catch (_) {}
+    return { ok: false, status: 401, code: 'MFA_INVALID', error: '2FA-Code ungueltig.', reason: totp.reason, diagnostic }
+  }
 
   const now = new Date().toISOString()
   const until = verifiedUntil()
@@ -209,5 +265,6 @@ module.exports = {
   verifyMfaWithRescue,
   _queryProfile: queryProfile,
   _pickProfile: pickProfile,
-  _verifyTotp: verifyTotp
+  _verifyTotp: verifyTotp,
+  _diagnoseTotpFailure: diagnoseTotpFailure
 }
