@@ -124,9 +124,10 @@ function customerPortalRoutes(supabase) {
   router.post('/register', async (req, res, next) => {
     try {
       const body = req.body || {}
-      const company_name = body.company_name || body.companyName
-      const email = body.email
-      if (!company_name || !email) return res.status(400).json({ ok:false, error:'Firmenname und E-Mail fehlen' })
+      const company_name = String(body.company_name || body.companyName || '').trim().slice(0, 200)
+      const email        = String(body.email || '').trim().toLowerCase().slice(0, 254)
+      if (!company_name || !email) return res.status(400).json({ ok: false, error: 'Firmenname und E-Mail fehlen' })
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ ok: false, error: 'Ungültige E-Mail-Adresse' })
 
       const requestedPackage = body.requested_package || body.package || 'Starter'
 

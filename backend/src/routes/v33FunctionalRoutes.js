@@ -2012,6 +2012,11 @@ function v33FunctionalRoutes(supabase) {
       const code = clean(req.body?.code)
       if (!code) return res.status(400).json({ ok: false, error: 'Code fehlt' })
 
+      // Brute-Force-Schutz: max 8 Versuche pro IP+customer_id / 15 min
+      const rateLimitKey = `staff-verify:${String(req.body?.customer_id || '')}:${req.ip || ''}`
+      const rate = checkPublicAuthRateLimit(rateLimitKey, 'staff-verify', req.ip || '')
+      if (!rate.ok) return rateLimitResponse(res, rate)
+
       const { data, error } = await supabase.from('v33_functional_records')
         .select('*')
         .eq('resource', 'staff_codes')

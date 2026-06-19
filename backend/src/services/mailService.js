@@ -36,7 +36,7 @@ class MailService {
 
     if (!this.enabled) {
       const dryRun = { dryRun: true, provider: 'dry_run', to, subject, html, text, from: cleanEnv(from) || this.from, replyTo: replyTo || this.replyTo, attachments: attachments.map((a) => ({ filename: a.filename, content_type: a.content_type || a.contentType || 'application/octet-stream', size: String(a.content || '').length })), missing_env: ['RESEND_API_KEY'] }
-      console.log('[MAIL_DRY_RUN]', dryRun)
+      if (process.env.NODE_ENV !== 'production') console.warn('[MAIL_DRY_RUN] RESEND_API_KEY nicht gesetzt — Mail nicht versendet:', { to, subject })
       if (requireDelivery) {
         const err = new Error('Mailversand nicht konfiguriert: RESEND_API_KEY fehlt.')
         err.code = 'MAIL_NOT_CONFIGURED'
