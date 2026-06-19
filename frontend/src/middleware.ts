@@ -1,18 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
-const AUTH_COOKIE_NAMES = ['sb-access-token', 'sb-refresh-token']
-
-function hasAuthCookie(req: NextRequest): boolean {
-  return AUTH_COOKIE_NAMES.some((name) => req.cookies.has(name)) ||
-    req.cookies.getAll().some(({ name }) => name.startsWith('sb-') && name.endsWith('-auth-token'))
-}
-
-export function middleware(req: NextRequest) {
-  if (!hasAuthCookie(req)) {
-    const loginUrl = new URL('/auth', req.url)
-    loginUrl.searchParams.set('next', req.nextUrl.pathname)
-    return NextResponse.redirect(loginUrl)
-  }
+// WICHTIG — KEINE harten Login-Redirects hier einbauen!
+//
+// Die Auth-Session lebt im Supabase-JS-Client ausschließlich im localStorage
+// (NICHT in Cookies). Eine cookie-basierte Edge-Middleware kann eine gültige
+// Session daher gar nicht sehen und würde bereits angemeldete Nutzer beim
+// Navigieren zu /admin/* (z. B. zum KI-Bot unter /admin/ai-assistant) auf
+// /auth umleiten → Endlos-Login-Loop.
+//
+// Das Auth-Gating passiert deshalb bewusst rein clientseitig:
+//   - RoleGate / AdminOnly (frontend/src/components/security/RoleGate.tsx)
+//   - localStorage-Rolle + Profil-Cache
+//   - Backend-Bearer-Token schützt ALLE echten Datenzugriffe
+//
+// Der Fullbuild-Guard (scripts/v061-fullbuild-check.mjs) erzwingt, dass diese
+// Datei keine harten Redirects enthält und sauber NextResponse.next()
+// zurückgibt. Bitte nicht wieder ändern.
+export function middleware() {
   return NextResponse.next()
 }
 
