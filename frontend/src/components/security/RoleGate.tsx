@@ -103,12 +103,13 @@ export default function RoleGate({
   }
 
   if (!profile) {
+    const next = typeof window !== 'undefined' ? encodeURIComponent(window.location.pathname + window.location.search) : ''
     return (
       <main className="adminPage">
         <section className="adminCard">
           <h1>Anmeldung erforderlich</h1>
           <p className="adminMuted">Bitte melden Sie sich an.</p>
-          <Link className="adminBtn" href="/auth">Zur Anmeldung</Link>
+          <Link className="adminBtn" href={`/auth${next ? `?next=${next}` : ''}`}>Zur Anmeldung</Link>
         </section>
       </main>
     )
