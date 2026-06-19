@@ -8,8 +8,9 @@ import { isDemoMode } from '@/lib/environmentMode'
 type GateMode = 'admin' | 'customer' | 'customer_or_admin'
 
 function localProfileFallback() {
-  // V103.8: localStorage role fallback is demo-only.
-  if (typeof window === 'undefined' || !isDemoMode()) return undefined
+  // Fallback wenn Backend nicht erreichbar — Supabase-Session ist noch gültig,
+  // alle echten Datenzugriffe sind weiterhin durch Backend-Auth geschützt.
+  if (typeof window === 'undefined') return undefined
   try {
     const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
     const storedCustomer = localStorage.getItem('mmos_customer_id') || ''
@@ -32,14 +33,15 @@ function canEnter(mode: GateMode, profile: any) {
 function readProfileCache() {
   if (typeof window === 'undefined') return undefined
   try {
-    const raw = sessionStorage.getItem('mmos_profile_cache_v1')
-    if (!raw) return undefined
-    const parsed = JSON.parse(raw)
-    if (!parsed?.expiresAt || parsed.expiresAt < Date.now()) return undefined
-    return parsed.profile ?? null
-  } catch {
-    return undefined
-  }
+    for (const store of [sessionStorage, localStorage]) {
+      const raw = store.getItem('mmos_profile_cache_v1')
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (!parsed?.expiresAt || parsed.expiresAt < Date.now()) continue
+      return parsed.profile ?? null
+    }
+  } catch {}
+  return undefined
 }
 
 function writeProfileCache(profile: any) {

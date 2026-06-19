@@ -46,7 +46,9 @@ export default function AuthPage() {
       localStorage.setItem('mmos_mode', 'live')
       localStorage.setItem('mmos_role', role)
       if (profile?.customer_id) localStorage.setItem('mmos_customer_id', profile.customer_id)
-      sessionStorage.setItem('mmos_profile_cache_v1', JSON.stringify({ profile, expiresAt: Date.now() + 1000 * 60 * 10 }))
+      const profileCache = JSON.stringify({ profile, expiresAt: Date.now() + 1000 * 60 * 60 })
+      sessionStorage.setItem('mmos_profile_cache_v1', profileCache)
+      localStorage.setItem('mmos_profile_cache_v1', profileCache)
     } catch {}
     const params = new URLSearchParams(window.location.search)
     const next = params.get('next')
