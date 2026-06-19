@@ -864,7 +864,7 @@ function GitHubTab({ apiBase }: { apiBase: string }) {
     try {
       const res = await apiPost(`${apiBase}/api/admin/ai/github/review`, { prNumber: Number(reviewPrNum) })
       const data = await res.json()
-      if (data.ok) setReviewText(data.review) else setError(data.error)
+      if (data.ok) { setReviewText(data.review) } else { setError(data.error) }
     } catch { setError('Verbindungsfehler') } finally { setLoading(false) }
   }
 
