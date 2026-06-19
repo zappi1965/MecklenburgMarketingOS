@@ -54,6 +54,7 @@ interface AgentEvent {
   requestId?: string
   op?: string
   preview?: string
+  filesCount?: number
 }
 
 interface GitHubIssue { number: number; title: string; html_url: string; labels: { name: string }[] }
