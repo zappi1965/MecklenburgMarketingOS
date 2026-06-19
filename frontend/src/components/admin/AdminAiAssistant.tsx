@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { getCurrentSession } from '@/lib/authClient'
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -93,12 +94,22 @@ const TOOL_META: Record<string, { icon: string; color: string; label: string }> 
   fetch_url:        { icon: '🌐', color: '#0ea5e9', label: 'URL laden' }
 }
 
-function apiPost(url: string, body: unknown) {
-  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) })
+async function getAuthHeader(): Promise<Record<string, string>> {
+  try {
+    const session = await getCurrentSession()
+    if (session?.access_token) return { Authorization: `Bearer ${session.access_token}` }
+  } catch { /* ignore */ }
+  return {}
 }
 
-function apiGet(url: string) {
-  return fetch(url, { credentials: 'include' })
+async function apiPost(url: string, body: unknown) {
+  const auth = await getAuthHeader()
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth }, credentials: 'omit', body: JSON.stringify(body) })
+}
+
+async function apiGet(url: string) {
+  const auth = await getAuthHeader()
+  return fetch(url, { headers: auth, credentials: 'omit' })
 }
 
 function Spinner({ size = 14, color = C.accent }: { size?: number; color?: string }) {
@@ -262,8 +273,9 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
     const { requestId } = pendingConfirmation
     setPendingConfirmation(null)
     try {
+      const auth = await getAuthHeader()
       await fetch(`${apiBase}/api/admin/ai/agent/confirm`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...auth }, credentials: 'omit',
         body: JSON.stringify({ requestId, approved })
       })
     } catch { /* ignore — agent-timeout handles it */ }
@@ -277,10 +289,11 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
     abortRef.current = new AbortController()
 
     try {
+      const auth = await getAuthHeader()
       const res = await fetch(`${apiBase}/api/admin/ai/agent/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...auth },
+        credentials: 'omit',
         body: JSON.stringify({ task: task.trim(), branch, createPR: true, agentSlug: agentSlug || undefined, confirmationMode }),
         signal: abortRef.current.signal
       })

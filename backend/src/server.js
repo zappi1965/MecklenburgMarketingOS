@@ -71,6 +71,7 @@ const walletMeRoutes = require('./routes/walletMeRoutes')
 const storeRoutes = require('./routes/storeRoutes')
 const opsAdminRoutes = require('./routes/opsAdminRoutes')
 const { bookingPublicRoutes } = require('./routes/bookingRoutes')
+const adminAiRoutes = require('./routes/adminAiRoutes')
 const { securityHeaders, generalRateLimit } = require('./middleware/securityHardening')
 const { createAdminAuditMiddleware } = require('./middleware/adminAuditMiddleware')
 
@@ -384,6 +385,7 @@ app.use('/api/store', storeRoutes())
 
 app.use('/api/document-engine-v2', requireAdmin, documentEngineV2Routes(supabaseAdmin))
 app.use('/api/security-core', requireAdmin, securityCoreRoutes(supabaseAdmin))
+app.use('/api/admin/ai', requireAdmin, adminAiRoutes(supabaseAdmin))
 
 app.use('/api/ops-admin', opsAdminRoutes())
 app.use('/api/booking', bookingPublicRoutes())

@@ -17,6 +17,7 @@ type NavSection = { label: string; items: NavItem[] }
 
 const NEW_TOOL_NAV: NavItem[] = [
   { href: '/admin', label: 'Tool-Zentrale', icon: BarChart3, hint: 'Alle neuen Admin-Tools auf einen Blick' },
+  { href: '/admin/ki-bot', label: 'KI Assistent', icon: Bot, hint: 'Agentic AI-Assistent: Code-Review, GitHub, SEO, PDF und Chat' },
   { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Quiz zu allen MMOS-Tools, Vertrieb, Datenschutz und Betrieb' },
   { href: '/admin/sales/mini-audit-generator', label: 'Mini Audit Generator', icon: FileSearch, hint: 'Google-only Mini-Audit für Akquise und Erstgespräch' },
   { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Target, hint: 'Google-Places Lead-Suche und Akquise-Vorbereitung' },
@@ -30,6 +31,7 @@ const NAV: NavSection[] = [
     label: 'Backoffice Start',
     items: [
       { href: '/admin', label: 'Backoffice-Zentrale', icon: BarChart3, hint: 'Zentrale Übersicht der internen Backoffice-Tools' },
+      { href: '/admin/ki-bot', label: 'KI Assistent', icon: Bot, hint: 'Agentic AI-Assistent: Code-Review, GitHub, SEO, PDF und Chat' },
       { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Internes Training zu MMOS, Vertrieb, Datenschutz und Betrieb' },
       { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'Monitoring, Backups, API-Kosten und Admin-Logs' },
       { href: '/admin/production/completeness-audit', label: 'Completeness Audit', icon: Gauge, hint: 'Systemvollständigkeit, Pilotfähigkeit und Blocker zentral prüfen' },
