@@ -29,10 +29,15 @@ const NEW_TOOL_NAV: NavItem[] = [
 
 const NAV: NavSection[] = [
   {
+    label: 'KI-Bot',
+    items: [
+      { href: '/admin/ai-assistant', label: 'KI-Assistent', icon: Bot, hint: 'MMOS KI-Bot: Agent, Chat, GitHub, SEO-Keywords, PDF und Registry' },
+    ]
+  },
+  {
     label: 'Backoffice Start',
     items: [
       { href: '/admin', label: 'Backoffice-Zentrale', icon: BarChart3, hint: 'Zentrale Übersicht der internen Backoffice-Tools' },
-      { href: '/admin/ai-assistant', label: 'KI-Assistent', icon: Bot, hint: 'MMOS KI-Bot: Agent, Chat, GitHub, SEO-Keywords, PDF und Registry' },
       { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Internes Training zu MMOS, Vertrieb, Datenschutz und Betrieb' },
       { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'Monitoring, Backups, API-Kosten und Admin-Logs' },
       { href: '/admin/production/completeness-audit', label: 'Completeness Audit', icon: Gauge, hint: 'Systemvollständigkeit, Pilotfähigkeit und Blocker zentral prüfen' },
@@ -102,7 +107,7 @@ const PERSONAL_NAV: NavItem[] = [
 
 const MOBILE_ADMIN_NAV: NavItem[] = [
   { href: '/admin', label: 'Start', icon: BarChart3 },
-  { href: '/admin/sales/lead-engine', label: 'Leads', icon: Target },
+  { href: '/admin/ai-assistant', label: 'KI-Bot', icon: Bot },
   { href: '/admin/admin-profiles', label: 'Admins', icon: UserPlus },
   { href: '/admin/tools', label: 'Tools', icon: Shield },
   { href: '/admin/production', label: 'Live', icon: Activity }
