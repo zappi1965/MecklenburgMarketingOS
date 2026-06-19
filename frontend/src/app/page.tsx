@@ -1940,6 +1940,7 @@ function AdminProfilesManager(){
 
 function AdminInternalToolCenter({setView}:any){
  const tools=[
+  {key:'ki_bot',href:'/admin/ai-assistant',title:'KI-Assistent',tag:'AI',text:'Agentic AI-Bot: Code-Review, GitHub, SEO-Keywords, PDF und Chat direkt im Admin.'},
   {key:'admin_training',title:'Wissenstest',tag:'Training',text:'Interner Wissenstest zu MMOS-Tools, Vertrieb, Datenschutz, Security und Betrieb.'},
   {key:'mini_audit',title:'Mini Audit Generator',tag:'Akquise',text:'Google-only Mini-Audit direkt im bestehenden Admin-Dashboard öffnen.'},
   {key:'lead_scraper',title:'Lead Engine',tag:'Akquise',text:'Leads suchen, prüfen und für den Vertrieb vorbereiten.'},
@@ -1947,7 +1948,7 @@ function AdminInternalToolCenter({setView}:any){
   {key:'security_core_live',title:'Security Core',tag:'Sicherheit',text:'Tenant-Isolation, Buckets, ENV und Systemstatus prüfen.'},
   {key:'security_center',title:'Security & Status Center',tag:'Bestand',text:'Bestehendes Sicherheits- und Status-Center im Dashboard öffnen.'}
  ]
- return <div className="grid">{tools.map((tool:any)=><Card key={tool.key} title={tool.title} right={<Badge>{tool.tag}</Badge>}><p className="sub">{tool.text}</p><button className="btn" onClick={()=>setView(tool.key)}>Öffnen</button></Card>)}</div>
+ return <div className="grid">{tools.map((tool:any)=><Card key={tool.key} title={tool.title} right={<Badge>{tool.tag}</Badge>}><p className="sub">{tool.text}</p><button className="btn" onClick={()=>tool.href?window.location.href=tool.href:setView(tool.key)}>Öffnen</button></Card>)}</div>
 }
 
 
