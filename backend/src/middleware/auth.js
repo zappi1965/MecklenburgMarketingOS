@@ -86,7 +86,7 @@ function authMiddleware(options = {}) {
           const lookupByEmail = await supabase
             .from('user_profiles')
             .select('role, status, customer_id, email, mfa_enabled, mfa_verified_until, mfa_last_used_at')
-            .ilike('email', email)
+            .eq('email', email)
             .maybeSingle()
           if (lookupByEmail?.data) profile = lookupByEmail.data
         } catch (_) {

@@ -1,22 +1,5 @@
 // Agent & Skill Registry — CRUD fuer mmos_agents und mmos_skills Tabellen
 
-// ── System-Prompt Validierung ──────────────────────────────────────────────────
-
-const FORBIDDEN_PROMPT_PATTERNS = [
-  /ignore\s+(all\s+)?previous\s+instructions/i,
-  /exfiltrate|send\s+to|upload\s+to/i,
-  /ANTHROPIC_API_KEY|GITHUB_TOKEN|STRIPE_SECRET|SUPABASE_SERVICE/i,
-  /169\.254\.|169_254/i,
-]
-
-function validateSystemPrompt(prompt) {
-  if (typeof prompt !== 'string') throw new Error('system_prompt muss ein String sein')
-  if (prompt.length > 20_000) throw new Error('system_prompt zu lang (max 20.000 Zeichen)')
-  for (const pattern of FORBIDDEN_PROMPT_PATTERNS) {
-    if (pattern.test(prompt)) throw new Error('system_prompt enthält nicht erlaubte Muster')
-  }
-}
-
 // ── Agents ─────────────────────────────────────────────────────────────────────
 
 async function listAgents(supabaseAdmin, { includeInactive = false } = {}) {
@@ -36,7 +19,6 @@ async function getAgent(supabaseAdmin, slug) {
 async function createAgent(supabaseAdmin, { name, slug, description, icon, system_prompt, allowed_tools, model, provider }) {
   if (!name || !slug || !system_prompt) throw new Error('name, slug und system_prompt sind Pflichtfelder')
   if (!/^[a-z0-9-]+$/.test(slug))      throw new Error('slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten')
-  validateSystemPrompt(system_prompt)
   const { data, error } = await supabaseAdmin.from('mmos_agents').insert({
     name, slug: slug.toLowerCase(), description, icon: icon || '🤖',
     system_prompt, allowed_tools: allowed_tools || null,
@@ -50,7 +32,6 @@ async function createAgent(supabaseAdmin, { name, slug, description, icon, syste
 async function updateAgent(supabaseAdmin, id, fields) {
   const allowed = ['name', 'description', 'icon', 'system_prompt', 'allowed_tools', 'model', 'provider', 'is_active']
   const update  = Object.fromEntries(Object.entries(fields).filter(([k]) => allowed.includes(k)))
-  if (update.system_prompt) validateSystemPrompt(update.system_prompt)
   update.updated_at = new Date().toISOString()
   const { data, error } = await supabaseAdmin.from('mmos_agents').update(update).eq('id', id).select().single()
   if (error) throw new Error(`updateAgent: ${error.message}`)

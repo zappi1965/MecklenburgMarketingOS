@@ -15,7 +15,11 @@ export type ConsentState = {
 
 export const CONSENT_VERSION = 2
 const COOKIE_NAME = 'mmos_consent_v1'
-const COOKIE_MAX_AGE_DAYS = 365
+
+// In-memory fallback for immediate reads after saveConsent() — the HttpOnly
+// cookie cannot be read by JS, so we keep the last saved state here until
+// the next page load (when the server can read the cookie directly).
+let _inmemoryState: ConsentState | null = null
 
 const DEFAULT_STATE: ConsentState = {
   version: CONSENT_VERSION,
@@ -33,22 +37,23 @@ function isBrowser() {
   return typeof window !== 'undefined' && typeof document !== 'undefined'
 }
 
-function readCookie(): string | null {
+// Reads the consent cookie value. Because the cookie is now HttpOnly (set via
+// the /api/consent route), document.cookie can no longer see it in the browser.
+// We fall back to the in-memory copy that saveConsent() populates immediately.
+function readCookieFallback(): string | null {
   if (!isBrowser()) return null
+  // Legacy: if the cookie was previously written as a non-HttpOnly cookie by an
+  // older version of this code it will still be visible here until it expires.
   const match = document.cookie.split('; ').find((c) => c.startsWith(`${COOKIE_NAME}=`))
   return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null
 }
 
-function writeCookie(value: string) {
-  if (!isBrowser()) return
-  const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60
-  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `${COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`
-}
-
 export function getConsent(): ConsentState {
+  // 1. Prefer the in-memory copy (available immediately after saveConsent()).
+  if (_inmemoryState) return _inmemoryState
+  // 2. Fall back to a legacy non-HttpOnly cookie if still present.
   if (!isBrowser()) return DEFAULT_STATE
-  const raw = readCookie()
+  const raw = readCookieFallback()
   if (!raw) return DEFAULT_STATE
   try {
     const parsed = JSON.parse(raw) as Partial<ConsentState>
@@ -83,7 +88,22 @@ export function setConsent(partial: Partial<Pick<ConsentState, 'functional' | 'a
     version: CONSENT_VERSION,
     decidedAt: new Date().toISOString()
   }
-  writeCookie(JSON.stringify(next))
+
+  // Keep an in-memory copy immediately so getConsent() returns the right value
+  // before the next page reload (the HttpOnly cookie is not readable by JS).
+  _inmemoryState = next
+
+  // Persist as an HttpOnly, Secure, SameSite=Strict cookie via the API route.
+  if (isBrowser()) {
+    fetch('/api/consent', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ categories: next })
+    }).catch(() => {
+      // Non-fatal: in-memory copy is still usable for the current session.
+    })
+  }
+
   if (!next.functional || !next.analytics || !next.marketing) {
     purgeNonConsentedStorage(next)
   }

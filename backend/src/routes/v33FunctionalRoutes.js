@@ -7,6 +7,9 @@ const { inspectPublicAction, recordPublicShieldEvent } = require('../services/pu
 const { writeCriticalAudit } = require('../services/criticalAuditService')
 const { requestMarketingDoubleOptIn, confirmMarketingConsentToken, withdrawMarketingConsentByTokenOrLogin, consentFromBody, createUnsubscribeToken } = require('../services/marketingConsentMailService')
 const MailService = require('../services/mailService')
+const { EndcustomerReferralService } = require('../services/endcustomerReferralService')
+const { DealCampaignService } = require('../services/dealCampaignService')
+const { MiniWebsiteService } = require('../services/miniWebsiteService')
 
 const safeToken = (prefix = 'tok') => `${prefix}_${crypto.randomBytes(12).toString('hex')}`
 const clean = (v) => v === undefined || v === null ? null : String(v).trim() || null
@@ -207,6 +210,39 @@ function slugify(input, fallback = 'kunde') {
 function v33FunctionalRoutes(supabase) {
   const router = express.Router()
   const engine = new V35BusinessEngine(supabase)
+  const endcustomerReferral = new EndcustomerReferralService(supabase)
+  const dealCampaignService = new DealCampaignService(supabase)
+  const miniWebsiteService = new MiniWebsiteService(supabase)
+
+  // Public: "Aktionen & Angebote" auflösen (nur aktive, im Zeitfenster).
+  router.get('/public/deal/:slug', async (req, res, next) => {
+    try {
+      const result = await dealCampaignService.publicResolve(String(req.params.slug || '').trim())
+      if (!result.found) return res.status(404).json({ ok: false, error: 'Aktion nicht gefunden.' })
+      if (!result.visible) return res.status(410).json({ ok: false, code: 'DEAL_NOT_ACTIVE', status: result.status, deal: result.dto })
+      res.json({ ok: true, deal: result.dto })
+    } catch (e) { next(e) }
+  })
+
+  // Public: View/Share zählen (geshieldet).
+  router.post('/public/deal/:slug/track', async (req, res) => {
+    try {
+      const slug = String(req.params.slug || '').trim()
+      const kind = String((req.body || {}).kind || 'view')
+      const shield = await inspectPublicAction({ supabase, req, action: 'public_deal_track', slug, max: 120 })
+      if (!shield.ok) return res.status(shield.status || 429).json({ ok: false, error: shield.error })
+      res.json(await dealCampaignService.track(slug, kind))
+    } catch (e) { res.json({ ok: false }) }
+  })
+
+  // Public: Mini-Website (One-Pager) ausliefern.
+  router.get('/public/site/:slug', async (req, res, next) => {
+    try {
+      const dto = await miniWebsiteService.assemblePublicSite(String(req.params.slug || '').trim())
+      if (!dto) return res.status(404).json({ ok: false, error: 'Seite nicht gefunden oder nicht aktiviert.' })
+      res.json({ ok: true, site: dto })
+    } catch (e) { next(e) }
+  })
 
   const stampLogoUpload = multer({
     storage: multer.memoryStorage(),
@@ -2346,6 +2382,7 @@ function v33FunctionalRoutes(supabase) {
       const qrLimitsForProgram = qrScanLimitSettings(qrCampaign, program)
       let points = authOnly ? 0 : num(qrCampaign?.points_per_scan ?? qrCampaign?.metadata?.points_per_scan ?? program.points_per_scan ?? program.metadata?.points_per_scan, 10)
       let member = null
+      let wasNewMember = false
       // v37_loyalty_limits_applied
 
       let q = supabase.from('loyalty_customers').select('*').eq('loyalty_program_id', program.id).eq('email', email).limit(1)
@@ -2412,9 +2449,10 @@ function v33FunctionalRoutes(supabase) {
           display_name: displayName,
           member_token: body.member_token || safeToken('loy'),
           device_id: deviceId,
-          points_balance: points,
-          total_points: points,
-          total_scans: authOnly ? 0 : 1,
+          // V103.11.1: Punkte/Stempel werden erst nach erfolgreichem Scan-Token-Verbrauch gutgeschrieben.
+          points_balance: 0,
+          total_points: 0,
+          total_scans: 0,
           last_seen_at: now,
           last_activity_at: now,
           metadata: { source: 'public_qr', slug, consent_marketing: false, marketing_consent_pending: marketingConsentRequest || null, marketing_consent_status: marketingConsentRequest?.requested ? 'pending_double_opt_in' : 'none', public_auth: { password_hash: publicPasswordHash(password), password_set_at: now, auth_method: 'email_password' } }
@@ -2422,6 +2460,8 @@ function v33FunctionalRoutes(supabase) {
 
         if (created.error) throw created.error
         member = created.data
+        wasNewMember = true
+        member.__wasNewMember = true
       } else {
         const nextMemberMetadata = marketingConsentRequest?.requested ? {
           ...(member.metadata || {}),
@@ -2431,14 +2471,7 @@ function v33FunctionalRoutes(supabase) {
           marketing_consent_version: marketingConsentRequest.version,
           marketing_consent_pending: marketingConsentRequest
         } : member.metadata
-        const patch = authOnly ? {
-          last_seen_at: now,
-          last_activity_at: now,
-          ...(marketingConsentRequest?.requested ? { metadata: nextMemberMetadata } : {})
-        } : {
-          points_balance: num(member.points_balance, 0) + points,
-          total_points: num(member.total_points, 0) + points,
-          total_scans: num(member.total_scans, 0) + 1,
+        const patch = {
           last_seen_at: now,
           last_activity_at: now,
           ...(marketingConsentRequest?.requested ? { metadata: nextMemberMetadata } : {})
@@ -2478,6 +2511,18 @@ function v33FunctionalRoutes(supabase) {
         if (!consumed.ok) return res.status(consumed.status || 409).json({ ok:false, code: consumed.code, error: consumed.error })
       }
 
+      // V103.11.1: Erst NACH erfolgreichem Token-Verbrauch werden Punkte/Stempel gespeichert.
+      const credited = await updateLoyaltyCustomerSafe(member.id, {
+        points_balance: num(member.points_balance, 0) + points,
+        total_points: num(member.total_points, 0) + points,
+        total_scans: num(member.total_scans, 0) + 1,
+        last_seen_at: now,
+        last_activity_at: now
+      })
+      if (credited.error) throw credited.error
+      member = credited.data || member
+      if (wasNewMember) member.__wasNewMember = true
+
       try {
         const tx = await insertLoyaltyTransactionSafe({
           customer_id: customerId,
@@ -2495,6 +2540,15 @@ function v33FunctionalRoutes(supabase) {
 
       const suspicion = await updateMemberSuspicionScore({ customerId, member, program, qrCampaign })
       if (suspicion) warnings.push({ code:'SUSPICION_SCORE', message:`Verdachts-Score ${suspicion.score}/100`, status:suspicion.status })
+
+      // Endkunden-Referral: beidseitige Gutschrift erst beim ersten echten Join+Scan.
+      const referralCodeFromBody = clean(body.referral_code || body.referralCode || body.ref)
+      if (!authOnly && wasNewMember && referralCodeFromBody) {
+        try {
+          const credit = await endcustomerReferral.creditOnFriendJoinScan({ customer_id: customerId, friend_member: member, referral_code: referralCodeFromBody })
+          if (credit?.ok) warnings.push({ code: 'REFERRAL_BONUS_CREDITED', message: `Empfehlung eingelöst: Freund +${credit.friend_points}, Werber +${credit.referrer_points} Punkte.` })
+        } catch (e) { warnings.push({ code: 'REFERRAL_CREDIT_FAILED', message: String(e?.message || e) }) }
+      }
 
       try {
         if (program.qr_campaign_id) {
@@ -3314,61 +3368,39 @@ function v33FunctionalRoutes(supabase) {
   router.post('/v37/loyalty/:customer_id/referral', async (req, res, next) => {
     try {
       const customerId = req.params.customer_id
-      const settings = await v37GetOrCreateLoyaltySettings(customerId)
       const body = req.body || {}
       const referrerToken = body.referrer_token || body.referrer_member_token || null
+      const referralCode = body.referral_code || body.code || null
       const friendEmail = clean(body.friend_email || body.email)
-      const friendName = clean(body.friend_name || body.name) || 'Referral Lead'
 
-      let referrer = null
-      if (referrerToken) {
-        const found = await supabase
-          .from('loyalty_customers')
-          .select('*')
-          .eq('customer_id', customerId)
-          .eq('member_token', referrerToken)
-          .maybeSingle()
-        if (!found.error) referrer = found.data || null
-      }
-
-      if (referrer) {
-        await supabase.from('loyalty_customers').update({
-          points_balance: Number(referrer.points_balance || 0) + Number(settings.referral_bonus_referrer || 0),
-          total_points: Number(referrer.total_points || 0) + Number(settings.referral_bonus_referrer || 0),
-          last_activity_at: new Date().toISOString()
-        }).eq('id', referrer.id)
-      }
-
-      const lead = await supabase.from('v33_public_leads').insert({
+      // V094: KEINE Sofort-Gutschrift mehr. Es wird nur eine PENDING-Referral
+      // angelegt. Beide Seiten werden erst gutgeschrieben, wenn der Freund
+      // tatsächlich beitritt UND das erste Mal scannt (Hook im join-or-scan).
+      const referral = await endcustomerReferral.registerReferral({
         customer_id: customerId,
-        name: friendName,
-        email: friendEmail,
-        source: 'loyalty_referral',
-        status: 'new',
-        points_added: Number(settings.referral_bonus_friend || 0),
-        points_balance: Number(settings.referral_bonus_friend || 0),
-        metadata: {
-          referrer_member_token: referrerToken,
-          referrer_bonus: Number(settings.referral_bonus_referrer || 0),
-          friend_bonus: Number(settings.referral_bonus_friend || 0)
-        }
-      }).select('*').single()
-
-      if (lead.error) throw lead.error
-
-      await supabase.from('customer_timeline_events').insert({
-        customer_id: customerId,
-        event_type: 'loyalty_referral_created',
-        title: 'Referral Lead erzeugt',
-        description: `${friendName} wurde über das Loyalty Referral Programm empfohlen.`,
-        source_module: 'loyalty',
-        severity: 'success',
-        metadata: { lead: lead.data, referrer_member_token: referrerToken }
+        referral_code: referralCode,
+        referrer_token: referrerToken,
+        friend_email: friendEmail,
+        source: 'loyalty_referral_form'
       })
 
-      const snapshot = await engine.recalculateCustomer(customerId)
-      res.json({ ok: true, lead: lead.data, referrer_updated: Boolean(referrer), snapshot })
-    } catch (e) { next(e) }
+      try {
+        await supabase.from('customer_timeline_events').insert({
+          customer_id: customerId,
+          event_type: 'loyalty_referral_created',
+          title: 'Empfehlung registriert',
+          description: `Empfehlung über ${referral?.referral_code || referralCode || referrerToken} registriert (Gutschrift erfolgt nach erstem Scan des Freundes).`,
+          source_module: 'loyalty',
+          severity: 'info',
+          metadata: { referral_id: referral?.id, referred_email: friendEmail }
+        })
+      } catch (_) {}
+
+      res.json({ ok: true, referral, status: referral?.status || 'pending', credited: false })
+    } catch (e) {
+      if (e.status) return res.status(e.status).json({ ok: false, error: e.message, code: e.code })
+      next(e)
+    }
   })
 
   router.post('/v37/loyalty/:customer_id/birthday-bonus', async (req, res, next) => {

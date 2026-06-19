@@ -73,20 +73,21 @@ async function authorizeAdminProfileWrite(supabase, req) {
   if (profile) return { ok: true, via: 'admin_session', profile }
 
   const setupToken = process.env.ADMIN_PROFILE_SETUP_TOKEN || ''
-  const provided = req.get('x-admin-setup-token') || req.body?.setup_token || ''
-  if (setupToken && provided && provided === setupToken) return { ok: true, via: 'setup_token' }
-
-  const existingAdmins = await adminCount(supabase)
-  if (!setupToken && existingAdmins === 0 && process.env.ALLOW_ADMIN_BOOTSTRAP === 'true') {
-    return { ok: true, via: 'bootstrap_no_admin' }
+  if (!setupToken) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Kein ADMIN_PROFILE_SETUP_TOKEN konfiguriert. Bootstrap ohne Token ist deaktiviert.'
+    }
   }
+
+  const provided = req.get('x-admin-setup-token') || req.body?.setup_token || ''
+  if (provided && provided === setupToken) return { ok: true, via: 'setup_token' }
 
   return {
     ok: false,
     status: 403,
-    error: setupToken
-      ? 'Keine Admin-Berechtigung. Bitte als Admin einloggen oder gültigen Setup-Key angeben.'
-      : 'Keine Admin-Berechtigung. Lege ADMIN_PROFILE_SETUP_TOKEN fest oder melde dich als aktiver Admin an.'
+    error: 'Keine Admin-Berechtigung. Bitte als Admin einloggen oder gültigen Setup-Key angeben.'
   }
 }
 

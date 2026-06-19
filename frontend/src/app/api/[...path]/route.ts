@@ -13,7 +13,7 @@ async function proxy(req: NextRequest, context: RouteContext) {
   const backends = resolveBackendCandidates(req)
 
   if (path === 'proxy-health') {
-    const checks = []
+    const checks: any[] = []
 
     for (const backend of backends) {
       const targetUrl = `${backend.base}/api/system/health`
@@ -135,7 +135,7 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
     headers: {
-      'access-control-allow-origin': '*',
+      'access-control-allow-origin': process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://mecklenburgmarketing.de',
       'access-control-allow-methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
       'access-control-allow-headers': 'Content-Type,Authorization',
       'cache-control': 'no-store'

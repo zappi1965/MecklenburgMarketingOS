@@ -8,6 +8,7 @@ import {
   Wrench, FileSearch, CalendarClock, Rocket, FileCode2, FileSpreadsheet, Database, Sparkles,
   BrainCircuit, Gauge, TrendingUp, Target, UserPlus
 } from 'lucide-react'
+import Link from 'next/link'
 import { getCurrentUserProfile, supabaseAuth } from '@/lib/authClient'
 import BrandLogo from '@/components/brand/BrandLogo'
 import AdminCustomerSearch from '@/components/admin/AdminCustomerSearch'
@@ -17,7 +18,7 @@ type NavSection = { label: string; items: NavItem[] }
 
 const NEW_TOOL_NAV: NavItem[] = [
   { href: '/admin', label: 'Tool-Zentrale', icon: BarChart3, hint: 'Alle neuen Admin-Tools auf einen Blick' },
-  { href: '/admin/ki-bot', label: 'KI Assistent', icon: Bot, hint: 'Agentic AI-Assistent: Code-Review, GitHub, SEO, PDF und Chat' },
+  { href: '/admin/ai-assistant', label: 'KI-Assistent', icon: Bot, hint: 'MMOS KI-Bot: Agent, Chat, GitHub, SEO-Keywords, PDF und Registry' },
   { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Quiz zu allen MMOS-Tools, Vertrieb, Datenschutz und Betrieb' },
   { href: '/admin/sales/mini-audit-generator', label: 'Mini Audit Generator', icon: FileSearch, hint: 'Google-only Mini-Audit für Akquise und Erstgespräch' },
   { href: '/admin/sales/lead-engine', label: 'Lead Engine', icon: Target, hint: 'Google-Places Lead-Suche und Akquise-Vorbereitung' },
@@ -31,7 +32,7 @@ const NAV: NavSection[] = [
     label: 'Backoffice Start',
     items: [
       { href: '/admin', label: 'Backoffice-Zentrale', icon: BarChart3, hint: 'Zentrale Übersicht der internen Backoffice-Tools' },
-      { href: '/admin/ki-bot', label: 'KI Assistent', icon: Bot, hint: 'Agentic AI-Assistent: Code-Review, GitHub, SEO, PDF und Chat' },
+      { href: '/admin/ai-assistant', label: 'KI-Assistent', icon: Bot, hint: 'MMOS KI-Bot: Agent, Chat, GitHub, SEO-Keywords, PDF und Registry' },
       { href: '/admin/training', label: 'Wissenstest', icon: BrainCircuit, hint: 'Internes Training zu MMOS, Vertrieb, Datenschutz und Betrieb' },
       { href: '/admin/production', label: 'Production Readiness', icon: Activity, hint: 'Monitoring, Backups, API-Kosten und Admin-Logs' },
       { href: '/admin/production/completeness-audit', label: 'Completeness Audit', icon: Gauge, hint: 'Systemvollständigkeit, Pilotfähigkeit und Blocker zentral prüfen' },
@@ -214,7 +215,7 @@ export default function AdminShell({
     const Icon = item.icon
     const active = isActive(item.href)
     return (
-      <a
+      <Link
         key={item.href}
         href={item.href}
         onClick={(event) => handleNavItem(item, event)}
@@ -224,7 +225,7 @@ export default function AdminShell({
       >
         <Icon size={16} strokeWidth={2} />
         <span>{item.label}</span>
-      </a>
+      </Link>
     )
   }
 
@@ -293,10 +294,10 @@ export default function AdminShell({
           const Icon = item.icon
           const active = isActive(item.href)
           return (
-            <a key={item.href} href={item.href} className={active ? 'active' : undefined} onClick={(event) => handleNavItem(item, event)} aria-current={active ? 'page' : undefined}>
+            <Link key={item.href} href={item.href} className={active ? 'active' : undefined} onClick={(event) => handleNavItem(item, event)} aria-current={active ? 'page' : undefined}>
               <Icon size={18} strokeWidth={2.2} />
               <span>{item.label}</span>
-            </a>
+            </Link>
           )
         })}
         <button type="button" onClick={() => setDrawerOpen(true)}>

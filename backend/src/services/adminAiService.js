@@ -12,9 +12,9 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b'
 function provider() {
   const p = String(process.env.AI_PROVIDER || 'ollama').toLowerCase()
   if (!PROVIDERS.includes(p)) return 'ollama'
-  if (p === 'groq'      && !process.env.GROQ_API_KEY)      throw new Error('AI_PROVIDER=groq gesetzt, aber GROQ_API_KEY fehlt.')
-  if (p === 'anthropic' && !process.env.ANTHROPIC_API_KEY) throw new Error('AI_PROVIDER=anthropic gesetzt, aber ANTHROPIC_API_KEY fehlt.')
-  if (p === 'openai'    && !process.env.OPENAI_API_KEY)    throw new Error('AI_PROVIDER=openai gesetzt, aber OPENAI_API_KEY fehlt.')
+  if (p === 'groq'      && !process.env.GROQ_API_KEY)      return 'ollama'
+  if (p === 'anthropic' && !process.env.ANTHROPIC_API_KEY) return 'ollama'
+  if (p === 'openai'    && !process.env.OPENAI_API_KEY)    return 'ollama'
   return p
 }
 

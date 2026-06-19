@@ -2,12 +2,9 @@
 //
 // Registration in server.js:
 //   const adminAiRoutes = require('./routes/adminAiRoutes')
-//   app.use('/api/admin/ai', authMiddleware, requireAdmin, adminAiRoutes(supabaseAdmin))
-//
-// requireAdmin prueft req.user.role === 'admin' (oder entsprechendes Flag).
+//   app.use('/api/admin/ai', authMiddleware, adminAiRoutes(supabaseAdmin))
 
 const express = require('express')
-const { randomUUID } = require('crypto')
 const rateLimit = require('express-rate-limit')
 const adminAiService       = require('../services/adminAiService')
 const agentService         = require('../services/agentService')
@@ -24,37 +21,21 @@ const adminAiRateLimit = rateLimit({
   message: { ok: false, error: 'Zu viele Anfragen. Bitte kurz warten.' }
 })
 
-// Bestaetigungs-Map: `userId::requestId` → { resolve, reject }
-// Scoped pro User-ID — verhindert dass User A die Confirmation von User B abfangen kann.
+// Bestaetigungs-Map: requestId → { resolve, reject } — wartet auf Nutzer-Antwort
 const pendingConfirmations = new Map()
 
-function makePendingKey(userId, requestId) {
-  return `${String(userId)}::${requestId}`
-}
-
-function makeWaitForConfirmation(userId, timeoutMs = 120_000) {
+function makeWaitForConfirmation(timeoutMs = 120_000) {
   return function waitForConfirmation(requestId) {
-    const key = makePendingKey(userId, requestId)
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        pendingConfirmations.delete(key)
+        pendingConfirmations.delete(requestId)
         reject(new Error('Bestaetigungs-Timeout (120s) — Operation abgebrochen'))
       }, timeoutMs)
-      pendingConfirmations.set(key, {
-        resolve: (v) => { clearTimeout(timer); pendingConfirmations.delete(key); resolve(v) },
-        reject:  (e) => { clearTimeout(timer); pendingConfirmations.delete(key); reject(e) }
+      pendingConfirmations.set(requestId, {
+        resolve: (v) => { clearTimeout(timer); pendingConfirmations.delete(requestId); resolve(v) },
+        reject:  (e) => { clearTimeout(timer); pendingConfirmations.delete(requestId); reject(e) }
       })
     })
-  }
-}
-
-function cleanupUserConfirmations(userId) {
-  const prefix = `${String(userId)}::`
-  for (const key of pendingConfirmations.keys()) {
-    if (key.startsWith(prefix)) {
-      pendingConfirmations.get(key)?.reject(new Error('Verbindung getrennt'))
-      pendingConfirmations.delete(key)
-    }
   }
 }
 
@@ -95,29 +76,20 @@ module.exports = (supabaseAdmin) => {
   })
 
   // POST /api/admin/ai/agent/confirm — Bestaetigungs-Antwort fuer laufenden Agent
-  router.post('/agent/confirm', adminAiRateLimit, (req, res) => {
+  router.post('/agent/confirm', (req, res) => {
     const { requestId, approved } = req.body
-    if (!requestId || typeof requestId !== 'string') return res.status(400).json({ ok: false, error: 'requestId fehlt' })
-    const key     = makePendingKey(req.user.id, requestId)
-    const pending = pendingConfirmations.get(key)
+    if (!requestId) return res.status(400).json({ ok: false, error: 'requestId fehlt' })
+    const pending = pendingConfirmations.get(requestId)
     if (!pending)  return res.json({ ok: false, error: 'Unbekannte requestId (bereits beantwortet oder abgelaufen)' })
     pending.resolve(!!approved)
     res.json({ ok: true })
   })
-
-  const BRANCH_SAFE = /^[a-zA-Z0-9._\-/]+$/
 
   router.post('/agent/run', agentRateLimit, async (req, res) => {
     const { task, branch, createPR = true, agentSlug, confirmationMode = false } = req.body
 
     if (!task || !String(task).trim()) {
       return res.status(400).json({ ok: false, error: 'task Pflichtfeld' })
-    }
-
-    // Branch-Name validieren (verhindert Sonderzeichen in GitHub-API-URLs)
-    const safeBranch = String(branch || 'main').slice(0, 100)
-    if (!BRANCH_SAFE.test(safeBranch)) {
-      return res.status(400).json({ ok: false, error: 'Ungültiger Branch-Name (nur Buchstaben, Zahlen, ., _, -, / erlaubt)' })
     }
 
     // Optionalen Custom-Agent aus Registry laden
@@ -128,9 +100,9 @@ module.exports = (supabaseAdmin) => {
     }
 
     // Letzte Agent-Runs als Gedaechtnis laden
-    const recentMemory  = await agentMemoryService.getRecentMemory(supabaseAdmin, req.user.id)
+    const recentMemory  = await agentMemoryService.getRecentMemory(supabaseAdmin)
     const memoryBlock   = agentMemoryService.formatMemoryBlock(recentMemory)
-    const waitConfirm   = confirmationMode ? makeWaitForConfirmation(req.user.id) : null
+    const waitConfirm   = confirmationMode ? makeWaitForConfirmation() : null
 
     // SSE-Headers
     res.setHeader('Content-Type', 'text/event-stream')
@@ -147,13 +119,10 @@ module.exports = (supabaseAdmin) => {
       }
     }
 
-    // Bei SSE-Disconnect: hängige Confirmations für diesen User aufräumen
-    req.on('close', () => { if (confirmationMode) cleanupUserConfirmations(req.user.id) })
-
     try {
       const result = await agentService.runAgent({
         task:                String(task).trim(),
-        branch:              safeBranch,
+        branch:              String(branch || 'main'),
         agentConfig,
         waitForConfirmation: waitConfirm,
         memoryBlock,
@@ -163,11 +132,10 @@ module.exports = (supabaseAdmin) => {
       // Erfolgreichen Run im Gedaechtnis speichern
       if (result.summary) {
         await agentMemoryService.saveMemory(supabaseAdmin, {
-          userId:    req.user.id,
           task:      String(task).trim(),
           summary:   result.summary,
           files:     [...(result.stagedFiles?.keys() || [])],
-          branch:    safeBranch,
+          branch:    String(branch || 'main'),
           prUrl:     result.prUrl,
           prNumber:  result.prNumber,
           agentSlug: agentSlug || null,
@@ -183,7 +151,7 @@ module.exports = (supabaseAdmin) => {
           const safeName = task.slice(0, 40).replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()
           const branchName = `ai/${Date.now()}-${safeName}`
 
-          await githubService.createBranch(branchName, safeBranch)
+          await githubService.createBranch(branchName, branch || 'main')
 
           const files = Array.from(result.stagedFiles.entries()).map(([path, content]) => ({ path, content }))
           await githubService.commitMultipleFiles(branchName, files, result.prTitle || `AI: ${task.slice(0, 60)}`)
@@ -192,7 +160,7 @@ module.exports = (supabaseAdmin) => {
             title: result.prTitle || `AI: ${task.slice(0, 70)}`,
             body: result.prBody || `## Aufgabe\n\n${task}\n\n---\n_Generiert von MMOS Admin AI Agent_ 🤖`,
             head: branchName,
-            base: safeBranch,
+            base: branch || 'main',
             draft: true
           })
 
@@ -203,15 +171,13 @@ module.exports = (supabaseAdmin) => {
             filesCommitted: files.length
           })
         } catch (prErr) {
-          console.error('[agent/run] PR-Erstellung fehlgeschlagen:', prErr.message, { userId: req.user?.id })
-          send({ type: 'error', message: 'PR-Erstellung fehlgeschlagen. Bitte manuell erstellen.' })
+          send({ type: 'error', message: `PR-Erstellung fehlgeschlagen: ${prErr.message}` })
         }
       } else if (result.stagedFiles && result.stagedFiles.size === 0) {
         send({ type: 'no_changes', message: 'Keine Datei-Aenderungen — kein PR erstellt.' })
       }
     } catch (e) {
-      console.error('[agent/run] Fehler:', e.message, { userId: req.user?.id })
-      send({ type: 'error', message: 'Agent-Fehler. Bitte erneut versuchen.' })
+      send({ type: 'error', message: e.message || 'Unbekannter Fehler' })
     } finally {
       send({ type: 'done' })
       res.end()
@@ -278,7 +244,7 @@ module.exports = (supabaseAdmin) => {
     try {
       const { path, ref } = req.query
       if (!path) return res.status(400).json({ ok: false, error: 'path Pflichtfeld' })
-      if (/(\.\.|\.env(\.[^/]*)?$|\.key$|\.pem$|\.p12$|\.pfx$)/i.test(String(path))) {
+      if (/\.(env|key|pem|p12|pfx)$/.test(String(path)) || String(path).includes('..')) {
         return res.status(403).json({ ok: false, error: 'Dateityp nicht erlaubt' })
       }
       const content = await githubService.getFile(String(path), String(ref || 'main'))
@@ -438,7 +404,7 @@ module.exports = (supabaseAdmin) => {
   })
 
   // DELETE /api/admin/ai/registry/agents/:id
-  router.delete('/registry/agents/:id', adminAiRateLimit, async (req, res, next) => {
+  router.delete('/registry/agents/:id', async (req, res, next) => {
     try {
       await agentRegistryService.deleteAgent(supabaseAdmin, req.params.id)
       res.json({ ok: true })
@@ -470,7 +436,7 @@ module.exports = (supabaseAdmin) => {
   })
 
   // DELETE /api/admin/ai/registry/skills/:id
-  router.delete('/registry/skills/:id', adminAiRateLimit, async (req, res, next) => {
+  router.delete('/registry/skills/:id', async (req, res, next) => {
     try {
       await agentRegistryService.deleteSkill(supabaseAdmin, req.params.id)
       res.json({ ok: true })

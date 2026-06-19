@@ -2,10 +2,9 @@
 
 const MEMORY_LIMIT = 5  // Letzte N Runs als Kontext laden
 
-async function saveMemory(supabaseAdmin, { task, summary, files, branch, prUrl, prNumber, agentSlug, provider, stepsUsed, userId }) {
+async function saveMemory(supabaseAdmin, { task, summary, files, branch, prUrl, prNumber, agentSlug, provider, stepsUsed }) {
   try {
     await supabaseAdmin.from('mmos_agent_memory').insert({
-      user_id:    userId || null,
       task:       String(task).slice(0, 500),
       summary:    String(summary).slice(0, 2000),
       files:      Array.isArray(files) ? files.slice(0, 20) : [],
@@ -21,16 +20,13 @@ async function saveMemory(supabaseAdmin, { task, summary, files, branch, prUrl, 
   }
 }
 
-async function getRecentMemory(supabaseAdmin, userId, limit = MEMORY_LIMIT) {
+async function getRecentMemory(supabaseAdmin, limit = MEMORY_LIMIT) {
   try {
-    let q = supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('mmos_agent_memory')
       .select('task, summary, files, branch, pr_url, created_at')
       .order('created_at', { ascending: false })
       .limit(limit)
-    // User-scoped: nur eigene Runs zurückgeben wenn userId vorhanden
-    if (userId) q = q.eq('user_id', String(userId))
-    const { data, error } = await q
     if (error || !data?.length) return null
     return data.reverse()  // chronologisch, aeltestes zuerst
   } catch {

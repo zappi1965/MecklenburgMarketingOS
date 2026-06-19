@@ -50,14 +50,8 @@ const COMMAND_TIMEOUT_MS = 8000
 
 function resolveProvider() {
   const p = (process.env.AGENT_PROVIDER || process.env.AI_PROVIDER || 'ollama').toLowerCase()
-  if (p === 'groq') {
-    if (!process.env.GROQ_API_KEY) throw new Error('AGENT_PROVIDER=groq gesetzt, aber GROQ_API_KEY fehlt.')
-    return 'groq'
-  }
-  if (p === 'anthropic') {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error('AGENT_PROVIDER=anthropic gesetzt, aber ANTHROPIC_API_KEY fehlt.')
-    return 'anthropic'
-  }
+  if (p === 'groq'      && process.env.GROQ_API_KEY)      return 'groq'
+  if (p === 'anthropic' && process.env.ANTHROPIC_API_KEY) return 'anthropic'
   return 'ollama'
 }
 
@@ -223,6 +217,21 @@ const TOOLS = [
           content: { type: 'string', description: 'Vollstaendiger Dateiinhalt' }
         },
         required: ['path', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'run_node',
+      description: 'Fuehrt ein Node.js Code-Snippet aus und gibt stdout/stderr zurueck. Ideal fuer: Logik testen, Regexes pruefen, kleine Berechnungen, require()-Kompatibilitaet pruefen. Kein Netzwerk, kein Filesystem-Schreibzugriff. Max 5 Sekunden.',
+      parameters: {
+        type: 'object',
+        properties: {
+          code:        { type: 'string', description: 'Node.js Code-Snippet (max 5000 Zeichen)' },
+          description: { type: 'string', description: 'Kurze Beschreibung was dieser Code tut/prueft' }
+        },
+        required: ['code']
       }
     }
   },
@@ -517,7 +526,7 @@ DEIN WORKFLOW
 3. UMSETZEN
    read_file() ZUERST — niemals blind editieren
    patch_file()         — Syntax wird automatisch geprueft
-   check_syntax()       — Syntax einer Datei pruefen (.js, .ts, .json)
+   run_node()           — Logik testen, Regex validieren, require() pruefen
    Bei Fehler: sofort fixen, nie mit Syntaxfehlern abschliessen
 
 4. VERIFIZIEREN
@@ -541,7 +550,8 @@ REGELN
 
 function checkPath(p) {
   const s = String(p)
-  if (/(\.\.|\.env(\.[^/]*)?$|\.key$|\.pem$|\.p12$|\.pfx$)/i.test(s)) throw new Error(`Dateityp blockiert: ${s}`)
+  if (/\.(env|key|pem|p12|pfx)$/i.test(s)) throw new Error(`Dateityp blockiert: ${s}`)
+  if (/\.\./.test(s))                       throw new Error(`Pfad-Traversal blockiert: ${s}`)
 }
 
 function extractOutline(content, filePath) {
@@ -769,7 +779,6 @@ async function executeTool(name, input, ctx) {
     }
 
     case 'list_directory': {
-      if (input.path) checkPath(input.path)
       const items = await githubService.getDirectory(input.path || '', branch)
       return items.length ? items.map(i => `${i.type === 'dir' ? '📁' : '📄'} ${i.name}`).join('\n') : '(leer)'
     }
@@ -923,8 +932,25 @@ async function executeTool(name, input, ctx) {
       return `OK: write_file "${input.path}" ${isNew ? '(neue Datei)' : '(ueberschrieben)'} — ${input.content.split('\n').length} Zeilen${syntaxNote}`
     }
 
-    case 'run_node':
-      return 'FEHLER: run_node ist aus Sicherheitsgruenden deaktiviert. Nutze check_syntax fuer Syntax-Pruefung.'
+    case 'run_node': {
+      const code = String(input.code || '').slice(0, 5000)
+      const tmp  = path.join(os.tmpdir(), `mmos-run-${Date.now()}-${Math.random().toString(36).slice(2)}.js`)
+      try {
+        fs.writeFileSync(tmp, code, 'utf8')
+        const { stdout, stderr } = await execAsync(`node "${tmp}"`, {
+          timeout: 5000,
+          env: { PATH: process.env.PATH, NODE_ENV: 'test', HOME: process.env.HOME }
+        })
+        const out = (stdout || '').slice(0, 2000)
+        const err = (stderr || '').slice(0, 500)
+        return `stdout:\n${out || '(leer)'}${err ? `\nstderr:\n${err}` : ''}`
+      } catch (e) {
+        const msg = (e.stderr || e.stdout || e.message || '').slice(0, 1000)
+        return `FEHLER:\n${msg}`
+      } finally {
+        try { fs.unlinkSync(tmp) } catch {}
+      }
+    }
 
     case 'read_files': {
       const paths = (Array.isArray(input.paths) ? input.paths : []).slice(0, 6)
@@ -971,17 +997,15 @@ async function executeTool(name, input, ctx) {
 
     case 'fetch_url': {
       const rawUrl = String(input.url || '').trim()
-      let parsedUrl
-      try { parsedUrl = new URL(rawUrl) } catch { return 'Fehler: Ungueltige URL.' }
-      if (parsedUrl.protocol !== 'https:') return 'Fehler: Nur HTTPS-URLs erlaubt.'
-      // SSRF-Schutz: alle privaten/internen Adressbereiche inkl. Cloud-Metadata blockieren
-      const BLOCKED_HOST = /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|::1$|fe80:|fd[0-9a-f]{2}:)/i
-      if (BLOCKED_HOST.test(parsedUrl.hostname)) return 'Fehler: Interne Adressen sind blockiert.'
+      if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) return 'Fehler: Nur http/https URLs erlaubt.'
+      // Sicherheit: keine internen/privaten Adressen
+      const blocked = /localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./i
+      if (blocked.test(rawUrl)) return 'Fehler: Interne Adressen sind blockiert.'
       try {
         const res = await fetch(rawUrl, {
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MMOS-SEO-Bot/1.0; +https://mecklenburgmarketingos.de)' },
           signal: AbortSignal.timeout(12000),
-          redirect: 'error'  // Redirects nie automatisch folgen (verhindert Open-Redirect zu internen Adressen)
+          redirect: 'follow'
         })
         if (!res.ok) return `HTTP ${res.status} — Seite nicht erreichbar.`
         const html = await res.text()

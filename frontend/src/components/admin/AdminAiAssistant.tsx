@@ -26,35 +26,35 @@ interface MmosSkill {
 // SSE Events vom Backend
 type AgentEventType =
   | 'thinking' | 'tool_call' | 'tool_result' | 'tool_error'
-  | 'file_changed' | 'file_diff' | 'complete' | 'max_steps' | 'creating_pr'
-  | 'pr_created' | 'no_changes' | 'error' | 'done'
+  | 'file_changed' | 'complete' | 'max_steps' | 'creating_pr'
+  | 'pr_created' | 'no_changes' | 'error' | 'done' | 'file_diff'
   | 'todo_update' | 'confirmation_request' | 'confirmation_denied'
 
 interface AgentEvent {
   type: AgentEventType
-  text?: string
-  tool?: string
-  input?: Record<string, unknown>
-  result?: string
-  error?: string
-  path?: string
-  isNew?: boolean
-  summary?: string
-  prTitle?: string
-  prBody?: string
+  text?: string       // thinking
+  tool?: string       // tool_call / tool_result / tool_error
+  input?: Record<string, unknown>  // tool_call
+  result?: string     // tool_result
+  error?: string      // tool_error / error
+  path?: string       // file_changed
+  isNew?: boolean     // file_changed
+  summary?: string    // complete
+  prTitle?: string    // complete
+  prBody?: string     // complete
   filesChanged?: number
   pr?: { url: string; number: number; title: string }
   branch?: string
   filesCommitted?: number
-  message?: string
-  stepsUsed?: number
-  oldContent?: string
-  newContent?: string
-  todos?: { index: number; text: string; done: boolean }[]
-  requestId?: string
-  op?: string
-  preview?: string
-  filesCount?: number
+  message?: string    // no_changes / error
+  oldContent?: string  // file_diff
+  newContent?: string  // file_diff
+  stepsUsed?: number  // max_steps
+  filesCount?: number   // creating_pr
+  todos?: { index: number; text: string; done: boolean }[]  // todo_update
+  requestId?: string    // confirmation_request
+  op?: string           // confirmation_request
+  preview?: string      // confirmation_request
 }
 
 interface GitHubIssue { number: number; title: string; html_url: string; labels: { name: string }[] }
@@ -96,6 +96,7 @@ const TOOL_META: Record<string, { icon: string; color: string; label: string }> 
   get_git_log:      { icon: '📜', color: '#a78bfa', label: 'Git-Log' },
   patch_file:       { icon: '✏️', color: '#8b5cf6', label: 'Editiere' },
   write_file:       { icon: '📝', color: '#8b5cf6', label: 'Schreibe' },
+  run_node:         { icon: '▶', color: '#06b6d4',  label: 'Node.js' },
   read_files:       { icon: '📚', color: '#0ea5e9', label: 'Lese (parallel)' },
   todo:             { icon: '☑', color: '#a78bfa',  label: 'TODO' },
   task_complete:    { icon: '✅', color: '#16a34a', label: 'Fertig' },
@@ -250,13 +251,13 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
   const [mcpServers, setMcpServers] = useState<{ name: string; status: string; toolCount: number; url: string }[]>([])
 
   useEffect(() => {
-    apiGet(`${apiBase}/api/admin/ai/agent/status`).then(r => r.json()).then(d => {
+    fetch(`${apiBase}/api/admin/ai/agent/status`).then(r => r.json()).then(d => {
       if (d.ok) setAgentConfig({ model: d.config.model, provider: d.config.provider })
     }).catch(() => {})
-    apiGet(`${apiBase}/api/admin/ai/agent/memory`).then(r => r.json()).then(d => {
+    fetch(`${apiBase}/api/admin/ai/agent/memory`).then(r => r.json()).then(d => {
       if (d.ok && d.runs) setRecentRuns(d.runs.slice().reverse())
     }).catch(() => {})
-    apiGet(`${apiBase}/api/admin/ai/mcp/status`).then(r => r.json()).then(d => {
+    fetch(`${apiBase}/api/admin/ai/mcp/status`).then(r => r.json()).then(d => {
       if (d.ok) setMcpServers(d.servers || [])
     }).catch(() => {})
   }, [apiBase])
@@ -281,9 +282,10 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
     const { requestId } = pendingConfirmation
     setPendingConfirmation(null)
     try {
-      const auth = await getAuthHeader()
+      const confirmAuth = await getAuthHeader()
       await fetch(`${apiBase}/api/admin/ai/agent/confirm`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...auth }, credentials: 'omit',
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...confirmAuth },
+        credentials: 'omit',
         body: JSON.stringify({ requestId, approved })
       })
     } catch { /* ignore — agent-timeout handles it */ }
@@ -297,10 +299,10 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
     abortRef.current = new AbortController()
 
     try {
-      const auth = await getAuthHeader()
+      const authHdr = await getAuthHeader()
       const res = await fetch(`${apiBase}/api/admin/ai/agent/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...auth },
+        headers: { 'Content-Type': 'application/json', ...authHdr },
         credentials: 'omit',
         body: JSON.stringify({ task: task.trim(), branch, createPR: true, agentSlug: agentSlug || undefined, confirmationMode }),
         signal: abortRef.current.signal
@@ -343,7 +345,7 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
               setFileContents(prev => ({ ...prev, [event.path!]: event.newContent || '' }))
             }
             if (event.type === 'todo_update' && event.todos) setTodos(event.todos)
-            if (event.type === 'confirmation_request') setPendingConfirmation({ requestId: event.requestId, op: event.op, path: event.path, preview: event.preview || '' })
+            if (event.type === 'confirmation_request') setPendingConfirmation({ requestId: event.requestId ?? '', op: event.op ?? '', path: event.path ?? '', preview: event.preview ?? '' })
             if (event.type === 'confirmation_denied')  setPendingConfirmation(null)
             if (event.type === 'tool_call') steps++
             setStepCount(steps)
@@ -368,7 +370,7 @@ function AgentTab({ apiBase, initialTask = '', initialAgentSlug }: { apiBase: st
     setActiveFile(path)
     if (fileContents[path]) return  // bereits vom diff-Event gecacht
     try {
-      const res = await apiGet(`${apiBase}/api/admin/ai/github/file?path=${encodeURIComponent(path)}&ref=${branch}`)
+      const res = await fetch(`${apiBase}/api/admin/ai/github/file?path=${encodeURIComponent(path)}&ref=${branch}`)
       const data = await res.json()
       if (data.ok) setFileContents(prev => ({ ...prev, [path]: data.content }))
     } catch { /* ignore */ }
@@ -766,7 +768,7 @@ function ChatTab({ apiBase, userName }: { apiBase: string; userName?: string }) 
     setMessages(updated); setLoading(true)
     try {
       const res = await fetch(`${apiBase}/api/admin/ai/chat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: updated.slice(-12).map(m => ({ role: m.role, content: m.content })),
           context:  { userName },
@@ -839,7 +841,7 @@ function GitHubTab({ apiBase }: { apiBase: string }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [i, p] = await Promise.all([apiGet(`${apiBase}/api/admin/ai/github/issues`), apiGet(`${apiBase}/api/admin/ai/github/prs`)])
+      const [i, p] = await Promise.all([fetch(`${apiBase}/api/admin/ai/github/issues`), fetch(`${apiBase}/api/admin/ai/github/prs`)])
       const [id, pd] = await Promise.all([i.json(), p.json()])
       if (id.ok) setIssues(id.issues || [])
       if (pd.ok) setPRs(pd.prs || [])
@@ -1014,8 +1016,8 @@ function RegistryTab({ apiBase, onRunSkill }: { apiBase: string; onRunSkill: (pr
     setLoading(true)
     try {
       const [ar, sr] = await Promise.all([
-        apiGet(`${apiBase}/api/admin/ai/registry/agents`).then(r => r.json()),
-        apiGet(`${apiBase}/api/admin/ai/registry/skills`).then(r => r.json())
+        fetch(`${apiBase}/api/admin/ai/registry/agents`).then(r => r.json()),
+        fetch(`${apiBase}/api/admin/ai/registry/skills`).then(r => r.json())
       ])
       if (ar.ok) setAgents(ar.agents || [])
       if (sr.ok) setSkills(sr.skills || [])
@@ -1068,7 +1070,7 @@ function RegistryTab({ apiBase, onRunSkill }: { apiBase: string; onRunSkill: (pr
     if (!confirm(`"${name}" wirklich löschen?`)) return
     setError(null)
     try {
-      const res = await fetch(`${apiBase}/api/admin/ai/registry/${type}/${id}`, { method: 'DELETE', credentials: 'include' })
+      const res = await fetch(`${apiBase}/api/admin/ai/registry/${type}/${id}`, { method: 'DELETE' })
       const d = await res.json()
       if (!d.ok) { setError(d.error || 'Fehler'); return }
       load()
@@ -1078,7 +1080,7 @@ function RegistryTab({ apiBase, onRunSkill }: { apiBase: string; onRunSkill: (pr
   async function toggleActive(type: 'agents' | 'skills', id: string, current: boolean) {
     try {
       await fetch(`${apiBase}/api/admin/ai/registry/${type}/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: !current })
       })
       load()

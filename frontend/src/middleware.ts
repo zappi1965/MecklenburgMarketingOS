@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-/**
- * MMOS V061 Middleware
- *
- * Wichtig:
- * Supabase Browser-Sessions sind in Middleware nicht zuverlässig genug,
- * um harte Redirects für Admin-/Backoffice-Bereiche zu erzwingen.
- *
- * Daher bleibt die Middleware bewusst soft.
- * Zugriffsschutz erfolgt client- und datenbankseitig über:
- * - RoleGate
- * - AdminOnly
- * - ToolAccessGate
- * - Supabase RLS / Service Role APIs
- */
-export function middleware(_req: NextRequest) {
+const AUTH_COOKIE_NAMES = ['sb-access-token', 'sb-refresh-token']
+
+function hasAuthCookie(req: NextRequest): boolean {
+  return AUTH_COOKIE_NAMES.some((name) => req.cookies.has(name)) ||
+    req.cookies.getAll().some(({ name }) => name.startsWith('sb-') && name.endsWith('-auth-token'))
+}
+
+export function middleware(req: NextRequest) {
+  if (!hasAuthCookie(req)) {
+    const loginUrl = new URL('/auth', req.url)
+    loginUrl.searchParams.set('next', req.nextUrl.pathname)
+    return NextResponse.redirect(loginUrl)
+  }
   return NextResponse.next()
 }
 
