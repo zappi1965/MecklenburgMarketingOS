@@ -108,7 +108,7 @@ export default function RoleGate({
         <section className="adminCard">
           <h1>Anmeldung erforderlich</h1>
           <p className="adminMuted">Bitte melden Sie sich an.</p>
-          <Link className="adminBtn" href="/auth">Zur Anmeldung</Link>
+          <Link className="adminBtn" href={typeof window !== 'undefined' ? `/auth?next=${encodeURIComponent(window.location.pathname + window.location.search)}` : '/auth'}>Zur Anmeldung</Link>
         </section>
       </main>
     )
