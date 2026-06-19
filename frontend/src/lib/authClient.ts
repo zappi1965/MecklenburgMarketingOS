@@ -54,9 +54,11 @@ function buildAuthClient(): SupabaseClient {
 export const supabaseAuth = buildAuthClient()
 
 function browserProfileFallback(session: any) {
-  // V103.8: localStorage role fallback is only allowed in explicit demo mode.
-  // Live roles must come from the backend/Supabase profile.
-  if (typeof window === 'undefined' || !session?.user || !isDemoMode()) return null
+  // Fallback wenn Backend nicht erreichbar (Railway Cold Start, Timeout).
+  // Supabase-Session (session?.user) bestätigt Authentizität — localStorage-Rolle
+  // wurde beim Login via Backend gesetzt. Alle echten Datenzugriffe bleiben
+  // durch Backend-Auth (Bearer Token) geschützt.
+  if (typeof window === 'undefined' || !session?.user) return null
   try {
     const storedRole = String(localStorage.getItem('mmos_role') || '').toLowerCase()
     const storedCustomer = localStorage.getItem('mmos_customer_id') || ''
