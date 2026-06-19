@@ -26,27 +26,34 @@ interface MmosSkill {
 // SSE Events vom Backend
 type AgentEventType =
   | 'thinking' | 'tool_call' | 'tool_result' | 'tool_error'
-  | 'file_changed' | 'complete' | 'max_steps' | 'creating_pr'
+  | 'file_changed' | 'file_diff' | 'complete' | 'max_steps' | 'creating_pr'
   | 'pr_created' | 'no_changes' | 'error' | 'done'
+  | 'todo_update' | 'confirmation_request' | 'confirmation_denied'
 
 interface AgentEvent {
   type: AgentEventType
-  text?: string       // thinking
-  tool?: string       // tool_call / tool_result / tool_error
-  input?: Record<string, unknown>  // tool_call
-  result?: string     // tool_result
-  error?: string      // tool_error / error
-  path?: string       // file_changed
-  isNew?: boolean     // file_changed
-  summary?: string    // complete
-  prTitle?: string    // complete
-  prBody?: string     // complete
+  text?: string
+  tool?: string
+  input?: Record<string, unknown>
+  result?: string
+  error?: string
+  path?: string
+  isNew?: boolean
+  summary?: string
+  prTitle?: string
+  prBody?: string
   filesChanged?: number
   pr?: { url: string; number: number; title: string }
   branch?: string
   filesCommitted?: number
-  message?: string    // no_changes / error
-  stepsUsed?: number  // max_steps
+  message?: string
+  stepsUsed?: number
+  oldContent?: string
+  newContent?: string
+  todos?: { index: number; text: string; done: boolean }[]
+  requestId?: string
+  op?: string
+  preview?: string
 }
 
 interface GitHubIssue { number: number; title: string; html_url: string; labels: { name: string }[] }
