@@ -2,7 +2,7 @@
 
 const MEMORY_LIMIT = 5  // Letzte N Runs als Kontext laden
 
-async function saveMemory(supabaseAdmin, { task, summary, files, branch, prUrl, prNumber, agentSlug, provider, stepsUsed }) {
+async function saveMemory(supabaseAdmin, { task, summary, files, branch, prUrl, prNumber, agentSlug, provider, stepsUsed, userId }) {
   try {
     await supabaseAdmin.from('mmos_agent_memory').insert({
       task:       String(task).slice(0, 500),
@@ -13,20 +13,24 @@ async function saveMemory(supabaseAdmin, { task, summary, files, branch, prUrl, 
       pr_number:  prNumber || null,
       agent_slug: agentSlug || null,
       provider:   provider || null,
-      steps_used: stepsUsed || null
+      steps_used: stepsUsed || null,
+      user_id:    userId || null
     })
   } catch (e) {
     console.error('agentMemoryService.saveMemory:', e.message)
   }
 }
 
-async function getRecentMemory(supabaseAdmin, limit = MEMORY_LIMIT) {
+// userId optional: scopt das Gedaechtnis auf einen bestimmten Admin (sonst global).
+async function getRecentMemory(supabaseAdmin, limit = MEMORY_LIMIT, userId = null) {
   try {
-    const { data, error } = await supabaseAdmin
+    let q = supabaseAdmin
       .from('mmos_agent_memory')
       .select('task, summary, files, branch, pr_url, created_at')
       .order('created_at', { ascending: false })
       .limit(limit)
+    if (userId) q = q.eq('user_id', userId)
+    const { data, error } = await q
     if (error || !data?.length) return null
     return data.reverse()  // chronologisch, aeltestes zuerst
   } catch {

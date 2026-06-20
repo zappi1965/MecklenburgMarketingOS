@@ -1176,10 +1176,15 @@ async function executeTool(name, input, ctx) {
 // agentConfig: optionaler Agent aus der Registry { system_prompt, allowed_tools, provider, model }
 // waitForConfirmation: optionale Funktion (requestId) => Promise<boolean> fuer Bestaetigungs-Modus
 // memoryBlock: optionaler Gedaechtnis-String aus agentMemoryService
-async function runAgent({ task, branch = 'main', agentConfig = null, waitForConfirmation = null, memoryBlock = null, onEvent = () => {} }) {
-  const provider = agentConfig?.provider && agentConfig.provider !== 'default'
-    ? agentConfig.provider
-    : resolveProvider()
+// profileBlock:      optionaler Admin-Profil-Gedaechtnis-Block (adminProfileService)
+// skillsBlock:       optionaler Block aktivierter Skills (adminProfileService)
+// providerOverride:  optionaler Provider aus dem Admin-Profil (hoechste Prioritaet)
+async function runAgent({ task, branch = 'main', agentConfig = null, waitForConfirmation = null, memoryBlock = null, profileBlock = null, skillsBlock = null, providerOverride = null, onEvent = () => {} }) {
+  const provider = providerOverride && providerOverride !== 'default'
+    ? providerOverride
+    : (agentConfig?.provider && agentConfig.provider !== 'default'
+        ? agentConfig.provider
+        : resolveProvider())
 
   if (provider === 'ollama') {
     try { await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(4000) }) }
@@ -1220,9 +1225,14 @@ async function runAgent({ task, branch = 'main', agentConfig = null, waitForConf
   const defaultPrompt = isGroq ? COMPACT_SYSTEM_PROMPT : SYSTEM_PROMPT
   const claudeMdLimit = isGroq ? 1500 : 8000
   const basePrompt    = agentConfig?.system_prompt || defaultPrompt
+  // Admin-Profil-Gedaechtnis hat Vorrang und wird auch auf Groq mitgegeben (gekuerzt),
+  // da es bewusst gepflegter Dauerkontext ist. Skills + Run-Memory nur wenn Budget reicht.
+  const profileText   = profileBlock ? (isGroq ? profileBlock.slice(0, 1500) : profileBlock) : null
   const systemPrompt  = [
     basePrompt,
     claudeMdContent ? `## Projekt-Gedaechtnis (CLAUDE.md)\n\n${claudeMdContent.slice(0, claudeMdLimit)}` : null,
+    profileText,
+    isGroq ? null : skillsBlock,
     isGroq ? null : (memoryBlock || null)
   ].filter(Boolean).join('\n\n')
   const allowedTools  = agentConfig?.allowed_tools || null  // null = alle Tools

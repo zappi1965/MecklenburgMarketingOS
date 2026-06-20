@@ -10,6 +10,7 @@ const adminAiService       = require('../services/adminAiService')
 const agentService         = require('../services/agentService')
 const agentRegistryService = require('../services/agentRegistryService')
 const agentMemoryService   = require('../services/agentMemoryService')
+const adminProfileService  = require('../services/adminProfileService')
 const githubService        = require('../services/githubService')
 const pdfReportService     = require('../services/pdfReportService')
 const mcpClientService     = require('../services/mcpClientService')
@@ -67,11 +68,32 @@ module.exports = (supabaseAdmin) => {
   // Event-Format: data: {"type":"...","...":"..."}\n\n
   // Event-Typen:  thinking | tool_call | tool_result | tool_error |
   //               file_changed | complete | max_steps | pr_created | error | done
-  // GET /api/admin/ai/agent/memory — letzte Agent-Runs
+  // GET /api/admin/ai/agent/memory — letzte Agent-Runs des aktuellen Admins
   router.get('/agent/memory', async (req, res, next) => {
     try {
-      const runs = await agentMemoryService.getRecentMemory(supabaseAdmin, 10)
+      const runs = await agentMemoryService.getRecentMemory(supabaseAdmin, 10, req.user?.id)
       res.json({ ok: true, runs: runs || [] })
+    } catch (e) { next(e) }
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // ADMIN-AI-PROFIL — Dauergedaechtnis, bevorzugter Agent/Provider, aktivierte Skills
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // GET /api/admin/ai/profile — Profil des aktuellen Admins (leeres Default falls keins)
+  router.get('/profile', async (req, res, next) => {
+    try {
+      const profile = await adminProfileService.getProfile(supabaseAdmin, req.user?.id)
+      res.json({ ok: true, profile: profile || adminProfileService.emptyProfile(req.user?.id) })
+    } catch (e) { next(e) }
+  })
+
+  // PUT /api/admin/ai/profile — Profil anlegen/aktualisieren
+  router.put('/profile', adminAiRateLimit, async (req, res, next) => {
+    try {
+      if (!req.user?.id) return res.status(401).json({ ok: false, error: 'Nicht authentifiziert' })
+      const profile = await adminProfileService.upsertProfile(supabaseAdmin, req.user.id, req.body || {})
+      res.json({ ok: true, profile })
     } catch (e) { next(e) }
   })
 
@@ -92,15 +114,35 @@ module.exports = (supabaseAdmin) => {
       return res.status(400).json({ ok: false, error: 'task Pflichtfeld' })
     }
 
-    // Optionalen Custom-Agent aus Registry laden
+    const userId = req.user?.id || null
+
+    // Admin-Profil laden (Dauergedaechtnis, bevorzugter Agent/Provider, aktivierte Skills)
+    let profile = null
+    try { profile = await adminProfileService.getProfile(supabaseAdmin, userId) }
+    catch (e) { console.warn('adminProfile laden:', e.message) }
+
+    // Agent: explizit angefragter Slug hat Vorrang vor dem Profil-Default
     let agentConfig = null
-    if (agentSlug) {
-      try { agentConfig = await agentRegistryService.getAgent(supabaseAdmin, agentSlug) }
+    const effectiveAgentSlug = agentSlug || profile?.default_agent_slug || null
+    if (effectiveAgentSlug) {
+      try { agentConfig = await agentRegistryService.getAgent(supabaseAdmin, effectiveAgentSlug) }
       catch { /* Fallback auf Default-Agent */ }
     }
 
-    // Letzte Agent-Runs als Gedaechtnis laden
-    const recentMemory  = await agentMemoryService.getRecentMemory(supabaseAdmin)
+    // Im Profil aktivierte Skills als Referenz-Block laden
+    let skillsBlock = null
+    if (profile?.enabled_skill_slugs?.length) {
+      try {
+        const skills = await Promise.all(
+          profile.enabled_skill_slugs.map(slug => agentRegistryService.getSkill(supabaseAdmin, slug).catch(() => null))
+        )
+        skillsBlock = adminProfileService.formatSkillsBlock(skills.filter(Boolean))
+      } catch (e) { console.warn('Skills laden:', e.message) }
+    }
+    const profileBlock = adminProfileService.formatProfileBlock(profile)
+
+    // Letzte Agent-Runs als Gedaechtnis laden — pro Admin gescopet
+    const recentMemory  = await agentMemoryService.getRecentMemory(supabaseAdmin, undefined, userId)
     const memoryBlock   = agentMemoryService.formatMemoryBlock(recentMemory)
     const waitConfirm   = confirmationMode ? makeWaitForConfirmation() : null
 
@@ -126,6 +168,9 @@ module.exports = (supabaseAdmin) => {
         agentConfig,
         waitForConfirmation: waitConfirm,
         memoryBlock,
+        profileBlock,
+        skillsBlock,
+        providerOverride:    profile?.default_provider || null,
         onEvent:             send
       })
 
@@ -138,9 +183,10 @@ module.exports = (supabaseAdmin) => {
           branch:    String(branch || 'main'),
           prUrl:     result.prUrl,
           prNumber:  result.prNumber,
-          agentSlug: agentSlug || null,
+          agentSlug: effectiveAgentSlug || null,
           provider:  result.provider || null,
-          stepsUsed: result.stepsUsed || null
+          stepsUsed: result.stepsUsed || null,
+          userId
         })
       }
 
