@@ -49,7 +49,7 @@ function packageInquiryRoutes(supabase) {
 
       const inquiryTo = cleanEnv(process.env.PACKAGE_INQUIRY_TO) || cleanEnv(process.env.MAIL_TO_PACKAGE_INQUIRIES) || cleanEnv(process.env.MAIL_TO) || 'zapf@mecklenburgmarketing.de'
       const inquiryFrom = cleanEnv(process.env.PACKAGE_INQUIRY_FROM) || 'Mecklenburg Marketing <noreply@mecklenburgmarketing.de>'
-      const subject = `Neue Paketanfrage: ${packageName}`
+      const subject = `Neue Paketanfrage: ${packageName}`.slice(0, 200)
       const text = `Neue Paketanfrage über die Landingpage\n\nPaket: ${packageName}\nName: ${contactName}\nBetrieb: ${companyName || '-'}\nE-Mail: ${email}\nTelefon: ${phone || '-'}\n\nNachricht:\n${message || '-'}\n\nQuelle: ${source}\nZeitpunkt: ${now}`
       const html = `<h2>Neue Paketanfrage</h2><p><b>Paket:</b> ${htmlEscape(packageName)}</p><p><b>Name:</b> ${htmlEscape(contactName)}</p><p><b>Betrieb:</b> ${htmlEscape(companyName || '-')}</p><p><b>E-Mail:</b> ${htmlEscape(email)}</p><p><b>Telefon:</b> ${htmlEscape(phone || '-')}</p><h3>Nachricht</h3><p>${htmlEscape(message || '-').replace(/\n/g,'<br/>')}</p><p><small>Quelle: ${htmlEscape(source)} · ${htmlEscape(now)}</small></p>`
       let mailStatus = 'skipped'

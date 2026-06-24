@@ -11,7 +11,19 @@ const securityHeaders = helmet({
       frameAncestors: ["'none'"]
     }
   },
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  frameguard: { action: 'deny' },
+  xContentTypeOptions: true,
+  dnsPrefetchControl: { allow: false }
+})
+
+const permissionsPolicy = helmet.permissionsPolicy({
+  features: {
+    camera: ["'none'"],
+    microphone: ["'none'"],
+    geolocation: ["'none'"],
+    payment: ["'none'"]
+  }
 })
 
 const generalRateLimit = rateLimit({
@@ -31,4 +43,12 @@ const authRateLimit = rateLimit({
   message: { ok: false, error: 'Zu viele Authentifizierungsversuche. Bitte später erneut versuchen.' }
 })
 
-module.exports = { securityHeaders, generalRateLimit, authRateLimit }
+const publicInquiryRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Zu viele Anfragen. Bitte später erneut versuchen.' }
+})
+
+module.exports = { securityHeaders, permissionsPolicy, generalRateLimit, authRateLimit, publicInquiryRateLimit }
