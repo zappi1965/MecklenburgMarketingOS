@@ -65,6 +65,9 @@ async function callAI({ system, messages, maxTokens = 2500, images = [] }) {
   if (p === 'groq') {
     // Groq Vision: llama-3.2-11b-vision-preview oder llava
     const model = images.length ? (process.env.GROQ_VISION_MODEL || 'llama-3.2-11b-vision-preview') : GROQ_MODEL
+    // Groq zaehlt reservierte Completion-Tokens (max_tokens) zur TPM-Grenze. Auf dem
+    // Free-Tier (12000 TPM) fuehrt ein grosses max_tokens (z.B. 8000) sonst zu 413.
+    const groqMaxTokens = Math.min(maxTokens, parseInt(process.env.GROQ_MAX_TOKENS || '2048', 10))
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
@@ -72,7 +75,7 @@ async function callAI({ system, messages, maxTokens = 2500, images = [] }) {
         model,
         messages:   buildOpenAiMessages(system, messages, images),
         temperature: 0.3,
-        max_tokens:  maxTokens
+        max_tokens:  groqMaxTokens
       })
     })
     if (!res.ok) {

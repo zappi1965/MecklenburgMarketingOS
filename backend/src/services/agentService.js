@@ -40,6 +40,15 @@ const OLLAMA_HOST  = process.env.OLLAMA_HOST  || 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b'
 const MAX_STEPS    = parseInt(process.env.AGENT_MAX_STEPS || '40', 10)
 
+// ── Groq Free-Tier TPM-Budget ────────────────────────────────────────────────
+// WICHTIG: Groq zaehlt das reservierte max_tokens (Completion) ZUR Tokens-per-Minute-
+// Grenze hinzu. Ein grosses max_tokens (z.B. 8192) frisst also schon die Haelfte des
+// Free-Tier-Limits (12000 TPM) auf, bevor ueberhaupt Prompt-Tokens gezaehlt werden →
+// 413 "Request too large" selbst bei trivialen Anfragen.
+// Darum: kleines max_tokens + System/Verlauf auf ein Budget begrenzen (fitGroqBudget).
+const GROQ_MAX_TOKENS = parseInt(process.env.GROQ_MAX_TOKENS || '2048', 10)
+const GROQ_TPM_LIMIT  = parseInt(process.env.GROQ_TPM_LIMIT  || '12000', 10)
+
 const MAX_FILE_CHARS     = 60000
 const MAX_OUTLINE_LINES  = 80
 const COMPRESS_THRESHOLD = 100000   // Bytes bevor Kontext komprimiert wird
@@ -546,6 +555,34 @@ REGELN
   - Auf Deutsch kommentieren und kommunizieren
   - Bei Unsicherheit: think() nutzen und erklaeren was fehlt`
 
+// Kompakter System-Prompt fuer Groq (Free-Tier mit striktem TPM-Limit).
+// Enthaelt nur das Noetigste — Domain-Details stehen bei Bedarf in CLAUDE.md.
+const COMPACT_SYSTEM_PROMPT = `Du bist MMOS-Dev-Agent — Senior Full-Stack-Entwickler fuer MecklenburgMarketingOS (MMOS),
+ein deutsches B2B-SaaS-Marketing-OS fuer lokale KMUs. GitHub: zappi1965/MecklenburgMarketingOS.
+Du arbeitest autonom wie Claude Code: explorieren, lesen, editieren, verifizieren, iterieren.
+
+STACK
+  Backend:  Node.js + Express 5, CommonJS (require/module.exports — NIEMALS import/export), Port 4000 (Railway)
+  Frontend: Next.js 16 App Router, TypeScript, React 19 (Vercel)
+  DB:       Supabase PostgreSQL (Frankfurt), RLS aktiv
+  Routen:   module.exports = (supabaseAdmin) => { const router = express.Router(); ...; return router }
+  Fehler:   try { ... } catch (e) { next(e) } — Erfolg: res.json({ ok: true, data }), Fehler: res.status(400).json({ ok: false, error })
+
+WORKFLOW
+  1. todo("add", ...) — Plan festhalten
+  2. get_repo_tree() / read_files() / grep_files() — erkunden (mehrere Dateien parallel lesen)
+  3. read_file() ZUERST, dann patch_file() — Syntax wird automatisch geprueft
+  4. read_file_lines() — Aenderung verifizieren, todo("done", idx)
+  5. think() pruefen, dann task_complete()
+
+REGELN
+  - NIEMALS editieren ohne vorherigen read_file()
+  - NIEMALS task_complete() mit Syntax-Fehlern
+  - NIEMALS .env, .key, .pem Dateien lesen
+  - Bestehenden Stil/Patterns beibehalten, vollstaendigen produktionsreifen Code liefern
+  - DSGVO: keine personenbezogenen Daten in Logs
+  - Auf Deutsch kommentieren und kommunizieren`
+
 // ── Hilfsfunktionen ────────────────────────────────────────────────────────────
 
 function checkPath(p) {
@@ -665,13 +702,64 @@ function compressIfNeeded(messages) {
 
 // ── KI-Aufrufe ─────────────────────────────────────────────────────────────────
 
+// Grobe Token-Schaetzung (~4 Zeichen/Token) — reicht zur Budgetierung.
+function estimateTokens(text) {
+  return Math.ceil(String(text || '').length / 4)
+}
+
+function messageTokens(m) {
+  const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')
+  const calls   = m.tool_calls ? JSON.stringify(m.tool_calls) : ''
+  return estimateTokens(content) + estimateTokens(calls)
+}
+
+// Begrenzt System-Prompt + Verlauf so, dass Prompt + reservierte Completion (max_tokens)
+// + Tool-Schemas unter GROQ_TPM_LIMIT bleiben. Behaelt System-Prompt + erste Aufgabe und
+// fuegt so viele juengste Nachrichten wie moeglich hinzu (Sliding Window).
+function fitGroqBudget(messages, tools) {
+  const toolTokens = estimateTokens(JSON.stringify(tools || []))
+  const reserve    = GROQ_MAX_TOKENS + toolTokens + 600   // 600 Tokens Sicherheits-Puffer
+  const budget     = Math.max(1500, GROQ_TPM_LIMIT - reserve)
+
+  const system    = messages[0]
+  const firstUser = messages[1]
+  const base      = firstUser ? [system, firstUser] : [system]
+  let used        = base.reduce((s, m) => s + messageTokens(m), 0)
+
+  // Juengste Nachrichten von hinten aufsammeln solange Budget reicht
+  const tail = []
+  for (let i = messages.length - 1; i >= base.length; i--) {
+    const t = messageTokens(messages[i])
+    if (used + t > budget && tail.length) break
+    tail.unshift(messages[i])
+    used += t
+  }
+
+  // Verwaiste fuehrende tool-Nachrichten entfernen (Groq verlangt vorangehende
+  // assistant-Nachricht mit passenden tool_calls — sonst 400).
+  while (tail.length && tail[0].role === 'tool') tail.shift()
+
+  return [...base, ...tail]
+}
+
 async function callGroq(messages, tools = TOOLS) {
+  const fitted = fitGroqBudget(messages, tools)
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
-    body: JSON.stringify({ model: GROQ_MODEL, messages, tools, tool_choice: 'auto', temperature: 0.1, max_tokens: 8192 })
+    body: JSON.stringify({ model: GROQ_MODEL, messages: fitted, tools, tool_choice: 'auto', temperature: 0.1, max_tokens: GROQ_MAX_TOKENS })
   })
-  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Groq ${res.status}: ${t.slice(0, 300)}`) }
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    if (res.status === 413) {
+      throw new Error(
+        `Groq 413: Anfrage ueberschreitet das TPM-Limit (${GROQ_TPM_LIMIT}/min). ` +
+        `Verkleinere GROQ_MAX_TOKENS (aktuell ${GROQ_MAX_TOKENS}), passe GROQ_TPM_LIMIT an deinen Tarif an ` +
+        `oder wechsle auf AGENT_PROVIDER=anthropic. Groq-Antwort: ${t.slice(0, 200)}`
+      )
+    }
+    throw new Error(`Groq ${res.status}: ${t.slice(0, 300)}`)
+  }
   return (await res.json()).choices?.[0]?.message || null
 }
 
@@ -1088,10 +1176,15 @@ async function executeTool(name, input, ctx) {
 // agentConfig: optionaler Agent aus der Registry { system_prompt, allowed_tools, provider, model }
 // waitForConfirmation: optionale Funktion (requestId) => Promise<boolean> fuer Bestaetigungs-Modus
 // memoryBlock: optionaler Gedaechtnis-String aus agentMemoryService
-async function runAgent({ task, branch = 'main', agentConfig = null, waitForConfirmation = null, memoryBlock = null, onEvent = () => {} }) {
-  const provider = agentConfig?.provider && agentConfig.provider !== 'default'
-    ? agentConfig.provider
-    : resolveProvider()
+// profileBlock:      optionaler Admin-Profil-Gedaechtnis-Block (adminProfileService)
+// skillsBlock:       optionaler Block aktivierter Skills (adminProfileService)
+// providerOverride:  optionaler Provider aus dem Admin-Profil (hoechste Prioritaet)
+async function runAgent({ task, branch = 'main', agentConfig = null, waitForConfirmation = null, memoryBlock = null, profileBlock = null, skillsBlock = null, providerOverride = null, onEvent = () => {} }) {
+  const provider = providerOverride && providerOverride !== 'default'
+    ? providerOverride
+    : (agentConfig?.provider && agentConfig.provider !== 'default'
+        ? agentConfig.provider
+        : resolveProvider())
 
   if (provider === 'ollama') {
     try { await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(4000) }) }
@@ -1125,12 +1218,22 @@ async function runAgent({ task, branch = 'main', agentConfig = null, waitForConf
     onEvent({ type: 'thinking', text: `[CLAUDE.md geladen — ${claudeMdContent.split('\n').length} Zeilen Projekt-Kontext]` })
   } catch { /* Kein CLAUDE.md — OK */ }
 
-  // Custom-Agent-Config aus Registry verwenden wenn vorhanden
-  const basePrompt    = agentConfig?.system_prompt || SYSTEM_PROMPT
+  // Custom-Agent-Config aus Registry verwenden wenn vorhanden.
+  // Fuer Groq (Free-Tier, striktes TPM-Limit): kompakter Prompt + stark gekuerzte
+  // CLAUDE.md und kein Memory-Block, damit der Fix-Overhead klein bleibt.
+  const isGroq        = provider === 'groq'
+  const defaultPrompt = isGroq ? COMPACT_SYSTEM_PROMPT : SYSTEM_PROMPT
+  const claudeMdLimit = isGroq ? 1500 : 8000
+  const basePrompt    = agentConfig?.system_prompt || defaultPrompt
+  // Admin-Profil-Gedaechtnis hat Vorrang und wird auch auf Groq mitgegeben (gekuerzt),
+  // da es bewusst gepflegter Dauerkontext ist. Skills + Run-Memory nur wenn Budget reicht.
+  const profileText   = profileBlock ? (isGroq ? profileBlock.slice(0, 1500) : profileBlock) : null
   const systemPrompt  = [
     basePrompt,
-    claudeMdContent ? `## Projekt-Gedaechtnis (CLAUDE.md)\n\n${claudeMdContent.slice(0, 8000)}` : null,
-    memoryBlock     || null
+    claudeMdContent ? `## Projekt-Gedaechtnis (CLAUDE.md)\n\n${claudeMdContent.slice(0, claudeMdLimit)}` : null,
+    profileText,
+    isGroq ? null : skillsBlock,
+    isGroq ? null : (memoryBlock || null)
   ].filter(Boolean).join('\n\n')
   const allowedTools  = agentConfig?.allowed_tools || null  // null = alle Tools
   const allTools      = [...TOOLS, ...mcpTools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }))]
