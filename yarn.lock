@@ -2416,10 +2416,10 @@ strip-ansi@^6.0.0, strip-ansi@^6.0.1:
   dependencies:
     ansi-regex "^5.0.1"
 
-stripe@22.1.1:
-  version "22.1.1"
-  resolved "https://registry.yarnpkg.com/stripe/-/stripe-22.1.1.tgz#b01f0bb7fa7b1c07e32a726a968eafe73335388d"
-  integrity sha512-cmodIYP27tBkJ8G7DuGgWw0PFuemlFZbuF3Wwr1TrjFjUa3T7NIgCe6TVwX8BO2ynu+xtTuDGfHafNDCPt9lXA==
+stripe@22.2.1:
+  version "22.2.1"
+  resolved "https://registry.yarnpkg.com/stripe/-/stripe-22.2.1.tgz#76e84ad74b0c4966511be0d845eb89ae17297642"
+  integrity sha512-ULAtq25USBEx3yeN5zimEkfYVFETVMP5om25Ryr8ol11P62imaCZLBIEW78T7zm7Wg3wnZi+80S72yf3LCpNhw==
 
 styled-jsx@5.1.6:
   version "5.1.6"
