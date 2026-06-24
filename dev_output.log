@@ -1,0 +1,11 @@
+yarn run v1.22.22
+$ next dev
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+✓ Ready in 579ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+ GET /auth 200 in 3.5s (next.js: 3.1s, application-code: 485ms)
+○ Compiling / ...
+ GET /?app=1&demo=admin&view=dashboard 200 in 3.9s (next.js: 3.1s, application-code: 812ms)

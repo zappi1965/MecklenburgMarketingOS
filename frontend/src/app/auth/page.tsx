@@ -243,7 +243,7 @@ export default function AuthPage() {
 
         {isInvite && <button type="button" className="btn secondary" onClick={()=>setMode('login')}>Zum normalen Login</button>}
 
-        {message && <p className="sub">{message}</p>}
+        {message && <p className="sub" aria-live="polite">{message}</p>}
       </section>
     </main>
   )
