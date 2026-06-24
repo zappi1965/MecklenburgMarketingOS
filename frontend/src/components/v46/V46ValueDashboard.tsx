@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, memo, type CSSProperties } from 'react'
 import LegalFooter from '@/components/legal/LegalFooter'
 import {
   buildReportPayload,
@@ -104,7 +104,7 @@ const styles: Record<string, CSSProperties> = {
   td: { padding: '10px 8px', borderBottom: '1px solid rgba(255,255,255,.08)', color: '#e5e7eb' }
 }
 
-function MetricCard({ label, value, sub }: { label: string; value: any; sub?: string }) {
+const MetricCard = memo(function MetricCard({ label, value, sub }: { label: string; value: any; sub?: string }) {
   return (
     <div style={styles.card}>
       <div style={styles.metricLabel}>{label}</div>
@@ -112,9 +112,9 @@ function MetricCard({ label, value, sub }: { label: string; value: any; sub?: st
       {sub && <div style={{ color: '#94a3b8', marginTop: 6 }}>{sub}</div>}
     </div>
   )
-}
+})
 
-function MiniTable({ rows }: { rows: ValueReport[] }) {
+const MiniTable = memo(function MiniTable({ rows }: { rows: ValueReport[] }) {
   if (!rows.length) return <p style={{ color: '#94a3b8' }}>Noch keine Reports gespeichert.</p>
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -140,7 +140,7 @@ function MiniTable({ rows }: { rows: ValueReport[] }) {
       </table>
     </div>
   )
-}
+})
 
 export default function V46ValueDashboard() {
   const [ctx, setCtx] = useState<any>(null)
@@ -187,7 +187,7 @@ export default function V46ValueDashboard() {
 
   const m = value.metrics
   const customers = ctx.customers || []
-  const reports = (ctx.v46_value_reports || []).filter((r: ValueReport) => !selectedCustomer || String(r.customer_id) === String(value.customerId))
+  const reports = useMemo(() => (ctx.v46_value_reports || []).filter((r: ValueReport) => !selectedCustomer || String(r.customer_id) === String(value.customerId)), [ctx.v46_value_reports, selectedCustomer, value.customerId])
 
   return (
     <main style={styles.shell}>
