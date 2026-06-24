@@ -231,13 +231,13 @@ export function customerName(customers: any[], customerId: string) {
 
 export function matchesCustomer(row: any, customerId: string) {
   if (!customerId) return true
-  return [
-    row.customer_id,
-    row.customerId,
-    row.client_customer_id,
-    row.owner_customer_id,
-    row.related_customer_id
-  ].filter(Boolean).some((value) => String(value) === String(customerId))
+  const sCid = String(customerId)
+  if (row.customer_id && String(row.customer_id) === sCid) return true
+  if (row.customerId && String(row.customerId) === sCid) return true
+  if (row.client_customer_id && String(row.client_customer_id) === sCid) return true
+  if (row.owner_customer_id && String(row.owner_customer_id) === sCid) return true
+  if (row.related_customer_id && String(row.related_customer_id) === sCid) return true
+  return false
 }
 
 export function buildPublicUrl(path: string) {
