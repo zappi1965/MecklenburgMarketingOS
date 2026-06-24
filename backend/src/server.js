@@ -78,7 +78,7 @@ const storeRoutes = require('./routes/storeRoutes')
 const opsAdminRoutes = require('./routes/opsAdminRoutes')
 const { bookingPublicRoutes } = require('./routes/bookingRoutes')
 const stripeRoutes = require('./routes/stripeRoutes')
-const { securityHeaders, generalRateLimit, authRateLimit } = require('./middleware/securityHardening')
+const { securityHeaders, permissionsPolicy, generalRateLimit, authRateLimit, publicInquiryRateLimit } = require('./middleware/securityHardening')
 const { createAdminAuditMiddleware } = require('./middleware/adminAuditMiddleware')
 
 const app = express()
@@ -174,6 +174,7 @@ app.use((req, res, next) => {
 })
 
 app.use(securityHeaders)
+app.use(permissionsPolicy)
 app.use(generalRateLimit)
 
 const supabaseAdmin = getSupabaseAdmin()
@@ -309,7 +310,7 @@ app.get('/api/metrics', requireAdmin, (req, res) => {
 })
 
 app.use('/api/system', requireAdmin, systemRoutes(supabaseAdmin))
-app.use('/api/public', packageInquiryRoutes(supabaseAdmin))
+app.use('/api/public', publicInquiryRateLimit, packageInquiryRoutes(supabaseAdmin))
 app.use('/api/public/seo-blog', seoBlogPublicRoutes(supabaseAdmin))
 
 const adminScopedRoutes = [
