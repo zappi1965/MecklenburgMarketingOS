@@ -36,8 +36,8 @@
     "postcss": "8.5.10"
   },
   "devDependencies": {
-    "@playwright/test": "1.60.0",
-    "@types/node": "25.9.1",
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.0.1",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "typescript": "6.0.3"
